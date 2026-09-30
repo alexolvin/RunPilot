@@ -1,0 +1,5 @@
+  Tips: Try /insight to generate personalized insights from your chat history.   
+
+  ➜ runpilot · qwen3.8-27b (node-a)        
+  .  Initializing...                    
+

@@ -1,0 +1,139 @@
+/* Макеты и сетка (v2 раздел 10.1). Медиазапросы ТОЛЬКО здесь; значения точек
+   перелома зафиксированы в комментарии web/styles/tokens.css и в app/constants.js.
+   Цвета — только через var(--…) (R2). */
+
+*,
+*::before,
+*::after{box-sizing:border-box}
+
+html,body{height:100%}
+body{
+  margin:0;
+  background:var(--color-bg);
+  color:var(--color-text);
+  font-family:var(--font-ui);
+  font-size:var(--font-size-md);
+  line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+  font-variant-numeric:tabular-nums;
+}
+
+h1,h2,h3,h4,p,ul{margin:0}
+button{font:inherit;color:inherit}
+a{color:var(--color-accent-text);text-decoration:none}
+
+/* ---- Каркас: боковая панель + основная область ---- */
+.app{
+  display:grid;
+  grid-template-columns:var(--sidebar-w) 1fr;
+  grid-template-rows:100vh;
+  height:100vh;
+  overflow:hidden;
+}
+
+.main{
+  display:grid;
+  grid-template-rows:auto auto 1fr auto;
+  min-width:0;
+  min-height:0;
+  overflow:hidden;
+}
+.content{
+  overflow-y:auto;
+  padding:var(--space-6);
+  min-height:0;
+}
+
+/* ---- Точки перелома (10.1) ---- */
+/* >=1280: широкая боковая панель 240 px (по умолчанию --sidebar-w). */
+
+/* 1024–1279: узкая боковая панель 72 px (иконки с подсказками). */
+@media (min-width:1024px) and (max-width:1279px){
+  .app{--sidebar-w:var(--sidebar-w-narrow)}
+}
+
+/* 768–1023: узкая боковая панель 72 px; содержимое в одну колонку. */
+@media (min-width:768px) and (max-width:1023px){
+  .app{--sidebar-w:var(--sidebar-w-narrow)}
+}
+
+/* <768: телефон — без боковой панели; верхняя + нижняя панели вкладок.
+   Верхняя панель — компактная (раздел 10.3): заголовок + статус + иконки;
+   подзаголовок и «Новая сессия» (есть в пустом состоянии/списке) скрыты. */
+@media (max-width:767px){
+  .app{
+    grid-template-columns:1fr;
+    grid-template-rows:1fr auto;
+  }
+  .sidebar{display:none}
+  .content{padding:var(--space-4)}
+  .bottom-tabs{display:flex}
+  .topbar{
+    align-items:center;
+    gap:var(--space-2);
+    padding:var(--space-2) var(--space-3);
+  }
+  .page-title{
+    font-size:var(--font-size-lg);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .page-sub{display:none}
+  .topbar-actions{gap:var(--space-1)}
+  .topbar-actions .btn--primary{display:none}
+  /* «Новая сессия» — иконка + в топбаре (текстовая не умещается в 390 px). */
+  .ns-new{display:inline-flex}
+  /* Нижние вкладки — только иконки (подписи вытесняли место); верхний
+     отступ убран — футер компактнее (иконки уже ≥44 px). */
+  .tab-label{display:none}
+  .bottom-tabs{padding-top:0}
+  /* «Сегодня»/метрики — одна компактная строка, не сетка карточек. */
+  .stat-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--space-2)}
+  .stat{padding:var(--space-2)}
+  .stat-value{font-size:var(--font-size-sm)}
+  .stat-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* Журнал: время · вид · цель; подробности — своей строкой. */
+  .jrow{grid-template-columns:64px minmax(0,1fr) minmax(0,1fr);gap:2px var(--space-2);padding:var(--space-2);font-size:var(--font-size-xs)}
+  .jrow-head .j-detail{display:none}
+  .jrow .j-detail{grid-column:1/-1}
+  /* 19.3.6: интерактивные элементы ≥44×44. */
+  .icon-btn{width:44px;height:44px}
+  .btn{min-height:44px}
+  .tab-btn{min-height:44px;display:flex;align-items:center}
+  .field input{min-height:44px}
+  .field select{min-height:44px}
+  /* Командная строка на телефоне — полноэкранный лист (открывается кнопкой). */
+  .command-bar{display:none}
+  .command-bar.is-open{
+    display:flex;
+    position:fixed;
+    inset:0;
+    z-index:60;
+    background:var(--color-surface);
+    flex-direction:column;
+  }
+  /* Карточка сессии — одна колонка (11.3: композер внизу). */
+  .sc-body{grid-template-columns:1fr}
+  .sc-composer{position:sticky;bottom:0;background:var(--color-surface)}
+}
+
+/* <1280: узкая боковая панель (иконки с подсказками, 10.1). */
+@media (max-width:1279px){
+  .sidebar .nav-label,
+  .sidebar .brand-name,
+  .sidebar .brand-sub,
+  .sidebar .nav-count,
+  .sidebar .user-name{display:none}
+  .sidebar .brand{justify-content:center;padding:var(--space-4) var(--space-2) var(--space-3)}
+  .sidebar .nav-item{justify-content:center}
+  .sidebar .sidebar-foot{justify-content:center}
+}
+
+/* ---- Движение (9.1: prefers-reduced-motion отключает анимации) ---- */
+@media (prefers-reduced-motion:reduce){
+  *,
+  *::before,
+  *::after{
+    animation-duration:0.001ms !important;
+    transition-duration:0.001ms !important;
+  }
+}

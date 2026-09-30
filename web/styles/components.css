@@ -1,0 +1,594 @@
+/* Компоненты каркаса (v2 раздел 9.3). Цвета — только var(--…) и color-mix
+   (R2: цвета — только tokens.css). Тон состояния/сервера задаётся
+   переменной --tone (state-style.js); один код — один цвет на всех экранах (9.4). */
+
+/* ---- Иконка (9.2: 20 px, линия 1.75, currentColor) ---- */
+.icon{
+  display:inline-flex;
+  width:var(--icon-size);
+  height:var(--icon-size);
+  flex:none;
+  color:inherit;
+}
+.icon svg{width:100%;height:100%;stroke-width:var(--icon-stroke)}
+.icon--sm{width:16px;height:16px}
+.icon--lg{width:44px;height:44px}
+
+/* ---- Карточка (тень в светлой, рамка в тёмной) ---- */
+.card{
+  background:var(--color-surface);
+  border:1px solid var(--color-border);
+  border-radius:var(--radius-card);
+  box-shadow:var(--shadow-card);
+}
+
+/* ---- Кнопка (9.3: основная, вторичная, опасная, опасная залитая, текстовая) ---- */
+.btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:var(--space-2);
+  padding:9px var(--space-4);
+  border-radius:var(--radius-control);
+  border:1px solid var(--color-border);
+  background:var(--color-surface);
+  color:var(--color-text);
+  font-size:var(--font-size-md);
+  font-weight:500;
+  cursor:pointer;
+  transition:background var(--duration-fast),border-color var(--duration-fast);
+  min-height:38px;
+}
+.btn:hover{background:var(--color-surface-muted)}
+.btn--primary{
+  background:var(--color-accent);
+  border-color:var(--color-accent);
+  color:var(--color-on-accent);
+}
+.btn--primary:hover{background:var(--color-accent);filter:brightness(0.94)}
+.btn--danger{color:var(--color-danger);border-color:var(--color-border)}
+.btn--danger-fill{
+  background:var(--color-danger);
+  border-color:var(--color-danger);
+  color:var(--color-on-accent);
+}
+.btn--text{border-color:transparent;background:transparent}
+.btn--text:hover{background:var(--color-surface-muted)}
+.btn:disabled{opacity:0.5;cursor:not-allowed}
+.btn--loading{pointer-events:none;opacity:0.7}
+.btn--loading::after{
+  content:"";
+  width:14px;height:14px;
+  border:2px solid currentColor;
+  border-top-color:transparent;
+  border-radius:50%;
+  animation:spin 0.7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---- Бейдж (9.3/9.4): тон задаётся --tone ----
+   Текст — нейтральный (--color-text): контраст ≥ 4.5 на любой светлой/тёмной
+   подложке-тинте (19.3.5); цвет кода — на точке и тинте фона (один код —
+   один цвет, 9.4). */
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:var(--space-1);
+  padding:2px var(--space-2);
+  border-radius:var(--radius-badge);
+  font-size:var(--font-size-xs);
+  font-weight:500;
+  color:var(--color-text);
+  background:color-mix(in srgb,var(--tone,var(--color-text-muted)) calc(var(--badge-tint) * 100%),transparent);
+  white-space:nowrap;
+}
+.badge .dot{width:7px;height:7px;border-radius:50%;background:var(--tone,var(--color-text-muted))}
+
+/* ---- Контент-область: скролл-регион фокусируем (axe scrollable-region) ---- */
+.content:focus{outline:none}
+.content:focus-visible{outline:2px solid var(--color-accent);outline-offset:-2px}
+
+/* ---- Точка сервера (9.3) ---- */
+.server-dot{
+  width:9px;height:9px;border-radius:50%;
+  background:var(--tone,var(--color-text-muted));
+  flex:none;
+}
+
+/* ---- Боковая панель (9.5, 10.2) ---- */
+.sidebar{
+  display:flex;
+  flex-direction:column;
+  background:var(--color-surface);
+  border-right:1px solid var(--color-border);
+  min-width:0;
+  overflow:hidden;
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:var(--space-3);
+  padding:var(--space-4) var(--space-4) var(--space-3);
+}
+.brand-mark{
+  width:32px;height:32px;border-radius:var(--radius-control);
+  background:var(--color-accent);color:var(--color-on-accent);
+  display:flex;align-items:center;justify-content:center;flex:none;
+}
+.brand-name{font-size:var(--font-size-lg);font-weight:600;line-height:1.1}
+.brand-sub{font-size:var(--font-size-xs);color:var(--color-text-muted);line-height:1.2}
+.nav{
+  display:flex;flex-direction:column;gap:2px;
+  padding:var(--space-2);flex:1;overflow-y:auto;
+}
+.nav-item{
+  display:flex;align-items:center;gap:var(--space-3);
+  padding:var(--space-2) var(--space-3);
+  border-radius:var(--radius-control);
+  color:var(--color-text-muted);
+  font-weight:500;font-size:var(--font-size-md);
+  cursor:pointer;white-space:nowrap;overflow:hidden;
+}
+.nav-item:hover{background:var(--color-surface-muted);color:var(--color-text)}
+.nav-item.is-active{
+  background:var(--color-surface-muted);
+  color:var(--color-text);
+}
+.nav-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.nav-count{
+  font-size:var(--font-size-xs);
+  color:var(--color-text-muted);
+  background:var(--color-surface-muted);
+  border-radius:999px;
+  padding:1px var(--space-2);
+  min-width:20px;text-align:center;
+}
+/* Текст — danger-text: danger на 14%-тинте не даёт 4.5 (19.3.5). */
+.nav-count.is-alert{background:color-mix(in srgb,var(--color-danger) calc(var(--badge-tint) * 100%),transparent);color:var(--color-danger-text)}
+.sidebar-foot{
+  display:flex;align-items:center;gap:var(--space-2);
+  padding:var(--space-3) var(--space-4);
+  border-top:1px solid var(--color-border);
+}
+.avatar{
+  width:32px;height:32px;border-radius:50%;
+  background:var(--color-surface-muted);color:var(--color-text);
+  display:flex;align-items:center;justify-content:center;flex:none;
+}
+.user-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:var(--font-size-sm)}
+.user-sub{font-size:var(--font-size-xs);color:var(--color-text-muted)}
+
+/* ---- Верхняя панель (10.2) ---- */
+.topbar{
+  display:flex;
+  align-items:flex-start;
+  gap:var(--space-4);
+  padding:var(--space-4) var(--space-6);
+  border-bottom:1px solid var(--color-border);
+  background:var(--color-surface);
+}
+.page-head{flex:1;min-width:0}
+.page-title{display:flex;align-items:center;gap:var(--space-2);min-width:0;font-size:var(--font-size-xl);font-weight:600;line-height:1.2}
+.page-title-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Статус системы — точка у заголовка (цвет = режим; подпись в подсказке). */
+.mode-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--tone,var(--color-success))}
+.page-sub{font-size:var(--font-size-sm);color:var(--color-text-muted);margin-top:2px}
+.topbar-actions{display:flex;align-items:center;gap:var(--space-3)}
+.topbar-title{
+  display:flex;align-items:center;gap:var(--space-3);
+  padding:var(--space-3) var(--space-4);
+  border-bottom:1px solid var(--color-border);
+  background:var(--color-surface);
+}
+
+/* Кнопка-иконка */
+.icon-btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:38px;height:38px;
+  border-radius:var(--radius-control);
+  border:1px solid transparent;
+  background:transparent;color:var(--color-text-muted);
+  cursor:pointer;position:relative;
+}
+.icon-btn:hover{background:var(--color-surface-muted);color:var(--color-text)}
+.icon-btn .count{
+  position:absolute;top:2px;right:2px;
+  min-width:16px;height:16px;padding:0 4px;
+  border-radius:999px;background:var(--color-accent);color:var(--color-on-accent);
+  font-size:10px;display:flex;align-items:center;justify-content:center;
+}
+
+/* ---- Баннер (9.3: режим/безопасный режим/нет связи) ---- */
+.banner{
+  display:flex;align-items:center;gap:var(--space-3);
+  padding:var(--space-2) var(--space-6);
+  font-size:var(--font-size-sm);font-weight:600;
+  /* Текст — нейтральный: тон-цвет на светлом тинте < 4.5 (19.3.5); тон
+     передают фон-тинт + нижняя рамка + иконка (как у бейджа, 9.4). */
+  color:var(--color-text);
+  background:color-mix(in srgb,var(--tone,var(--color-warning)) calc(var(--badge-tint) * 100%),var(--color-surface));
+  border-bottom:1px solid color-mix(in srgb,var(--tone,var(--color-warning)) 30%,var(--color-border));
+}
+.banner .icon{color:var(--tone,var(--color-warning))}
+
+/* ---- Нижние вкладки (телефон, 10.3) — базово скрыты, видны на телефоне (layout.css) ---- */
+.bottom-tabs{
+  display:none;
+  border-top:1px solid var(--color-border);
+  background:var(--color-surface);
+  padding:var(--space-1) var(--space-2) calc(var(--space-1) + env(safe-area-inset-bottom));
+}
+.tab{
+  flex:1;min-width:0;min-height:44px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  color:var(--color-text-muted);font-size:var(--font-size-xs);
+  cursor:pointer;border-radius:var(--radius-control);
+}
+.tab.is-active{color:var(--color-accent-text)}
+.tab-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+/* Лист «Ещё» (телефон): колонка кнопок разделов. */
+.more-list{display:flex;flex-direction:column;gap:var(--space-2)}
+/* «Новая сессия» на телефоне — иконка + в действиях топбара (показывается
+   только в media-правиле layout.css; на широких экранах — текстовая кнопка). */
+.ns-new{display:none}
+
+/* ---- Командная строка (12) ---- */
+.command-bar{
+  position:relative;
+  border-top:1px solid var(--color-border);
+  background:var(--color-surface);
+  padding:var(--space-3) var(--space-6);
+}
+.command-input{
+  display:flex;align-items:center;gap:var(--space-2);
+  background:var(--color-bg);
+  border:1px solid var(--color-border);
+  border-radius:var(--radius-control);
+  padding:8px var(--space-3);
+}
+.command-input:focus-within{border-color:var(--color-accent)}
+.command-input input{
+  flex:1;border:0;outline:0;background:transparent;
+  font-size:var(--font-size-md);color:var(--color-text);
+  font-family:var(--font-mono);
+}
+.command-input input::placeholder{color:var(--color-text-muted)}
+.command-hint{
+  font-size:var(--font-size-xs);color:var(--color-text-muted);
+  display:inline-flex;align-items:center;gap:var(--space-1);
+}
+.command-suggest{
+  position:absolute;left:var(--space-6);right:var(--space-6);bottom:100%;
+  background:var(--color-surface);border:1px solid var(--color-border);
+  border-radius:var(--radius-card);box-shadow:var(--shadow-card);
+  max-height:320px;overflow-y:auto;z-index:40;
+}
+.command-suggest .row{
+  display:flex;align-items:center;gap:var(--space-3);
+  padding:var(--space-2) var(--space-3);cursor:pointer;
+}
+.command-suggest .row.is-active{background:var(--color-surface-muted)}
+.command-suggest .cmd{font-family:var(--font-mono);font-size:var(--font-size-sm);color:var(--color-accent-text);min-width:120px}
+.command-suggest .desc{font-size:var(--font-size-sm);color:var(--color-text-muted)}
+.command-error{font-size:var(--font-size-sm);color:var(--color-danger);margin-top:var(--space-2)}
+
+/* ---- Пустое состояние (9.3: иконка, фраза, одна кнопка) ---- */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:var(--space-4);
+  padding:var(--space-10) var(--space-6);
+  text-align:center;height:100%;
+}
+.empty-icon{
+  width:64px;height:64px;border-radius:50%;
+  background:var(--color-surface-muted);color:var(--color-text-muted);
+  display:flex;align-items:center;justify-content:center;
+}
+.empty-icon .icon{width:32px;height:32px}
+.empty-title{font-size:var(--font-size-lg);font-weight:600}
+.empty-text{font-size:var(--font-size-md);color:var(--color-text-muted);max-width:420px}
+
+/* ---- Скелетон (9.3) ---- */
+.skeleton{
+  background:linear-gradient(90deg,var(--color-surface-muted),var(--color-border),var(--color-surface-muted));
+  background-size:200% 100%;
+  animation:shimmer 1.2s infinite;
+  border-radius:var(--radius-control);
+}
+@keyframes shimmer{to{background-position:-200% 0}}
+
+/* ---- Страница ---- */
+.page{display:flex;flex-direction:column;gap:var(--space-4);min-height:100%}
+
+/* ---- Страница входа ---- */
+.login-page{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background:var(--color-bg);padding:var(--space-6);
+}
+.login-card{
+  width:100%;max-width:380px;
+  padding:var(--space-8);
+}
+.login-brand{display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-6)}
+.login-title{font-size:var(--font-size-xl);font-weight:600}
+.login-sub{font-size:var(--font-size-sm);color:var(--color-text-muted);margin-top:2px}
+.field{margin-bottom:var(--space-4)}
+.field label{display:block;font-size:var(--font-size-sm);margin-bottom:var(--space-2);color:var(--color-text-muted)}
+.field input{
+  width:100%;padding:10px var(--space-3);
+  border:1px solid var(--color-border);border-radius:var(--radius-control);
+  font-size:var(--font-size-md);background:var(--color-bg);color:var(--color-text);
+}
+.field input:focus{outline:0;border-color:var(--color-accent)}
+.field select{
+  width:100%;padding:10px var(--space-3);
+  border:1px solid var(--color-border);border-radius:var(--radius-control);
+  font-size:var(--font-size-md);background:var(--color-bg);color:var(--color-text);
+}
+.field select:focus{outline:0;border-color:var(--color-accent)}
+.login-error{color:var(--color-danger);font-size:var(--font-size-sm);min-height:1.2em;margin-top:var(--space-2)}
+
+/* ---- Дропдаун меню (9.3: ⋮, десктоп) ---- */
+.dropdown{position:absolute;top:100%;right:0;z-index:50}
+.dropdown-menu{
+  min-width:200px;margin-top:4px;
+  background:var(--color-surface);border:1px solid var(--color-border);
+  border-radius:var(--radius-card);box-shadow:var(--shadow-card);
+  padding:var(--space-1);
+}
+.dropdown-item{
+  display:flex;align-items:center;gap:var(--space-2);
+  padding:var(--space-2) var(--space-3);border-radius:var(--radius-control);
+  font-size:var(--font-size-sm);cursor:pointer;white-space:nowrap;
+}
+.dropdown-item:hover{background:var(--color-surface-muted)}
+.dropdown-item.is-danger{color:var(--color-danger)}
+
+/* ============================================================
+   W4: основные экраны (11.2–11.11). Цвета — только var(--…) (R2).
+   ============================================================ */
+
+/* ---- Сетки карточек/метрик ---- */
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--space-4)}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--space-3)}
+.stat{padding:var(--space-3) var(--space-4);min-width:0}
+.stat-label{font-size:var(--font-size-xs);color:var(--color-text-muted);margin-bottom:2px}
+.stat-value{font-size:var(--font-size-xl);font-weight:600;font-family:var(--font-mono);line-height:1.2;word-break:break-word}
+.stat-hint{font-size:var(--font-size-xs);color:var(--color-text-muted);margin-top:2px}
+
+/* ---- Секция экрана ---- */
+.page-section{min-width:0}
+.section-head{display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2)}
+.section-title{font-size:var(--font-size-md);font-weight:600}
+.section-count{font-size:var(--font-size-xs);color:var(--color-text-muted);background:var(--color-surface-muted);border-radius:999px;padding:1px var(--space-2);min-width:20px;text-align:center}
+.section-empty{padding:var(--space-4);color:var(--color-text-muted);font-size:var(--font-size-sm);background:var(--color-surface);border:1px dashed var(--color-border);border-radius:var(--radius-card)}
+
+/* ---- Карточка сервера ---- */
+.server-card{padding:var(--space-4);cursor:pointer;transition:border-color var(--duration-fast)}
+.server-card:hover{border-color:var(--color-accent)}
+.server-card-head{display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-3)}
+.server-card-name{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.server-card-metrics{display:flex;gap:var(--space-5)}
+.metric{display:flex;flex-direction:column;gap:2px;min-width:0}
+.metric-k{font-size:var(--font-size-xs);color:var(--color-text-muted)}
+.metric-v{font-size:var(--font-size-sm);font-weight:500;font-family:var(--font-mono);white-space:nowrap}
+
+/* ---- Строки списков (В работе / Очередь / Внимание / Сессии) ---- */
+.srow-hint{margin:0 0 var(--space-2);font-size:var(--font-size-xs);color:var(--color-text-muted)}
+.srow-toggle{display:flex;align-items:center;gap:var(--space-2);margin:var(--space-4) 0 var(--space-2);font-size:var(--font-size-sm);color:var(--color-text-muted);cursor:pointer}
+.srow-toggle input{cursor:pointer}
+.srow-list{display:flex;flex-direction:column;border:1px solid var(--color-border);border-radius:var(--radius-card);overflow:hidden}
+.srow{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--color-border);background:var(--color-surface)}
+.srow:last-child{border-bottom:0}
+.srow-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.srow-name{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow-sub{font-size:var(--font-size-xs);color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow-why{font-size:var(--font-size-xs);color:var(--color-attention-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srow-side{display:flex;align-items:center;gap:var(--space-2);flex:none}
+.qrow-pos{width:24px;height:24px;border-radius:50%;background:var(--color-surface-muted);color:var(--color-text-muted);display:flex;align-items:center;justify-content:center;font-size:var(--font-size-xs);font-family:var(--font-mono);flex:none}
+.qrow-wait{font-size:var(--font-size-xs);color:var(--color-text-muted);font-family:var(--font-mono)}
+
+/* ---- Детальная страница (сервер/узел) ---- */
+.detail-head{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-5)}
+.detail-title{font-size:var(--font-size-xl);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+/* ---- Спарклайны (11.9) ---- */
+.spark{width:100%;height:32px;display:block;overflow:visible}
+.spark-line{stroke-width:1.5;vector-effect:non-scaling-stroke;fill:none;stroke-linejoin:round;stroke-linecap:round}
+.spark--empty{height:32px;background:var(--color-surface-muted);border-radius:var(--radius-control)}
+.spark-block{display:flex;flex-direction:column;gap:var(--space-2)}
+.spark-row{display:flex;align-items:center;gap:var(--space-3)}
+.spark-k{width:84px;flex:none;font-size:var(--font-size-xs);color:var(--color-text-muted)}
+.mon-server{padding:var(--space-4)}
+.mon-server + .mon-server{margin-top:var(--space-3)}
+
+/* ---- Вкладки (журнал, уведомления) ---- */
+.tabs{display:flex;align-items:center;gap:var(--space-1);border-bottom:1px solid var(--color-border);margin-bottom:var(--space-3)}
+.tab-btn{padding:var(--space-2) var(--space-3);border:0;background:transparent;color:var(--color-text-muted);font-size:var(--font-size-sm);font-weight:500;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab-btn.is-active{color:var(--color-text);border-bottom-color:var(--color-accent)}
+.j-csv{margin-left:auto}
+
+/* ---- Таблица журнала (11.8) ---- */
+.jtable{border:1px solid var(--color-border);border-radius:var(--radius-card);overflow:hidden}
+.jrow{display:grid;grid-template-columns:92px 130px 160px 1fr;gap:var(--space-3);padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--color-border);font-size:var(--font-size-sm);align-items:center;background:var(--color-surface)}
+.jrow:last-child{border-bottom:0}
+.jrow-head{font-weight:600;color:var(--color-text-muted);font-size:var(--font-size-xs);background:var(--color-surface-muted)}
+.j-ts,.j-kind,.j-target,.j-detail{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--font-mono)}
+.jrow-head .j-ts,.jrow-head .j-kind,.jrow-head .j-target,.jrow-head .j-detail{font-family:var(--font-ui)}
+.j-kind{color:var(--color-accent-text)}
+
+/* ---- Узлы (11.7) ---- */
+.node-card{padding:var(--space-4);cursor:pointer;transition:border-color var(--duration-fast)}
+.node-card:hover{border-color:var(--color-accent)}
+.node-card-head{display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2)}
+.node-card-count{font-size:var(--font-size-xs);color:var(--color-text-muted);flex:none}
+.node-card-sub{font-size:var(--font-size-xs);color:var(--color-text-muted);margin-bottom:var(--space-1)}
+.node-card-socks{font-size:var(--font-size-xs);font-family:var(--font-mono);color:var(--color-text-muted);word-break:break-all}
+
+/* ---- Центр уведомлений (11.11) ---- */
+.notif-list{display:flex;flex-direction:column;border:1px solid var(--color-border);border-radius:var(--radius-card);overflow:hidden}
+.notif{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-border);background:var(--color-surface)}
+.notif:last-child{border-bottom:0}
+.notif.is-active{background:color-mix(in srgb,var(--color-attention) calc(var(--badge-tint) * 100%),var(--color-surface))}
+.notif-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.notif-title{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.notif-sub{font-size:var(--font-size-xs);color:var(--color-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---- Карточка сессии (11.3, v2) ---- */
+.session-card{display:flex;flex-direction:column;gap:var(--space-4);max-width:1200px;margin:0 auto}
+.sc-head{display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap}
+.sc-title{display:flex;align-items:center;gap:var(--space-3);min-width:0}
+.sc-name{font-size:var(--font-size-xl);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sc-meta{font-size:var(--font-size-sm);color:var(--color-text-muted)}
+.sc-body{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:var(--space-4);align-items:start}
+.sc-left{display:flex;flex-direction:column;gap:var(--space-3);min-width:0}
+.sc-right{display:flex;flex-direction:column;gap:var(--space-4);min-width:0}
+.sc-dl{margin:0;display:flex;flex-direction:column;gap:var(--space-2)}
+.sc-dl>div{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3)}
+.sc-dl dt{font-size:var(--font-size-sm);color:var(--color-text-muted)}
+.sc-dl dd{margin:0;font-size:var(--font-size-sm);font-weight:500;text-align:right}
+.sc-why{font-size:var(--font-size-sm);color:var(--color-attention-text)}
+.sc-actions{display:flex;flex-wrap:wrap;gap:var(--space-2)}
+.sc-approval{border:1px solid var(--color-attention);border-radius:var(--radius-card);background:color-mix(in srgb,var(--color-attention) calc(var(--badge-tint) * 100%),var(--color-surface))}
+.sc-approval-box{display:flex;flex-direction:column;gap:var(--space-3)}
+.sc-approval-text{margin:0;font-size:var(--font-size-sm);font-family:var(--font-mono);word-break:break-word}
+
+/* ---- Живой экран (11.3/15.4) ---- */
+.livescreen-wrap{display:flex;flex-direction:column;border:1px solid var(--color-border);border-radius:var(--radius-card);overflow:hidden;background:var(--color-screen-bg)}
+.livescreen-head{display:flex;align-items:center;justify-content:space-between;padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--color-border);background:var(--color-surface)}
+.livescreen-title{font-size:var(--font-size-sm);font-weight:600;color:var(--color-text)}
+.livescreen-live{font-size:var(--font-size-xs);color:var(--color-text-muted)}
+.livescreen-live--live{color:var(--color-success)}
+.livescreen{margin:0;padding:var(--space-3);font-family:var(--font-mono);font-size:var(--font-size-sm);line-height:1.4;color:var(--color-screen-text);white-space:pre;overflow:auto;min-height:280px;max-height:60vh}
+
+/* ---- Композер (13.1) ---- */
+.sc-composer{border-top:1px solid var(--color-border);padding-top:var(--space-3)}
+.composer{display:flex;flex-direction:column;gap:var(--space-2)}
+.composer-input{width:100%;resize:vertical;min-height:60px;font-family:var(--font-mono);font-size:var(--font-size-sm);padding:var(--space-2) var(--space-3);border:1px solid var(--color-border);border-radius:var(--radius-control);background:var(--color-bg);color:var(--color-text);line-height:1.5}
+.composer-input:focus{outline:0;border-color:var(--color-accent)}
+.composer-bar{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap}
+.composer-hint{font-size:var(--font-size-xs);color:var(--color-text-muted)}
+.composer-actions{display:flex;gap:var(--space-2)}
+.composer-result{font-size:var(--font-size-sm)}
+.composer-result--ok{color:var(--color-success)}
+.composer-result--err{color:var(--color-danger-text)}
+
+/* Клик по строке сессии — карточка. */
+.srow--link{cursor:pointer}
+.srow--link:hover{background:var(--color-surface-muted)}
+
+/* ---- W6: действия в шапке страницы (5.1/5.3/11.5) ---- */
+.page-head-row{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);margin-bottom:var(--space-4)}
+.page-head-row .detail-title{flex:1}
+
+/* ---- W6: диалог (11.5/5.1/5.3/11.10) ---- */
+.dialog-overlay{position:fixed;inset:0;z-index:50;background:var(--color-overlay);display:flex;align-items:center;justify-content:center;padding:var(--space-4)}
+.dialog{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-card);box-shadow:var(--shadow-card);width:100%;max-width:520px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.dialog--wide{max-width:680px}
+.dialog-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);padding:var(--space-4) var(--space-5);border-bottom:1px solid var(--color-border)}
+.dialog-title{font-size:var(--font-size-lg);font-weight:600}
+.dialog-close{border:0;background:transparent;color:var(--color-text-muted);cursor:pointer;padding:var(--space-1);border-radius:var(--radius-control);display:flex;align-items:center;justify-content:center;min-width:44px;min-height:44px}
+.dialog-close:hover{background:var(--color-surface-muted)}
+.dialog-body{padding:var(--space-5);overflow:auto}
+.dialog-foot{display:flex;align-items:center;justify-content:flex-end;gap:var(--space-2);padding:var(--space-4) var(--space-5);border-top:1px solid var(--color-border)}
+.dialog-note{margin:0 0 var(--space-4);font-size:var(--font-size-sm);color:var(--color-text-muted)}
+.dialog-err{margin:var(--space-2) 0 0;font-size:var(--font-size-sm);color:var(--color-danger-text)}
+.dialog-ok{margin:var(--space-2) 0 0;font-size:var(--font-size-sm);color:var(--color-success-text)}
+
+/* ---- W6: формы ---- */
+.field .field-err{color:var(--color-danger-text);font-size:var(--font-size-xs);margin-top:var(--space-1)}
+/* Подсказка (не ошибка) — приглушённым; одна строка с обрезкой. */
+.field .field-hint{color:var(--color-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Длинная подсказка (эндпоинт шлюза): переносом по словам, без обрезки. */
+.field .field-hint--wrap{white-space:normal;overflow:visible;text-overflow:clip}
+/* Статус settings.json + кнопка «Внести коррекции» (доп-3i). */
+.endpoint-settings{display:flex;align-items:center;gap:var(--space-2);margin-top:var(--space-1)}
+.endpoint-settings-status{font-size:var(--font-size-xs);color:var(--color-text-muted)}
+.endpoint-settings-status.is-ok,.endpoint-settings-status.is-changed{color:var(--color-success-text)}
+.endpoint-settings-status.is-error{color:var(--color-danger-text)}
+.field input[type=number]{width:120px}
+.field-row{display:flex;gap:var(--space-4)}
+.field-row .field{flex:1}
+/* Неравные поля в ряд (мастер сервера): имя шире, числа — компактные. */
+.field-row .field--grow{flex:2 1 0;min-width:0}
+.field-row .field--narrow{flex:0 0 72px}
+.field-row .field--prio{flex:0 0 88px}
+.field-row .field--narrow input[type=number],
+.field-row .field--prio input[type=number]{width:100%}
+.code-block{margin:var(--space-2) 0;padding:var(--space-3);background:var(--color-bg);border:1px solid var(--color-border);border-radius:var(--radius-control);font-family:var(--font-mono);font-size:var(--font-size-sm);line-height:1.5;white-space:pre-wrap;word-break:break-all;color:var(--color-text)}
+.check-row{display:flex;align-items:center;gap:var(--space-2);margin:var(--space-2) 0;font-size:var(--font-size-sm)}
+
+/* ---- W6: каталоги (автодополнение новой сессии, 13.2) ---- */
+.dir-list{list-style:none;margin:var(--space-2) 0 0;padding:0;border:1px solid var(--color-border);border-radius:var(--radius-control);overflow:hidden;max-height:200px;overflow:auto}
+.dir-list li{padding:var(--space-1) var(--space-3);font-family:var(--font-mono);font-size:var(--font-size-xs);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dir-list li:hover{background:var(--color-surface-muted)}
+.dir-list li.is-active{background:color-mix(in srgb,var(--color-accent) calc(var(--badge-tint) * 100%),var(--color-surface))}
+
+/* ---- W6: ревизии настроек (11.10) ---- */
+.rev-table{width:100%;border-collapse:collapse;font-size:var(--font-size-sm)}
+.rev-table th{text-align:left;font-size:var(--font-size-xs);color:var(--color-text-muted);font-weight:600;padding:var(--space-2);border-bottom:1px solid var(--color-border)}
+.rev-table td{padding:var(--space-2);border-bottom:1px solid var(--color-border);vertical-align:top}
+.rev-table tr:last-child td{border-bottom:0}
+.rev-key{font-family:var(--font-mono);font-size:var(--font-size-xs);word-break:break-all}
+.rev-val{font-family:var(--font-mono);font-size:var(--font-size-xs);word-break:break-all;color:var(--color-text-muted)}
+.rev-who{font-size:var(--font-size-xs);color:var(--color-text-muted)}
+.rev-cell-actions{white-space:nowrap;text-align:right}
+.settings-group{margin-bottom:var(--space-5)}
+.settings-group h3{font-size:var(--font-size-md);font-weight:600;margin:0 0 var(--space-3);color:var(--color-text)}
+.settings-search{
+  width:100%;min-height:44px;padding:10px var(--space-3);
+  border:1px solid var(--color-border);border-radius:var(--radius-control);
+  font-size:var(--font-size-md);background:var(--color-bg);color:var(--color-text);
+  margin-bottom:var(--space-4);
+}
+.settings-search:focus{outline:0;border-color:var(--color-accent)}
+
+/* ---- W7: тосты (11.11, O5/J12) + здоровье узла (14.4) ---- */
+.toasts{position:fixed;right:var(--space-4);bottom:var(--space-4);display:flex;flex-direction:column;gap:var(--space-2);z-index:50;max-width:360px}
+.toast{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);background:var(--color-surface);border:1px solid var(--color-border);border-left:3px solid var(--tone);border-radius:var(--radius-control);box-shadow:var(--shadow-card);font-size:var(--font-size-sm);color:var(--color-text)}
+.toast-text{flex:1}
+.toast-action{white-space:nowrap;border:0;background:var(--color-accent);color:var(--color-on-accent);border-radius:var(--radius-control);padding:6px 12px;font-size:var(--font-size-sm);font-weight:600;cursor:pointer}
+.toast-action:hover{opacity:.9}
+.toast-close{border:0;background:transparent;color:var(--color-text-muted);font-size:var(--font-size-sm);cursor:pointer;padding:0 2px;line-height:1}
+@media(max-width:767px){.toasts{right:var(--space-2);left:var(--space-2);bottom:76px;max-width:none}.toast{padding:10px var(--space-3)}.toast-action{min-height:44px;padding:10px 16px}.toast-close{min-width:44px;min-height:44px;padding:0}}
+.node-health{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2) var(--space-3);font-size:var(--font-size-sm)}
+.node-health-skew,.node-health-disk,.node-health-qwen{color:var(--color-text-muted);font-family:var(--font-mono);font-size:var(--font-size-xs)}
+.node-health-warn{flex-basis:100%;margin:var(--space-1) 0 0;padding:var(--space-2);border-radius:var(--radius-control);background:color-mix(in srgb,var(--color-warning) 14%,var(--color-surface));color:var(--color-text);font-size:var(--font-size-sm)}
+.section-action{margin-left:auto;display:inline-flex}
+.detail-actions{display:flex;gap:var(--space-3);flex-wrap:wrap}
+.ext-hint{margin:var(--space-2) 0 0;font-size:var(--font-size-xs);color:var(--color-text-muted)}
+
+/* ---- W8: терминал в браузере (13.4) ---- */
+/* Оверлей выше диалогов (50) и командной строки (60). */
+.term-overlay{position:fixed;inset:0;z-index:70;background:var(--color-overlay);display:flex;align-items:center;justify-content:center;padding:var(--space-5)}
+.term-panel{display:flex;flex-direction:column;overflow:hidden;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-card);box-shadow:var(--shadow-card);max-width:100%;max-height:100%}
+.term-head{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--color-border);background:var(--color-surface-muted)}
+.term-title{margin:0;font-size:var(--font-size-md);font-weight:600;display:flex;align-items:baseline;gap:var(--space-2);min-width:0}
+.term-sid{font-size:var(--font-size-xs);color:var(--color-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.term-status{margin-left:auto;font-size:var(--font-size-xs);color:var(--color-text-muted);white-space:nowrap}
+.term-status.error{color:var(--color-danger-text)}
+.term-close{border:0;background:transparent;color:var(--color-text-muted);cursor:pointer;padding:var(--space-1);border-radius:var(--radius-control);display:flex;align-items:center;justify-content:center}
+.term-close:hover{background:var(--color-surface)}
+.term-body{flex:1;min-height:0;position:relative;overflow:hidden;background:var(--color-screen-bg);color:var(--color-screen-text)}
+.term-body .xterm,.term-body .xterm-screen{font-family:var(--font-mono)}
+/* Прокси-текстара xterm (невидимая, z-index:-5): размер для ввода не важен,
+   но 19.3.6 требует ≥44×44 на телефоне → расширяем (!important против inline). */
+.term-body .xterm-helper-textarea{width:44px !important;height:44px !important}
+.term-err{padding:var(--space-3);font-size:var(--font-size-sm);color:var(--color-danger-text);text-align:center}
+/* Inline-терминал карточки сессии (доп-3i): как .livescreen-wrap, но интерактив. */
+.term-inline{display:flex;flex-direction:column;border:1px solid var(--color-border);border-radius:var(--radius-card);overflow:hidden;background:var(--color-screen-bg)}
+.term-inline-head{background:var(--color-surface)}
+.term-inline-body{flex:none;height:320px;max-height:60vh}
+/* Строка клавиш телефона (над клавиатурой). */
+.term-keyrow{display:none}
+.term-key{min-width:44px;min-height:44px;padding:0 var(--space-3);border:1px solid var(--color-border);border-radius:var(--radius-control);background:var(--color-surface);color:var(--color-text);font-size:var(--font-size-sm);font-family:var(--font-mono);cursor:pointer}
+.term-key:hover{background:var(--color-surface-muted)}
+.term-key.is-active{background:var(--color-accent);color:var(--color-on-accent);border-color:var(--color-accent)}
+/* Телефон (<768): весь экран, без рамки/скругления, строка клавиш видна. */
+@media(max-width:767px){
+  .term-overlay{padding:0;background:var(--color-screen-bg)}
+  .term-panel--phone{border:0;border-radius:0;box-shadow:none}
+  .term-close{min-width:44px;min-height:44px}
+  .term-keyrow{display:flex;flex-wrap:wrap;gap:var(--space-2);padding:var(--space-2) var(--space-3) calc(var(--space-2) + env(safe-area-inset-bottom));background:var(--color-surface);border-top:1px solid var(--color-border)}
+  .term-key{flex:1 1 auto}
+}

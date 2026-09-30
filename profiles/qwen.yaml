@@ -1,0 +1,63 @@
+# Профиль агента qwen (раздел 7 ТЗ). Единственный профиль в этой редакции.
+#
+# Регулярные выражения зафиксированы фикстурами testdata/fixtures/qwen/0.24.4/
+# (реальные экраны Qwen Code 0.24.4, buffer-режим, 2026-09-24/25).
+# Источник истины — фикстуры, не этот файл. Расширять regex «чтобы прошло»
+# без новой фикстуры запрещено (процесс — docs/HANDOFF.md).
+#
+# Примечания к regex:
+# - busy_regex: «Enter to steer» — маркер занятой панели (фикстуры busy_*);
+#   «esc to cancel» — строка, которую обязан показывать runpilot-mockcoder
+#   (раздел 15 ТЗ), чтобы детектор qwen классифицировал его экраны.
+# - wait_regex: «Initializing» — экран загрузки (wait_connecting);
+#   «Context (8[5-9]|9[0-9]|100)% used» — авто-компрессия, видимый маркер
+#   высокого контекста (wait_compact); «plan mode (…)» — режим plan
+#   (таблица состояний раздела 7 относит его к WAIT_UI);
+#   «Retrying in Ns» — маркер ожидания при rate limit: на реальных экранах
+#   0.24.4 строка видима только в истории терминала (видимый экран
+#   byte-в-byte равен busy — см. docs/evidence/Э1/CONTROL.md), в mockcoder
+#   она рисуется на видимом экране (фикстуры mockcoder_wait_rate_limit).
+# - idle_regex «^>» — строка ввода в колонке 0; порядок классификации
+#   wait→busy→approval→idle делает его безопасным (busy_*/plan_* тоже
+#   содержат «^>», но определяются раньше).
+# - input_strip_regex: \x{200B} — невидимый курсор (ZWSP) в конце строки ввода.
+name: qwen
+command: qwen
+version_cmd: qwen --version
+submit_keys: Enter
+cancel_keys: Escape
+resume_text: continue
+cmdline_regex: '(^|/)qwen(\s|$)'
+classify_lines: 20
+tab_width: 8
+busy_regex: 'Enter to steer|esc to cancel'
+approval_regex: 'Waiting for user confirmation'
+wait_regex: 'Initializing|Context (8[5-9]|9[0-9]|100)% used|plan mode \(shift \+ tab to cycle\)|Retrying in [0-9]+s'
+idle_regex: '^>'
+placeholder_regex: '^Type your message'
+input_top_regex: '^>'
+input_bottom_regex: '^─+$'
+input_strip_regex: '^>\s*|^ {2}|\s+\x{200B}$|\x{200B}'
+volatile_regex: ''
+# Ввод и разрешения (v2 разделы 13.1/13.3): фиксируются фикстурами 0.24.5 (W5).
+# approval_options — варианты ответа на запрос подтверждения (id/label/keys).
+# 0.24.5: запрос — однострочный выбор «? <Tool> … ←» + «Waiting for user
+# confirmation»; подтверждение — Enter (выбранный вариант), отказ — Escape.
+# (В 0.24.4 варианты были нумерованным списком 1–4 с ответом y/n.)
+approval_options:
+  - id: allow
+    label: Разрешить
+    keys: [Enter]
+  - id: deny
+    label: Отказать
+    keys: [Escape]
+compress_text: /compact
+quit_text: /quit
+# 13.1: Qwen Code сворачивает длинную вставку в заглушку «[Pasted Content N chars]»
+# (фикстуры idle_input_pasted_short / idle_input_pasted_long, 0.24.5).
+paste_placeholder_regex: '\[Pasted Content \d+ chars\]'
+env:
+  OPENAI_BASE_URL: "{{.Gateway}}/s/{{.SID}}/v1"
+  OPENAI_API_KEY: "runpilot"
+  OPENAI_MODEL: "{{.ModelAlias}}"
+  RUNPILOT_SID: "{{.SID}}"

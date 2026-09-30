@@ -1,0 +1,5 @@
+     3. Always allow run 'rm *' commands for this user                           
+     4. No, suggest changes (esc)       
+
+
+  ⠏ Waiting for user confirmation...    

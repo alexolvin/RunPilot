@@ -1,0 +1,16 @@
+{
+    "card0": {
+        "GPU use (%)": 87,
+        "GPU temp (degC)": 61,
+        "GPU power (watts)": 312.5,
+        "VRAM Total Memory (B)": 68719476736,
+        "VRAM Total Used Memory (B)": 57982058496
+    },
+    "card1": {
+        "GPU use (%)": 0,
+        "GPU temp (degC)": 44,
+        "GPU power (watts)": 95.2,
+        "VRAM Total Memory (B)": 68719476736,
+        "VRAM Total Used Memory (B)": 4294967296
+    }
+}

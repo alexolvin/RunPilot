@@ -1,0 +1,153 @@
+/* Дизайн-токены RunPilot (v2 раздел 9.2). ЕДИНСТВЕННЫЙ источник цветов и
+   размерных шкал фронтенда (R2: lintweb — цвета #hex/rgb()/hsl() только здесь).
+   Компоненты и layout ссылаются только на var(--…). Тёмная тема — [data-theme].
+   Точки перелома (раздел 10.1): >=1280 широкая; 1024–1279 узкая; 768–1023 планшет;
+   <768 телефон. Зеркалируются в app/constants.js (JS не видит CSS-медиазапросы). */
+
+/* ---- Шрифты (woff2, web/fonts/; поднаборы latin/cyrillic/cyrillic-ext) ---- */
+/* Inter 400 */
+@font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/inter-cyrillic-ext-400-normal.woff2) format('woff2');unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}
+@font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/inter-cyrillic-400-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/inter-latin-400-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+/* Inter 500 */
+@font-face{font-family:'Inter';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/inter-cyrillic-ext-500-normal.woff2) format('woff2');unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}
+@font-face{font-family:'Inter';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/inter-cyrillic-500-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:'Inter';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/inter-latin-500-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+/* Inter 600 */
+@font-face{font-family:'Inter';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/inter-cyrillic-ext-600-normal.woff2) format('woff2');unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}
+@font-face{font-family:'Inter';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/inter-cyrillic-600-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:'Inter';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/inter-latin-600-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+/* IBM Plex Mono 400 */
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/ibm-plex-mono-cyrillic-ext-400-normal.woff2) format('woff2');unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/ibm-plex-mono-cyrillic-400-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/ibm-plex-mono-latin-400-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+/* IBM Plex Mono 500 */
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/ibm-plex-mono-cyrillic-ext-500-normal.woff2) format('woff2');unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/ibm-plex-mono-cyrillic-500-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/ibm-plex-mono-latin-500-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+
+:root{
+  /* ---- Цвета (раздел 9.2) ---- */
+  --color-accent:#2563EB;
+  /* Акцент как ТЕКСТ (ссылки, активные пункты): в тёмной теме светлее
+     --color-accent, чтобы контраст на тёмной поверхности ≥ 4.5 (19.3.5).
+     Заполнения (кнопки, brand, бейджи) используют --color-accent. */
+  --color-accent-text:#2563EB;
+  --color-bg:#F8FAFC;
+  --color-surface:#FFFFFF;
+  --color-surface-muted:#F1F5F9;
+  --color-border:#E2E8F0;
+  --color-text:#0F172A;
+  /* Приглушённый текст: тёмнее slate-500, чтобы контраст ≥ 4.5 даже на
+     surface-muted (19.3.5; #64748B даёт 4.34 на #F1F5F9). */
+  --color-text-muted:#5B6B85;
+  --color-success:#16A34A;
+  --color-warning:#D97706;
+  --color-danger:#DC2626;
+  --color-attention:#EA580C;
+  --color-info:#0891B2;
+  --color-violet:#7C3AED;
+  /* Текстовые варианты семантики: контраст ≥ 4.5 на светлой поверхности (19.3.5). */
+  --color-success-text:#15803D;
+  --color-attention-text:#C2410C;
+  --color-warning-text:#B45309;
+  --color-danger-text:#B91C1C;
+  --server-1:#2563EB;
+  --server-2:#7C3AED;
+  --server-3:#0D9488;
+  --server-4:#DB2777;
+  --server-5:#CA8A04;
+  /* Фон бейджа — тот же цвет с прозрачностью. */
+  --badge-tint:0.14;
+  /* Текст на залитом акценте/опасном фоне. */
+  --color-on-accent:#FFFFFF;
+  /* Экран кодера (11.3): тёмный моноширинный фон в обеих темах. */
+  --color-screen-bg:#0B1220;
+  --color-screen-text:#E2E8F0;
+  /* Подложка диалога (W6): затемнение вьюпорта. */
+  --color-overlay:rgba(15,23,42,0.45);
+
+  /* ---- Шрифты ---- */
+  --font-ui:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+
+  /* ---- Шкала размеров (9.2) ---- */
+  --font-size-xs:12px;
+  --font-size-sm:13px;
+  --font-size-md:14px;
+  --font-size-lg:16px;
+  --font-size-xl:20px;
+  --font-size-2xl:28px;
+
+  /* ---- Сетка 4 px ---- */
+  --space-1:4px;
+  --space-2:8px;
+  --space-3:12px;
+  --space-4:16px;
+  --space-5:20px;
+  --space-6:24px;
+  --space-7:28px;
+  --space-8:32px;
+  --space-9:36px;
+  --space-10:40px;
+
+  /* ---- Радиусы ---- */
+  --radius-card:12px;
+  --radius-control:8px;
+  --radius-badge:6px;
+
+  /* ---- Тень карточки (только светлая тема) ---- */
+  --shadow-card:0 1px 2px rgba(15,23,42,0.06),0 1px 3px rgba(15,23,42,0.08);
+
+  /* ---- Длительности ---- */
+  --duration-fast:120ms;
+  --duration-base:200ms;
+  --hold-confirm-duration:900ms;
+
+  /* ---- Иконки (9.2: 20 px, линия 1.75) ---- */
+  --icon-size:20px;
+  --icon-stroke:1.75;
+
+  /* ---- Боковая панель (10.1) ---- */
+  --sidebar-w:240px;
+  --sidebar-w-narrow:72px;
+
+  color-scheme:light;
+}
+
+/* ---- Тёмная тема (9.2): светлее на один шаг для акцентов/состояний ---- */
+[data-theme='dark']{
+  --color-accent:#3B82F6;
+  --color-accent-text:#60A5FA;
+  --color-bg:#0F172A;
+  --color-surface:#1E293B;
+  --color-surface-muted:#273449;
+  --color-border:#334155;
+  --color-text:#E2E8F0;
+  --color-text-muted:#94A3B8;
+  --color-success:#22C55E;
+  --color-warning:#F59E0B;
+  --color-danger:#F87171;
+  --color-attention:#FB923C;
+  --color-info:#22D3EE;
+  --color-violet:#A78BFA;
+  /* Текстовые варианты семантики: контраст ≥ 4.5 на тёмной поверхности (19.3.5). */
+  --color-success-text:#4ADE80;
+  --color-attention-text:#FDBA74;
+  --color-warning-text:#FCD34D;
+  --color-danger-text:#FCA5A5;
+  --server-1:#3B82F6;
+  --server-2:#A78BFA;
+  --server-3:#2DD4BF;
+  --server-4:#F472B6;
+  --server-5:#FACC15;
+  --badge-tint:0.20;
+  /* Текст/иконка на залитом акценте — тёмные (тёмная тема): белый на #3B82F6
+     даёт контраст 3.68 < 4.5 (WCAG AA), а #0F172A — 4.85 ≥ 4.5 (19.3.5/axe). */
+  --color-on-accent:#0F172A;
+  /* Подложка диалога в тёмной теме чуть темнее. */
+  --color-overlay:rgba(2,6,23,0.6);
+  /* В тёмной теме карточка без тени — рамка. */
+  --shadow-card:none;
+  color-scheme:dark;
+}

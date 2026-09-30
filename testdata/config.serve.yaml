@@ -1,0 +1,4 @@
+# Смоук-конфиг для проверки запуска serve (Э0).
+coordinator:
+  bind: 127.0.0.1
+  db_path: /tmp/runpilot-smoke/db.db

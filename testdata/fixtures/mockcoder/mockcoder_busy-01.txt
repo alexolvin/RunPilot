@@ -1,0 +1,50 @@
+────────────────────────────────────────────────────────────────────────────────────────────────────
+>   Type your message or @path/to/file                                                                                                                                                                  
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  ➜ mockcoder · mock-model · 1.2k Context 3% used                                                                                                                                                       
+  Enter to steer · Ctrl+Q to queue · ⏸ Ask permissions (shift + tab to cycle)                                                                                                                           
+  > Промпт для busy-скрина                        
+  Working... (0s · esc to cancel)                 
+  ▍ post 1/4 done (3 chunks)                      
+  ⚙ tool 1/3 done                                 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

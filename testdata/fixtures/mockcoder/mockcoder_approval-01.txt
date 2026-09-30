@@ -1,0 +1,50 @@
+  ? Shell mock-tool (запустить инструмент)                                                                                                                                                              
+     mock-tool                                                                                                                                                                                          
+   Allow execution of: 'mock-tool'?                                                                                                                                                                     
+   ● 1. Yes, allow once                                                                                                                                                                                 
+     2. Always allow run 'mock-tool *' commands in this project                                                                                                                                         
+     3. Always allow run 'mock-tool *' commands for this user                                                                                                                                           
+     4. No, suggest changes (esc)                                                                                                                                                                       
+                                                                                                                                                                                                        
+  Waiting for user confirmation...                                                                                                                                                                      
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

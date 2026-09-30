@@ -1,0 +1,90 @@
+# --- build output / binaries ---
+/runpilot
+/runpilot-mockcoder
+/runpilot-stand
+/runpilot-fakellm
+/screenshots
+dist/
+build/
+*.test
+
+# --- database / local state ---
+*.db
+*.db-wal
+*.db-shm
+
+# --- secrets and local configuration ---
+.env
+.env.*
+!.env.example
+secrets.env
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+credentials.json
+secrets.yaml
+secrets.yml
+kubeconfig
+*.kubeconfig
+
+# --- agent / local AI tooling (never publish) ---
+.agent/
+.agents/
+.qwen/
+.claude/
+.codex/
+.cursor/
+.aider/
+.continue/
+.windsurf/
+.sweep/
+.goose/
+.idea-agent/
+*.agent.md
+.scratch/
+PLAN.md
+
+# --- terminal sessions, multiplexers, distributed-agent runtime ---
+*.tmux
+*.tmux.log
+tmux-client-*
+tmux-server-*
+screenlog.*
+*.screenlog
+nohup.out
+*.cast
+typescript
+.typescript
+pane-capture*
+session-dump*
+.queue/
+.jobs/
+.runs/
+gpu-pool/
+tmux-sessions/
+terminal-dumps/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- editors ---
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# --- logs and caches ---
+*.log
+.cache/
+tmp/
+temp/
+
+# --- local-only, не публикуется ---
+manual.md
+docs/evidence/

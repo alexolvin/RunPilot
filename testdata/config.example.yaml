@@ -1,0 +1,105 @@
+# Пример координатора — дословно из раздела 13 ТЗ.
+coordinator:
+  bind: 192.0.2.10
+  allow_cidrs: ["192.168.0.0/16", "10.0.0.0/8", "127.0.0.0/8", "100.64.0.0/10"]
+  gateway_port: 8787
+  api_port: 8788
+  gateway_url: http://192.0.2.10:8787
+  token_env: RUNPILOT_TOKEN
+  db_path: ~/.local/share/runpilot/runpilot.db
+  shutdown_grace_sec: 30
+
+scheduler:
+  tick_ms: 500
+  aging_sec: 900
+  prefer_wait_sec: 300
+  pin_unavailable_sec: 120
+  affinity_ttl_sec: 900
+  resume_backoff_sec: 30
+  auto_requeue_max: 3
+  snapshot_max_age_sec: 5
+  dispatch_stable_sec: 3
+  external_confirm_sec: 3
+  cooldown_sec: 2
+  recovery_window_sec: 15
+
+dispatch:
+  node_reply_timeout_sec: 5
+  start_confirm_sec: 20
+  resume_key_delay_ms: 150
+  budget_p95_ms: 1500
+
+turn:
+  done_quiet_sec: 5
+  done_stable_sec: 5
+  tool_hold_max_sec: 900
+  approval_hold_max_sec: 600
+  unknown_max_sec: 60
+  node_lost_release_sec: 120
+  auto_enqueue_stable_sec: 20
+
+gateway:
+  hold_max_sec: 60
+  max_body_mb: 32
+  retry_after_sec: 30
+  max_inflight: 256
+
+monitor:
+  health_interval_sec: 5
+  health_timeout_sec: 3
+  health_down_after: 3
+  health_up_after: 2
+  metrics_interval_sec: 2
+  metrics_timeout_sec: 2
+  rate_window_sec: 10
+  history_window_min: 10
+
+limits:
+  max_sessions_per_node: 32
+  max_queue_length: 256
+  max_pane_snapshot_bytes: 131072
+
+servers:
+  - name: node-a
+    priority: 100
+    slots: 1
+    accept: [resume, high, normal, low]
+    health_url: http://192.0.2.21:8004/health
+    metrics_url: http://192.0.2.21:8004/metrics
+    max_output_tokens: 16384
+    first_byte_timeout_sec: 900
+    require_direct: true
+    upstreams:
+      openai:
+        url: http://192.0.2.21:8004
+        model: qwen3.6-27b
+        key_env: RUNPILOT_KEY_VLLM
+  - name: srv2
+    priority: 50
+    slots: 1
+    accept: [resume, high, normal, low]
+    health_url: http://192.0.2.22:8004/health
+    metrics_url: http://192.0.2.22:8004/metrics
+    max_output_tokens: 16384
+    first_byte_timeout_sec: 900
+    require_direct: true
+    upstreams:
+      openai:
+        url: http://192.0.2.22:8004
+        model: qwen3.6-27b
+        key_env: RUNPILOT_KEY_VLLM
+
+profiles:
+  qwen: {model_alias: qwen3.6-27b}
+
+notify:
+  telegram:
+    bot_token_env: RUNPILOT_TG_TOKEN
+    chat_ids: [000000000]
+    min_turn_sec: 60
+    coalesce_sec: 10
+
+retention:
+  requests_days: 30
+  events_days: 30
+  gone_sessions_days: 7

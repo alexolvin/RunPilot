@@ -1,0 +1,4 @@
+# bind вне allow_cidrs — serve обязан отклониться (T22).
+coordinator:
+  bind: 8.8.8.8
+  allow_cidrs: ["127.0.0.0/8", "10.0.0.0/8"]

@@ -1,0 +1,9 @@
+  Tips: Try /insight to generate personalized insights from your chat history.   
+  ●︎ Update successful! The new version will be used on your next run.            
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> /compact ​                             
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ➜ runpilot-w5 · qwen3.8-27b (node-b)     
+  ⏸ Ask permissions (shift + tab to cycle)                                       
+

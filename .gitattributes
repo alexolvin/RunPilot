@@ -1,0 +1,11 @@
+* text=auto eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.png binary
+*.jpg binary
+*.gif binary
+*.webp binary
+*.svg binary
+*.pdf binary
+*.min.js linguist-generated=true

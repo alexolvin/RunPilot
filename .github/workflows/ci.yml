@@ -1,0 +1,26 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - name: build
+        run: CGO_ENABLED=0 go build ./...
+      - name: go vet
+        run: CGO_ENABLED=0 go vet ./...
+      - name: staticcheck
+        run: CGO_ENABLED=0 go run honnef.co/go/tools/cmd/staticcheck@latest ./...
+      - name: project linters (R2)
+        run: make lint
+      # -race требует cgo, поэтому к тестам CGO_ENABLED=0 не применяем.
+      - name: go test -race
+        run: go test -race ./...

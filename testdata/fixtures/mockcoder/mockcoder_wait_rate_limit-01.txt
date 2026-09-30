@@ -1,0 +1,50 @@
+────────────────────────────────────────────────────────────────────────────────────────────────────                                                              
+>   Type your message or @path/to/file                                                                                                                            
+────────────────────────────────────────────────────────────────────────────────────────────────────                                                              
+  ✕ [API Error: 429 Rate limit reached for requests.] (Retrying in 56s… (attempt 1/10))                                                                           
+  ↻ Retrying in 56s… (attempt 1/10)                                                                                                                               
+  ➜ mockcoder · mock-model                                                                                                                                        
+  Enter to steer · Ctrl+Q to queue · ⏸ Ask permissions (shift + tab to cycle)                                                                                     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
