@@ -4,19 +4,31 @@
    Точки перелома (раздел 10.1): >=1280 широкая; 1024–1279 узкая; 768–1023 планшет;
    <768 телефон. Зеркалируются в app/constants.js (JS не видит CSS-медиазапросы). */
 
-/* ---- Шрифты (woff2, web/fonts/; поднаборы latin/cyrillic/cyrillic-ext) ---- */
-/* Inter 400 */
-@font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/inter-cyrillic-ext-400-normal.woff2) format('woff2');unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}
-@font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/inter-cyrillic-400-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
-@font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/inter-latin-400-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
-/* Inter 500 */
-@font-face{font-family:'Inter';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/inter-cyrillic-ext-500-normal.woff2) format('woff2');unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}
-@font-face{font-family:'Inter';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/inter-cyrillic-500-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
-@font-face{font-family:'Inter';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/inter-latin-500-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
-/* Inter 600 */
-@font-face{font-family:'Inter';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/inter-cyrillic-ext-600-normal.woff2) format('woff2');unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}
-@font-face{font-family:'Inter';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/inter-cyrillic-600-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
-@font-face{font-family:'Inter';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/inter-latin-600-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+/* ---- Шрифты (woff2, web/fonts/; поднаборы cyrillic/cyrillic-ext/latin) ---- */
+/* Manrope 600 (display) */
+@font-face{font-family:'Manrope';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/manrope-cyrillic-600-normal.woff2) format('woff2');unicode-range:U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116}
+@font-face{font-family:'Manrope';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/manrope-latin-600-normal.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Manrope';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/manrope-cyrillic-ext-600-normal.woff2) format('woff2');unicode-range:U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F}
+/* Manrope 700 (display) */
+@font-face{font-family:'Manrope';font-style:normal;font-weight:700;font-display:swap;src:url(/fonts/manrope-cyrillic-700-normal.woff2) format('woff2');unicode-range:U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116}
+@font-face{font-family:'Manrope';font-style:normal;font-weight:700;font-display:swap;src:url(/fonts/manrope-latin-700-normal.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Manrope';font-style:normal;font-weight:700;font-display:swap;src:url(/fonts/manrope-cyrillic-ext-700-normal.woff2) format('woff2');unicode-range:U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F}
+/* Manrope 800 (display) */
+@font-face{font-family:'Manrope';font-style:normal;font-weight:800;font-display:swap;src:url(/fonts/manrope-cyrillic-800-normal.woff2) format('woff2');unicode-range:U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116}
+@font-face{font-family:'Manrope';font-style:normal;font-weight:800;font-display:swap;src:url(/fonts/manrope-latin-800-normal.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'Manrope';font-style:normal;font-weight:800;font-display:swap;src:url(/fonts/manrope-cyrillic-ext-800-normal.woff2) format('woff2');unicode-range:U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F}
+/* IBM Plex Sans 400 (ui) */
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/ibm-plex-sans-cyrillic-400-normal.woff2) format('woff2');unicode-range:U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/ibm-plex-sans-latin-400-normal.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/ibm-plex-sans-cyrillic-ext-400-normal.woff2) format('woff2');unicode-range:U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F}
+/* IBM Plex Sans 500 (ui) */
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/ibm-plex-sans-cyrillic-500-normal.woff2) format('woff2');unicode-range:U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/ibm-plex-sans-latin-500-normal.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:500;font-display:swap;src:url(/fonts/ibm-plex-sans-cyrillic-ext-500-normal.woff2) format('woff2');unicode-range:U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F}
+/* IBM Plex Sans 600 (ui) */
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/ibm-plex-sans-cyrillic-600-normal.woff2) format('woff2');unicode-range:U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/ibm-plex-sans-latin-600-normal.woff2) format('woff2');unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD}
+@font-face{font-family:'IBM Plex Sans';font-style:normal;font-weight:600;font-display:swap;src:url(/fonts/ibm-plex-sans-cyrillic-ext-600-normal.woff2) format('woff2');unicode-range:U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F}
 /* IBM Plex Mono 400 */
 @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/ibm-plex-mono-cyrillic-ext-400-normal.woff2) format('woff2');unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F}
 @font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;src:url(/fonts/ibm-plex-mono-cyrillic-400-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
@@ -28,47 +40,52 @@
 
 :root{
   /* ---- Цвета (раздел 9.2) ---- */
-  --color-accent:#2563EB;
-  /* Акцент как ТЕКСТ (ссылки, активные пункты): в тёмной теме светлее
-     --color-accent, чтобы контраст на тёмной поверхности ≥ 4.5 (19.3.5).
-     Заполнения (кнопки, brand, бейджи) используют --color-accent. */
-  --color-accent-text:#2563EB;
-  --color-bg:#F8FAFC;
+  /* Акцент — teal. Акцент как ТЕКСТ (ссылки, активные пункты): в тёмной теме
+     светлее --color-accent, чтобы контраст ≥ 4.5 (19.3.5). Заполнения
+     (кнопки, brand, бейджи) используют --color-accent. */
+  --color-accent:#0F766E;
+  --color-accent-text:#0F766E;
+  --color-bg:#F4F5F2;
   --color-surface:#FFFFFF;
-  --color-surface-muted:#F1F5F9;
-  --color-border:#E2E8F0;
-  --color-text:#0F172A;
-  /* Приглушённый текст: тёмнее slate-500, чтобы контраст ≥ 4.5 даже на
-     surface-muted (19.3.5; #64748B даёт 4.34 на #F1F5F9). */
-  --color-text-muted:#5B6B85;
-  --color-success:#16A34A;
-  --color-warning:#D97706;
-  --color-danger:#DC2626;
-  --color-attention:#EA580C;
-  --color-info:#0891B2;
-  --color-violet:#7C3AED;
+  --color-surface-muted:#EEF1EC;
+  --color-border:#E5E8E3;
+  --color-text:#1A2330;
+  /* Приглушённый текст: контраст ≥ 4.5 на surface и surface-muted (19.3.5). */
+  --color-text-muted:#5C6774;
+  --color-success:#059669;
+  --color-warning:#B45309;
+  --color-danger:#BE123C;
+  --color-attention:#C2410C;
+  --color-info:#0369A1;
+  --color-violet:#6D28D9;
   /* Текстовые варианты семантики: контраст ≥ 4.5 на светлой поверхности (19.3.5). */
-  --color-success-text:#15803D;
+  --color-success-text:#047857;
   --color-attention-text:#C2410C;
   --color-warning-text:#B45309;
-  --color-danger-text:#B91C1C;
-  --server-1:#2563EB;
-  --server-2:#7C3AED;
-  --server-3:#0D9488;
-  --server-4:#DB2777;
-  --server-5:#CA8A04;
+  --color-danger-text:#BE123C;
+  --server-1:#0F766E;
+  --server-2:#0369A1;
+  --server-3:#6D28D9;
+  --server-4:#BE123C;
+  --server-5:#B45309;
   /* Фон бейджа — тот же цвет с прозрачностью. */
   --badge-tint:0.14;
   /* Текст на залитом акценте/опасном фоне. */
   --color-on-accent:#FFFFFF;
+  /* Лого-марка (favicon + sidebar): teal-градиент + тёмный шеврон (дизайн
+     .agent/design). Брендовые цвета не зависят от темы. */
+  --brand-mark-from:#2EE6C7;
+  --brand-mark-to:#0F766E;
+  --brand-mark-arrow:#06231E;
   /* Экран кодера (11.3): тёмный моноширинный фон в обеих темах. */
   --color-screen-bg:#0B1220;
   --color-screen-text:#E2E8F0;
   /* Подложка диалога (W6): затемнение вьюпорта. */
-  --color-overlay:rgba(15,23,42,0.45);
+  --color-overlay:rgba(26,35,48,0.45);
 
   /* ---- Шрифты ---- */
-  --font-ui:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --font-ui:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --font-display:'Manrope','IBM Plex Sans',system-ui,sans-serif;
   --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 
   /* ---- Шкала размеров (9.2) ---- */
@@ -92,12 +109,12 @@
   --space-10:40px;
 
   /* ---- Радиусы ---- */
-  --radius-card:12px;
-  --radius-control:8px;
-  --radius-badge:6px;
+  --radius-card:14px;
+  --radius-control:10px;
+  --radius-badge:999px;
 
-  /* ---- Тень карточки (только светлая тема) ---- */
-  --shadow-card:0 1px 2px rgba(15,23,42,0.06),0 1px 3px rgba(15,23,42,0.08);
+  /* ---- Тень карточки (только светлая тема; плоский вид — рамка + лёгкая тень) ---- */
+  --shadow-card:0 1px 2px rgba(26,35,48,0.04),0 1px 3px rgba(26,35,48,0.05);
 
   /* ---- Длительности ---- */
   --duration-fast:120ms;
@@ -115,38 +132,39 @@
   color-scheme:light;
 }
 
-/* ---- Тёмная тема (9.2): светлее на один шаг для акцентов/состояний ---- */
+/* Тёмная тема (teal): акцент/нейтральные с лёгким teal-оттенком, акцент светлее
+   на один шаг, чтобы контраст ≥ 4.5 (19.3.5). */
 [data-theme='dark']{
-  --color-accent:#3B82F6;
-  --color-accent-text:#60A5FA;
-  --color-bg:#0F172A;
-  --color-surface:#1E293B;
-  --color-surface-muted:#273449;
-  --color-border:#334155;
-  --color-text:#E2E8F0;
-  --color-text-muted:#94A3B8;
-  --color-success:#22C55E;
-  --color-warning:#F59E0B;
-  --color-danger:#F87171;
+  --color-accent:#2DD4BF;
+  --color-accent-text:#5EEAD4;
+  --color-bg:#0B1514;
+  --color-surface:#12211F;
+  --color-surface-muted:#1A2C29;
+  --color-border:#243835;
+  --color-text:#E6EFE9;
+  --color-text-muted:#93A8A0;
+  --color-success:#34D399;
+  --color-warning:#F5A524;
+  --color-danger:#FB7185;
   --color-attention:#FB923C;
-  --color-info:#22D3EE;
+  --color-info:#38BDF8;
   --color-violet:#A78BFA;
   /* Текстовые варианты семантики: контраст ≥ 4.5 на тёмной поверхности (19.3.5). */
-  --color-success-text:#4ADE80;
+  --color-success-text:#6EE7B7;
   --color-attention-text:#FDBA74;
   --color-warning-text:#FCD34D;
-  --color-danger-text:#FCA5A5;
-  --server-1:#3B82F6;
-  --server-2:#A78BFA;
-  --server-3:#2DD4BF;
-  --server-4:#F472B6;
-  --server-5:#FACC15;
+  --color-danger-text:#FDA4AF;
+  --server-1:#2DD4BF;
+  --server-2:#38BDF8;
+  --server-3:#A78BFA;
+  --server-4:#FB7185;
+  --server-5:#FBBF24;
   --badge-tint:0.20;
-  /* Текст/иконка на залитом акценте — тёмные (тёмная тема): белый на #3B82F6
-     даёт контраст 3.68 < 4.5 (WCAG AA), а #0F172A — 4.85 ≥ 4.5 (19.3.5/axe). */
-  --color-on-accent:#0F172A;
+  /* Текст/иконка на залитом акценте — тёмные: белый на #2DD4BF даёт контраст
+     < 4.5 (WCAG AA), а #04211C — ≥ 4.5 (19.3.5/axe). */
+  --color-on-accent:#04211C;
   /* Подложка диалога в тёмной теме чуть темнее. */
-  --color-overlay:rgba(2,6,23,0.6);
+  --color-overlay:rgba(2,10,9,0.6);
   /* В тёмной теме карточка без тени — рамка. */
   --shadow-card:none;
   color-scheme:dark;

@@ -40,7 +40,7 @@ export function Sidebar() {
   const s = useStore();
   return html`<aside class="sidebar">
     <div class="brand" role="link" title=${T.brand.home} onClick=${() => navigate('queue')}>
-      <div class="brand-mark">${Icon({ name: 'command' })}</div>
+      <div class="brand-mark"></div>
       <div>
         <div class="brand-name">${T.brand.name}</div>
         ${s.session.version ? html`<div class="brand-sub">v${s.session.version}</div>` : null}

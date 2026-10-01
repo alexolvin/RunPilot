@@ -114,11 +114,18 @@
 }
 .brand:hover .brand-mark{filter:brightness(0.94)}
 .brand-mark{
-  width:32px;height:32px;border-radius:var(--radius-control);
-  background:var(--color-accent);color:var(--color-on-accent);
-  display:flex;align-items:center;justify-content:center;flex:none;
+  width:32px;height:32px;border-radius:9px;flex:none;position:relative;
+  display:grid;place-items:center;
+  background:linear-gradient(160deg,var(--brand-mark-from),var(--brand-mark-to));
 }
-.brand-name{font-size:var(--font-size-lg);font-weight:600;line-height:1.1}
+/* Шеврон «пайлот» (дизайн .agent/design): угол-«⌟» поворачивается в «❯». */
+.brand-mark::before{
+  content:"";width:12px;height:12px;
+  border-right:2px solid var(--brand-mark-arrow);
+  border-bottom:2px solid var(--brand-mark-arrow);
+  transform:rotate(-45deg) translate(-1px,-1px);
+}
+.brand-name{font-size:var(--font-size-lg);font-weight:800;font-family:var(--font-display);letter-spacing:-0.02em;line-height:1.1}
 .brand-sub{font-size:var(--font-size-xs);color:var(--color-text-muted);line-height:1.2}
 .nav{
   display:flex;flex-direction:column;gap:2px;
@@ -134,8 +141,8 @@
 }
 .nav-item:hover{background:var(--color-surface-muted);color:var(--color-text)}
 .nav-item.is-active{
-  background:var(--color-surface-muted);
-  color:var(--color-text);
+  background:color-mix(in srgb,var(--color-accent) 12%,transparent);
+  color:var(--color-accent-text);
 }
 .nav-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .nav-count{
@@ -171,7 +178,7 @@
   background:var(--color-surface);
 }
 .page-head{flex:1;min-width:0}
-.page-title{display:flex;align-items:center;gap:var(--space-2);min-width:0;font-size:var(--font-size-xl);font-weight:600;line-height:1.2}
+.page-title{display:flex;align-items:center;gap:var(--space-2);min-width:0;font-size:var(--font-size-xl);font-weight:700;font-family:var(--font-display);letter-spacing:-0.02em;line-height:1.2}
 .page-title-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Статус системы — точка у заголовка (цвет = режим; подпись в подсказке). */
 .mode-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--tone,var(--color-success))}
@@ -313,7 +320,9 @@
   padding:var(--space-8);
 }
 .login-brand{display:flex;align-items:center;gap:var(--space-3);margin-bottom:var(--space-6)}
-.login-title{font-size:var(--font-size-xl);font-weight:600}
+.login-brand .brand-mark{width:40px;height:40px;border-radius:11px}
+.login-brand .brand-mark::before{width:15px;height:15px}
+.login-title{font-size:var(--font-size-xl);font-weight:800;font-family:var(--font-display);letter-spacing:-0.02em}
 .login-sub{font-size:var(--font-size-sm);color:var(--color-text-muted);margin-top:2px}
 .field{margin-bottom:var(--space-4)}
 .field label{display:block;font-size:var(--font-size-sm);margin-bottom:var(--space-2);color:var(--color-text-muted)}
@@ -356,13 +365,13 @@
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--space-3)}
 .stat{padding:var(--space-3) var(--space-4);min-width:0}
 .stat-label{font-size:var(--font-size-xs);color:var(--color-text-muted);margin-bottom:2px}
-.stat-value{font-size:var(--font-size-xl);font-weight:600;font-family:var(--font-mono);line-height:1.2;word-break:break-word}
+.stat-value{font-size:var(--font-size-xl);font-weight:800;font-family:var(--font-display);letter-spacing:-0.02em;line-height:1.2;word-break:break-word}
 .stat-hint{font-size:var(--font-size-xs);color:var(--color-text-muted);margin-top:2px}
 
 /* ---- Секция экрана ---- */
 .page-section{min-width:0}
 .section-head{display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-2)}
-.section-title{font-size:var(--font-size-md);font-weight:600}
+.section-title{font-size:var(--font-size-md);font-weight:700;font-family:var(--font-display)}
 .section-count{font-size:var(--font-size-xs);color:var(--color-text-muted);background:var(--color-surface-muted);border-radius:999px;padding:1px var(--space-2);min-width:20px;text-align:center}
 .section-empty{padding:var(--space-4);color:var(--color-text-muted);font-size:var(--font-size-sm);background:var(--color-surface);border:1px dashed var(--color-border);border-radius:var(--radius-card)}
 
@@ -393,7 +402,7 @@
 
 /* ---- Детальная страница (сервер/узел) ---- */
 .detail-head{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-5)}
-.detail-title{font-size:var(--font-size-xl);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.detail-title{font-size:var(--font-size-xl);font-weight:700;font-family:var(--font-display);letter-spacing:-0.02em;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
 
 /* ---- Спарклайны (11.9) ---- */
 .spark{width:100%;height:32px;display:block;overflow:visible}
@@ -441,7 +450,7 @@
 .session-card{display:flex;flex-direction:column;gap:var(--space-4);max-width:1200px;margin:0 auto}
 .sc-head{display:flex;align-items:center;gap:var(--space-4);flex-wrap:wrap}
 .sc-title{display:flex;align-items:center;gap:var(--space-3);min-width:0}
-.sc-name{font-size:var(--font-size-xl);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sc-name{font-size:var(--font-size-xl);font-weight:700;font-family:var(--font-display);letter-spacing:-0.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sc-meta{font-size:var(--font-size-sm);color:var(--color-text-muted)}
 .sc-body{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:var(--space-4);align-items:start}
 .sc-left{display:flex;flex-direction:column;gap:var(--space-3);min-width:0}

@@ -6,7 +6,6 @@ import { render } from 'preact';
 import { useState } from 'preact/hooks';
 import { HTTP } from '../constants.js';
 import { T } from '../i18n/ru.js';
-import { Icon } from '../components/icon-view.js';
 
 // O4 (11.1): возврат на запрошенную страницу (?next). Принимает только
 // абсолютный путь /… (не //…) или hash-роут #/… — иначе /.
@@ -47,7 +46,7 @@ export function LoginView() {
   return html`<div class="login-page">
     <form class="card login-card" onSubmit=${submit}>
       <div class="login-brand">
-        <div class="brand-mark">${Icon({ name: 'command' })}</div>
+        <div class="brand-mark"></div>
         <div>
           <div class="login-title">${T.login.title}</div>
           <div class="login-sub">${T.login.sub}</div>
