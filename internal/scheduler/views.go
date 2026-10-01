@@ -44,8 +44,9 @@ type ServerRow struct {
 	SlotInfo []ServerSlotRow `json:"slots_info"`
 
 	// Метрики (раздел 10 ТЗ).
-	GPU   *int     `json:"gpu,omitempty"`    // утилизация, max по картам, %
-	KV    *float64 `json:"kv_pct,omitempty"` // kv_cache_usage_perc, %
+	GPU   *int     `json:"gpu,omitempty"`     // утилизация, max по картам, %
+	Power *int     `json:"power,omitempty"`   // мощность, сумма по картам, Вт
+	KV    *float64 `json:"kv_pct,omitempty"`  // kv_cache_usage_perc, %
 	GEN   *float64 `json:"gen_tok_s,omitempty"`
 	EXT   *int     `json:"ext,omitempty"` // внешняя нагрузка; отсутствует = metrics_missing
 	Missing bool   `json:"metrics_missing,omitempty"`
@@ -113,7 +114,7 @@ func (s *Scheduler) ServersView() []ServerRow {
 	for _, sv := range servers {
 		row := ServerRow{
 			Name: sv.Name, Priority: sv.Priority, State: string(sv.State), Slots: sv.Slots,
-			GPU: sv.GPUPct,
+			GPU: sv.GPUPct, Power: sv.Power,
 			KV: sv.KV, GEN: sv.GenTokS, EXT: sv.Ext, Missing: sv.Missing,
 			Removing: s.serverRemoving[sv.Name],
 			GPUCards: sv.GPUCards,

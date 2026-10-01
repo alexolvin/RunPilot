@@ -48,6 +48,9 @@ type Server struct {
 	// serverDrain — drain/undrain сервера (runpilot server drain); ставится из
 	// serve.go (шлюз меняет состояние, планировщик — через OnChange).
 	serverDrain func(name string, on bool) error
+	// serverPause — pause/resume сервера (POST /servers/{s}/pause): шлюз
+	// меняет состояние UP↔PAUSED; новые ходы не выдаются, идущие доделываются.
+	serverPause func(name string, on bool) error
 	// serverReg — реестр серверов в работе (W6 CRUD): AddOrUpdate/Remove.
 	serverReg serverReg
 
@@ -235,6 +238,10 @@ func (s *Server) MinContextWindow() int {
 // планировщик узнаёт через Servers.OnChange.
 func (s *Server) SetServerDrain(fn func(name string, on bool) error) { s.serverDrain = fn }
 
+// SetServerPause — pause/resume сервера (UP↔PAUSED); шлюз меняет состояние,
+// планировщик узнаёт через Servers.OnChange.
+func (s *Server) SetServerPause(fn func(name string, on bool) error) { s.serverPause = fn }
+
 // SetProfile — профиль qwen (W6 spawn: окружение/команда агента).
 func (s *Server) SetProfile(p *profiles.Qwen) { s.prof = p }
 
@@ -279,6 +286,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/sessions/hold-emergency/requeue", s.handleRequeueEmergency)
 	mux.HandleFunc("POST /api/v1/nodes/{h}/drain", s.handleNodeDrain)
 	mux.HandleFunc("POST /api/v1/servers/{s}/drain", s.handleServerDrain)
+	mux.HandleFunc("POST /api/v1/servers/{s}/pause", s.handleServerPause)
 	// v2 (W6, 5.1/5.2): серверы — мастер, удаление, управление.
 	mux.HandleFunc("POST /api/v1/servers", s.handleServerCreate)
 	mux.HandleFunc("POST /api/v1/servers/probe", s.handleServerProbe)

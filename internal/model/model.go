@@ -38,6 +38,11 @@ const (
 	ServerUp       ServerState = "UP"
 	ServerDown     ServerState = "DOWN"
 	ServerDraining ServerState = "DRAINING"
+	// v2: оператор временно выводит сервер из выдачи под другой процесс.
+	// Новые ходы не выдаются, идущие доделываются (как DRAINING); обратимо
+	// командой «Возобновить». Команда оператора — sticky: health-серии не
+	// сбрасывают в UP (как и DRAINING в ServerHealth.Observe).
+	ServerPaused ServerState = "PAUSED"
 	// v2 (S11): key_env не задана в окружении службы — сервер не годится.
 	ServerKeyMissing ServerState = "KEY_MISSING"
 	// v2 (S7/S8): модель недоступна (заданная не найдена / несколько при auto).

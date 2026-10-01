@@ -8,7 +8,7 @@ import { get, post, patch, del } from '../api.js';
 import { T } from '../i18n/ru.js';
 import { HTTP, W6 } from '../constants.js';
 import { stateColorVar } from '../state-style.js';
-import { serverStateLabel, fmtPct, fmtTokS } from '../labels.js';
+import { serverStateLabel, fmtPct, fmtTokS, fmtW } from '../labels.js';
 import { ServerCard } from '../components/server-card.js';
 import { Sparkline } from '../components/sparkline.js';
 import { EmptyState } from '../components/empty-state.js';
@@ -63,7 +63,9 @@ function ServerDetail({ name }) {
     ? T.servers.spark + ' · ' + T.servers.sparkWindow(windowMin)
     : T.servers.spark;
   return html`<div class="page">
-    <${Button} variant="text" label=${T.servers.back} onClick=${() => navigate('servers')} />
+    <div style=${{ alignSelf: 'flex-start' }}>
+      <${Button} variant="text" label=${T.servers.back} onClick=${() => navigate('servers')} />
+    </div>
     <div class="detail-head card">
       <span class="server-dot" style=${{ '--tone': tone }}></span>
       <h2 class="detail-title">${server.name}</h2>
@@ -74,8 +76,8 @@ function ServerDetail({ name }) {
       <${Stat} label=${T.servers.slots} value=${server.running + '/' + server.total} />
       <${Stat} label=${T.servers.kv} value=${server.missing ? T.units.none : fmtPct(server.kv_pct)} />
       <${Stat} label=${T.servers.gen} value=${server.missing ? T.units.none : fmtTokS(server.gen_tok_s)} />
-      <${Stat} label=${T.servers.gpu}
-        value=${server.gpu == null ? T.units.none : fmtPct(server.gpu)} />
+      <${Stat} label=${T.servers.power}
+        value=${server.power == null ? T.units.none : fmtW(server.power)} />
     </div>
     <${Section} title=${sparkTitle}>
       ${hist.length
@@ -94,6 +96,9 @@ function ServerDetail({ name }) {
     <div style=${{ marginTop: 'var(--space-5)' }} class="detail-actions">
       <${Button} variant="secondary" label=${T.servers.edit} onClick=${() => setEdit(true)} />
       <${Button} variant="secondary" label=${T.servers.drain} onClick=${() => setDrain(true)} />
+      <${Button} variant="secondary"
+        label=${server.state === 'PAUSED' ? T.servers.resume : T.servers.pause}
+        onClick=${() => togglePause(name, server.state)} />
       <${Button} variant="danger" label=${T.servers.delTitle} onClick=${() => setDel(true)} />
     </div>
     ${del ? html`<${ServerDelete} name=${name} used=${server.running} onClose=${() => setDel(false)} />` : null}
@@ -127,6 +132,21 @@ function ServerDrain({ name, onClose }) {
     <p class="dialog-note">${T.servers.drainNote}</p>
     ${err ? html`<p class="dialog-err">${err}</p>` : null}
   </${Dialog}>`;
+}
+
+// --- Пауза: временно вывести сервер из выдачи (идущие ходы доделываются) ---
+function togglePause(name, state) {
+  const on = state !== 'PAUSED';
+  post('/api/v1/servers/' + encodeURIComponent(name) + '/pause', { on })
+    .then((r) => {
+      if (r.ok) {
+        actions.resync();
+        actions.addToast({ kind: 'info', text: (on ? T.servers.pauseDone : T.servers.resumeDone) + ': ' + name });
+        return;
+      }
+      actions.addToast({ kind: 'error', text: (r.data && r.data.detail) || ('HTTP ' + r.status) });
+    })
+    .catch(() => actions.addToast({ kind: 'error', text: 'network' }));
 }
 
 // --- Мастер нового сервера (5.1, J6) / редактирование (5.1) ---

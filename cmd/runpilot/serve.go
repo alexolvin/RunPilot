@@ -224,6 +224,16 @@ func newServeCmd() *cobra.Command {
 				}
 				return nil
 			})
+			// Пауза (UP↔PAUSED): новый ход не выдаётся, идущие доделываются.
+			// Sticky: health-серии не сбрасывают PAUSED в UP (как DRAINING).
+			srv.SetServerPause(func(name string, on bool) error {
+				if on {
+					gw.Servers().SetState(name, model.ServerPaused)
+				} else {
+					gw.Servers().SetState(name, model.ServerUp)
+				}
+				return nil
+			})
 
 			var (
 				mu       sync.Mutex
@@ -343,13 +353,16 @@ func (a *gwServers) List() []scheduler.ServerView {
 			if g, ok := a.hub.GPU(s.Cfg.Name); ok {
 				v.GPUCards = g.Cards
 				maxUtil := g.Cards[0].UtilPercent
+				var power int
 				for _, c := range g.Cards {
 					if c.UtilPercent > maxUtil {
 						maxUtil = c.UtilPercent
 					}
+					power += c.PowerW
 				}
 				u := maxUtil
 				v.GPUPct = &u
+				v.Power = &power
 			}
 		}
 		out = append(out, v)

@@ -44,8 +44,10 @@ type ServerView struct {
 	Missing bool     // metrics_missing (раздел 5 ТЗ)
 
 	// GPU-телеметрия узла (раздел 10 ТЗ): на строке сервера — максимум
-	// утилизации; разбивка по картам — в карточке.
+	// утилизации; разбивка по картам — в карточке. Power — суммарная
+	// мощность (Вт) по картам (nvidia-smi power.draw / rocm power).
 	GPUPct   *int
+	Power    *int
 	GPUCards []proto.GPUCard
 }
 
@@ -444,7 +446,11 @@ func (s *Scheduler) ServerState(name string, st model.ServerState) {
 		delete(s.downSince, name)
 	}
 	s.event(model.KindServerState, "", name, map[string]any{"server": name, "state": string(st)})
-	s.serverDownLocked(name, now)
+	// PAUSED не снимает идущие ходы (оператор пузил сервер, чтобы доделать
+	// текущие; DOWN/DRAINING/QUARANTINED — снимают, как раньше).
+	if st != model.ServerPaused {
+		s.serverDownLocked(name, now)
+	}
 	s.mu.Unlock()
 }
 

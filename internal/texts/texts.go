@@ -85,6 +85,7 @@ func serverLabels() []Enum {
 	return []Enum{
 		{Code: "UP", Label: "Доступен"},
 		{Code: "DRAINING", Label: "Обслуживание"},
+		{Code: "PAUSED", Label: "Пауза"},
 		{Code: "QUARANTINED", Label: "Карантин"},
 		{Code: "DOWN", Label: "Недоступен"},
 		{Code: "MODEL_PROBLEM", Label: "Модель не определена"},

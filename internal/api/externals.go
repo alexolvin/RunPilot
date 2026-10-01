@@ -36,6 +36,7 @@ func (s *Server) handleExternals(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, "STORE", err.Error())
 		return
 	}
+	list = dedupExternals(list)
 	views := make([]externalView, 0, len(list))
 	for _, p := range list {
 		views = append(views, externalView{
@@ -47,6 +48,37 @@ func (s *Server) handleExternals(w http.ResponseWriter, r *http.Request) {
 	}
 	rules, _ := s.store.IgnoreList()
 	writeJSON(w, map[string]any{"externals": views, "ignore_rules": rules})
+}
+
+// dedupExternals — одна строка на (host, pid). Корень дубля: start_time =
+// now − etimes «дребезжит» на ±1 с (floor ps etimes), поэтому в БД на один
+// PID два ключа (s0/s0+1) в статусах ACTIVE/GONE — в UI дубль. Считаем кодер
+// одним по PID и показываем активную запись (иначе самую свежую).
+func dedupExternals(list []model.ExternalProcess) []model.ExternalProcess {
+	best := map[string]int{} // host\x00pid → индекс в out
+	out := make([]model.ExternalProcess, 0, len(list))
+	for _, p := range list {
+		k := p.Host + "\x00" + strconv.Itoa(p.PID)
+		if i, ok := best[k]; ok {
+			if externalBetter(p, out[i]) {
+				out[i] = p
+			}
+			continue
+		}
+		best[k] = len(out)
+		out = append(out, p)
+	}
+	return out
+}
+
+// externalBetter — a предпочтительнее b для отображения: ACTIVE важнее
+// остальных статусов, при равенстве — более свежий last_seen.
+func externalBetter(a, b model.ExternalProcess) bool {
+	aActive := a.Status == model.ExtActive
+	if aActive != (b.Status == model.ExtActive) {
+		return aActive
+	}
+	return a.LastSeen.After(b.LastSeen)
 }
 
 // handleExternalIgnore — POST /api/v1/externals/ignore: правило «Игнорировать».

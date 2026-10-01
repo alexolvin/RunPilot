@@ -116,6 +116,7 @@ type ServerRow struct {
 	SlotInfo []ServerSlotRow `json:"slots_info"`
 
 	GPU   *int     `json:"gpu,omitempty"`
+	Power *int     `json:"power,omitempty"`
 	KV    *float64 `json:"kv_pct,omitempty"`
 	GEN   *float64 `json:"gen_tok_s,omitempty"`
 	EXT   *int     `json:"ext,omitempty"`

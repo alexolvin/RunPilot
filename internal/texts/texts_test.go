@@ -78,7 +78,7 @@ func TestMetaWhyMapsComplete(t *testing.T) {
 // TestServerStateLabels — подписи отображаемых состояний сервера (3.2).
 func TestServerStateLabels(t *testing.T) {
 	d := Meta("test", "NORMAL")
-	for _, code := range []string{"UP", "DRAINING", "QUARANTINED", "DOWN",
+	for _, code := range []string{"UP", "DRAINING", "PAUSED", "QUARANTINED", "DOWN",
 		"MODEL_PROBLEM", "KEY_MISSING", "DISABLED", "REMOVING"} {
 		found := false
 		for _, e := range d.Servers {

@@ -383,6 +383,27 @@ func (s *Server) handleServerDrain(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleServerPause — POST /api/v1/servers/{s}/pause {on}. on=true → PAUSED
+// (новые ходы не выдаются, идущие доделываются), on=false → UP.
+func (s *Server) handleServerPause(w http.ResponseWriter, r *http.Request) {
+	if !s.schedOr503(w) {
+		return
+	}
+	if s.serverPause == nil {
+		httpError(w, http.StatusServiceUnavailable, "NO_PAUSE", "пауза не настроена")
+		return
+	}
+	var body struct {
+		On bool `json:"on"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if err := s.serverPause(r.PathValue("s"), body.On); err != nil {
+		httpError(w, http.StatusBadRequest, "PAUSE", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)
