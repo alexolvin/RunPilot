@@ -63,8 +63,12 @@ export function QueuePage() {
     return html`<div class="page"><div class="skeleton" style=${{ height: '200px' }}></div></div>`;
   }
 
-  const running = s.sessions.filter((x) => x.state === 'RUNNING' || x.state === 'DISPATCHING');
-  const hold = s.sessions.filter((x) => x.state === 'HOLD');
+  // item 6: панель в PROMPT («кодер ждёт разрешения») — «требует внимания».
+  // View-level: session state при PROMPT остаётся RUNNING (автомата не
+  // трогаем), поэтому выносим такие сессии из «В работе» в «Требуют внимания».
+  const isPrompt = (x) => { const p = s.panes[x.sid]; return !!p && p.state === 'PROMPT'; };
+  const running = s.sessions.filter((x) => (x.state === 'RUNNING' || x.state === 'DISPATCHING') && !isPrompt(x));
+  const hold = s.sessions.filter((x) => x.state === 'HOLD' || isPrompt(x));
   const hasAny = s.servers.length > 0 || s.sessions.length > 0;
 
   if (!hasAny) {
@@ -131,8 +135,12 @@ export function QueuePage() {
     <${Section} title=${T.queue.attention} count=${hold.length}>
       ${hold.length
         ? html`<div class="srow-list">
-            ${hold.map((x) => SessionRow({ s: x, meta: s.meta,
-              why: whyText(s.meta, 'hold', x.hold_reason) }))}
+            ${hold.map((x) => {
+              const why = x.state === 'HOLD'
+                ? whyText(s.meta, 'hold', x.hold_reason)
+                : (s.panes[x.sid] && s.panes[x.sid].input_preview) || T.queue.promptWait;
+              return SessionRow({ s: x, meta: s.meta, why });
+            })}
           </div>`
         : html`<${SectionEmpty} text=${T.queue.emptyAttention} />`}
     </${Section}>

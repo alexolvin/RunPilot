@@ -34,7 +34,7 @@ let S = {
   servers: [],
   nodes: [],
   gateway: null, // {url, model_alias} — эндпоинт шлюза (W9 доп-3c)
-  panes: {}, // sid → {state, input_empty, input_preview, host} (W5: карточка)
+  panes: {}, // sid → {state, input_empty, input_preview, host, tmux_session, socket} (W5: карточка + подключение снаружи)
   unmanaged: [], // 8.3 X1: «вне runpilot» — {pane_id, session, dir, cmd, host}
   closed: [], // GONE-сессии (показываются по фильтру «Показать закрытые»)
   notifications: [],
@@ -119,6 +119,7 @@ function paneMap(data) {
       m[pane.sid] = {
         state: pane.state, input_empty: !!pane.input_empty,
         input_preview: pane.input_preview || '', host: p.Host || p.host || '',
+        tmux_session: pane.tmux_session || '', socket: pane.socket || '',
       };
     }
   }

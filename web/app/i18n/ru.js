@@ -6,6 +6,7 @@
 export const T = {
   brand: {
     name: 'RunPilot',
+    home: 'На главную (Очередь)',
   },
 
   dialog: {
@@ -160,6 +161,7 @@ export const T = {
     work: 'В работе',
     queued: 'Очередь',
     attention: 'Требуют внимания',
+    promptWait: 'Ожидает разрешения',
     today: 'Сегодня',
     turns: 'ходы',
     ok: 'успешно',
@@ -262,6 +264,9 @@ export const T = {
     screenLive: 'обновляется в реальном времени',
     screenEmpty: 'Экран недоступен (узел офлайн?)',
     openTerminal: 'Открыть терминал',
+    connectOutside: 'Подключиться снаружи',
+    connectTitle: 'Подключение снаружи',
+    connectHint: 'Команда для подключения к этой сессии во внешнем терминале (tmux attach на узле):',
     terminalSoon: 'Интерактивный терминал — в W7',
     composer: 'Текст задания…',
     composerHint: 'Enter — в очередь · Alt+Enter — вставить · Shift+Enter — новая строка',

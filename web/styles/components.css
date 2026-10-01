@@ -109,7 +109,10 @@
   align-items:center;
   gap:var(--space-3);
   padding:var(--space-4) var(--space-4) var(--space-3);
+  cursor:pointer;
+  user-select:none;
 }
+.brand:hover .brand-mark{filter:brightness(0.94)}
 .brand-mark{
   width:32px;height:32px;border-radius:var(--radius-control);
   background:var(--color-accent);color:var(--color-on-accent);
@@ -492,6 +495,7 @@
 .dialog-body{padding:var(--space-5);overflow:auto}
 .dialog-foot{display:flex;align-items:center;justify-content:flex-end;gap:var(--space-2);padding:var(--space-4) var(--space-5);border-top:1px solid var(--color-border)}
 .dialog-note{margin:0 0 var(--space-4);font-size:var(--font-size-sm);color:var(--color-text-muted)}
+.connect-cmd{margin:0;padding:var(--space-3);background:var(--color-screen-bg);color:var(--color-screen-text);border:1px solid var(--color-border);border-radius:var(--radius-control);font-size:var(--font-size-sm);word-break:break-all}
 .dialog-err{margin:var(--space-2) 0 0;font-size:var(--font-size-sm);color:var(--color-danger-text)}
 .dialog-ok{margin:var(--space-2) 0 0;font-size:var(--font-size-sm);color:var(--color-success-text)}
 
@@ -583,9 +587,13 @@
 /* Inline-терминал карточки сессии (доп-3i): как .livescreen-wrap, но интерактив. */
 .term-inline{display:flex;flex-direction:column;border:1px solid var(--color-border);border-radius:var(--radius-card);overflow:hidden;background:var(--color-screen-bg)}
 .term-inline-head{background:var(--color-surface)}
-.term-inline-body{flex:none;height:320px;max-height:60vh}
-/* Строка клавиш телефона (над клавиатурой). */
-.term-keyrow{display:none}
+/* Высота inline-терминала: достаточное число строк для qwen-TUI — при потоке
+   вывода (запуск процесса) короткий терминал (21 строка) reflow'ит layout
+   кодера («бег повторений»), а в развёрнутом (выше) рендер стабилен (item 5). */
+.term-inline-body{flex:none;height:480px;max-height:65vh}
+/* Строка клавиш (Esc/Tab/Ctrl/стрелки/Enter): видима всегда; на телефоне
+   кнопки растянуты под тач (в @media), на десктопе — компактные. */
+.term-keyrow{display:flex;flex-wrap:wrap;gap:var(--space-2);padding:var(--space-2) var(--space-3);background:var(--color-surface);border-top:1px solid var(--color-border)}
 .term-key{min-width:44px;min-height:44px;padding:0 var(--space-3);border:1px solid var(--color-border);border-radius:var(--radius-control);background:var(--color-surface);color:var(--color-text);font-size:var(--font-size-sm);font-family:var(--font-mono);cursor:pointer}
 .term-key:hover{background:var(--color-surface-muted)}
 .term-key.is-active{background:var(--color-accent);color:var(--color-on-accent);border-color:var(--color-accent)}

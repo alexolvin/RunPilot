@@ -39,7 +39,7 @@ async function logout() {
 export function Sidebar() {
   const s = useStore();
   return html`<aside class="sidebar">
-    <div class="brand">
+    <div class="brand" role="link" title=${T.brand.home} onClick=${() => navigate('queue')}>
       <div class="brand-mark">${Icon({ name: 'command' })}</div>
       <div>
         <div class="brand-name">${T.brand.name}</div>

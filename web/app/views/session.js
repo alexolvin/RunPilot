@@ -7,6 +7,7 @@ import { html } from '../html.js';
 import { useState } from 'preact/hooks';
 import { useStore, actions } from '../store.js';
 import { navigate } from '../router.js';
+import { W6 } from '../constants.js';
 import { T } from '../i18n/ru.js';
 import { sessionStateLabel, classLabel, whyText, fmtTime } from '../labels.js';
 import { stateColorVar } from '../state-style.js';
@@ -34,6 +35,18 @@ function constraintLabel(sess) {
   return T.units.none;
 }
 
+// connectCmd — команда подключения к сессии во внешнем терминале (ssh + tmux
+// attach на узле). Строится на клиенте из host сессии + tmux-сессии/сокета
+// панели (R6: без host-литералов в коде — host и socket из store). Сокет —
+// через -L <имя> (как узел; -L default = стандартный сокет tmux).
+function connectCmd(sess, pane) {
+  if (!sess.host || !pane || !pane.tmux_session) return '';
+  const parts = ['ssh', sess.host, 'tmux'];
+  if (pane.socket) parts.push('-L', pane.socket);
+  parts.push('attach', '-t', pane.tmux_session);
+  return parts.join(' ');
+}
+
 function actionList(sess) {
   const st = sess.state;
   const a = [];
@@ -58,6 +71,8 @@ export function SessionPage() {
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [connectCopied, setConnectCopied] = useState(false);
   if (!s.loaded) {
     return html`<div class="page"><div class="skeleton" style=${{ height: '320px' }}></div></div>`;
   }
@@ -73,6 +88,15 @@ export function SessionPage() {
   const why = sess.state === 'HOLD' ? whyText(s.meta, 'hold', sess.hold_reason) : '';
   const isPrompt = pane && pane.state === 'PROMPT';
   const acts = actionList(sess);
+  const cmd = connectCmd(sess, pane);
+  const copyConnect = async () => {
+    if (!cmd) return;
+    try {
+      await navigator.clipboard.writeText(cmd);
+      setConnectCopied(true);
+      setTimeout(() => setConnectCopied(false), W6.copyFlashMs);
+    } catch { /* clipboard недоступен (не-secure context) */ }
+  };
 
   // 5.4: «Закрыть» — kill tmux-сессии на узле (через общий разбор команд).
   const doClose = () => {
@@ -118,6 +142,8 @@ export function SessionPage() {
           : html`<${TerminalInline} sid=${sid} />`}
         ${sess.state !== 'GONE' ? html`<${Button} variant="secondary" label=${T.session.openTerminal}
           onClick=${() => actions.openTerminal(sid)} />` : null}
+        ${sess.state !== 'GONE' && cmd ? html`<${Button} variant="secondary" label=${T.session.connectOutside}
+          onClick=${() => setConnectOpen(true)} />` : null}
       </div>
 
       <div class="sc-right">
@@ -184,6 +210,17 @@ export function SessionPage() {
         <${Button} variant="danger" label=${T.session.deleteOk} loading=${busy}
           onClick=${doDelete} />`}>
       <p class="dialog-note">${T.session.deleteNote.replace('{name}', sess.name)}</p>
+    </${Dialog}>` : null}
+
+    ${connectOpen && cmd ? html`<${Dialog} title=${T.session.connectTitle}
+      onClose=${() => setConnectOpen(false)}
+      footer=${html`
+        <${Button} variant="secondary" label=${T.dialog.close}
+          onClick=${() => setConnectOpen(false)} />
+        <${Button} variant="primary" label=${connectCopied ? T.terminal.copied : T.terminal.copy}
+          onClick=${copyConnect} />`}>
+      <p class="dialog-note">${T.session.connectHint}</p>
+      <div class="connect-cmd mono">${cmd}</div>
     </${Dialog}>` : null}
   </div>`;
 }

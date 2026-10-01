@@ -156,8 +156,9 @@ function useXterm(sid, fontSize, onErr) {
   }, [sid, fontSize]);
 
   // copySelection — копирование из xterm в буфер обмена (item: текст не
-  // копируется). Если выделение есть (Shift+drag) — оно; иначе видимый
-  // экран (не весь скроллбэк). navigator.clipboard — secure context (https).
+  // копируется). Если выделение есть (drag мышью) — оно; иначе ВЕСЬ буфер
+  // (скроллбэк + экран), а не только видимую часть. navigator.clipboard —
+  // secure context (https).
   const copySelection = async () => {
     const term = termRef.current;
     if (!term) return false;
@@ -165,7 +166,7 @@ function useXterm(sid, fontSize, onErr) {
     if (!text) {
       const buf = term.buffer.active;
       const lines = [];
-      for (let y = buf.viewportY; y < buf.viewportY + term.rows; y++) {
+      for (let y = 0; y < buf.length; y++) {
         const line = buf.getLine(y);
         if (line) lines.push(line.translateToString(true));
       }
@@ -207,7 +208,8 @@ function useCopyButton(copySelection) {
   return { copied, onCopy };
 }
 
-// KeyRow — строка клавиш (телефон): Esc/Tab/Ctrl/стрелки/Enter.
+// KeyRow — строка клавиш (Esc/Tab/Ctrl/стрелки/Enter): видима всегда — на
+// телефоне над клавиатурой, на десктопе как быстрый ввод специальных клавиш.
 function KeyRow({ sendKey, ctrlOn }) {
   return html`<div class="term-keyrow">
     <button class="term-key" type="button" title=${T.terminal.keyEsc} onClick=${() => sendKey('esc')}>Esc</button>
@@ -259,7 +261,7 @@ function TerminalOverlay({ sid }) {
       </div>
       <div class="term-body" ref=${boxRef}></div>
       ${status === 'error' ? html`<div class="term-err">${errMsg}</div>` : null}
-      ${isPhone ? html`<${KeyRow} sendKey=${sendKey} ctrlOn=${ctrlOn} />` : null}
+      <${KeyRow} sendKey=${sendKey} ctrlOn=${ctrlOn} />
     </div>
   </div>`;
 }
@@ -271,7 +273,6 @@ function TerminalOverlay({ sid }) {
 export function TerminalInline({ sid }) {
   const { boxRef, status, errMsg, ctrlOn, sendKey, copySelection } = useXterm(sid, UI.termInlineFontSizePx);
   const { copied, onCopy } = useCopyButton(copySelection);
-  const isPhone = useIsPhone();
   return html`<div class="term-inline">
     <div class="term-head term-inline-head">
       <span class="livescreen-title">${T.session.screen}</span>
@@ -283,6 +284,6 @@ export function TerminalInline({ sid }) {
     </div>
     <div class="term-body term-inline-body" ref=${boxRef}></div>
     ${status === 'error' ? html`<div class="term-err">${errMsg}</div>` : null}
-    ${isPhone ? html`<${KeyRow} sendKey=${sendKey} ctrlOn=${ctrlOn} />` : null}
+    <${KeyRow} sendKey=${sendKey} ctrlOn=${ctrlOn} />
   </div>`;
 }
