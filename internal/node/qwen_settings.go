@@ -52,8 +52,11 @@ func qwenSettingsPath() (string, error) {
 // (автоматическое подключение кодера к шлюзу перед запуском) и из операции
 // qwen_settings (явная проверка с отчётом в веб). modelAlias — только для
 // sanity-проверки (пустой — ошибка); на содержание modelProviders он не
-// влияет (удаляются все, см. patchQwenSettings). Возвращает результат.
-func (n *Node) EnsureQwenSettings(modelAlias string) QwenSettingsResult {
+// влияет (удаляются все, см. patchQwenSettings). contextWindow (item 3) —
+// размер контекста модели (min по серверам): пишется в
+// model.generationConfig.contextWindowSize; 0 — не менять (стартовое
+// значение координатора до первого /v1/models). Возвращает результат.
+func (n *Node) EnsureQwenSettings(modelAlias string, contextWindow int) QwenSettingsResult {
 	if modelAlias == "" {
 		return QwenSettingsResult{Err: fmt.Errorf("пустой model_alias")}
 	}
@@ -65,30 +68,57 @@ func (n *Node) EnsureQwenSettings(modelAlias string) QwenSettingsResult {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return n.createQwenSettings(path, modelAlias)
+			return n.createQwenSettings(path, contextWindow)
 		}
 		n.log.Warn("node: qwen settings: чтение", "err", err.Error())
 		return QwenSettingsResult{Err: fmt.Errorf("чтение: %w", err)}
 	}
-	return n.patchQwenSettings(path, data, modelAlias)
+	return n.patchQwenSettings(path, data, contextWindow)
+}
+
+// applyContextWindow — model.generationConfig.contextWindowSize (item 3).
+// Возвращает строку изменения ("" — не задано (0) или уже совпадает).
+func applyContextWindow(doc map[string]any, contextWindow int) string {
+	if contextWindow <= 0 {
+		return ""
+	}
+	model, _ := doc["model"].(map[string]any)
+	if model == nil {
+		model = map[string]any{}
+		doc["model"] = model
+	}
+	gc, _ := model["generationConfig"].(map[string]any)
+	if gc == nil {
+		gc = map[string]any{}
+		model["generationConfig"] = gc
+	}
+	// после json.Unmarshal число — float64; сверяем с ним.
+	if f, ok := gc["contextWindowSize"].(float64); ok && int(f) == contextWindow {
+		return ""
+	}
+	gc["contextWindowSize"] = contextWindow
+	return fmt.Sprintf("model.generationConfig.contextWindowSize: %d", contextWindow)
 }
 
 // createQwenSettings — файла нет: создаём минимальный правильный конфиг.
-func (n *Node) createQwenSettings(path, modelAlias string) QwenSettingsResult {
+func (n *Node) createQwenSettings(path string, contextWindow int) QwenSettingsResult {
 	doc := map[string]any{
 		"security": map[string]any{
 			"auth": map[string]any{"selectedType": "openai"},
 		},
 	}
-	if err := n.writeQwenSettings(path, doc, "создан (security.auth.selectedType=openai)"); err != nil {
+	changes := []string{"файл создан: security.auth.selectedType=openai"}
+	if cw := applyContextWindow(doc, contextWindow); cw != "" {
+		changes = append(changes, cw)
+	}
+	if err := n.writeQwenSettings(path, doc, strings.Join(changes, "; ")); err != nil {
 		return QwenSettingsResult{Err: err}
 	}
-	return QwenSettingsResult{Changed: true,
-		Changes: []string{"файл создан: security.auth.selectedType=openai"}}
+	return QwenSettingsResult{Changed: true, Changes: changes}
 }
 
 // patchQwenSettings — внести изменения; Changed=false, если они не нужны.
-func (n *Node) patchQwenSettings(path string, data []byte, modelAlias string) QwenSettingsResult {
+func (n *Node) patchQwenSettings(path string, data []byte, contextWindow int) QwenSettingsResult {
 	var doc map[string]any
 	if err := json.Unmarshal(data, &doc); err != nil {
 		n.log.Warn("node: qwen settings: не JSON", "path", path, "err", err.Error())
@@ -124,6 +154,11 @@ func (n *Node) patchQwenSettings(path string, data []byte, modelAlias string) Qw
 			delete(doc, "modelProviders")
 			changes = append(changes, "modelProviders: убран прямой доступ (кодер идёт через шлюз)")
 		}
+	}
+	// 3) model.generationConfig.contextWindowSize (item 3) — реальный размер
+	//    контекста (min по серверам), а не гадание qwen по имени модели.
+	if cw := applyContextWindow(doc, contextWindow); cw != "" {
+		changes = append(changes, cw)
 	}
 	if len(changes) == 0 {
 		return QwenSettingsResult{}

@@ -49,7 +49,7 @@ func readJSON(t *testing.T, path string) map[string]any {
 func TestEnsureQwenSettingsCreatesWhenMissing(t *testing.T) {
 	_, path := writeQwenFixture(t, "")
 	n := newTestNode(t, &fakeExec{})
-	n.EnsureQwenSettings(qwenTestAlias)
+	n.EnsureQwenSettings(qwenTestAlias, 0)
 
 	doc := readJSON(t, path)
 	sec, _ := doc["security"].(map[string]any)
@@ -72,7 +72,7 @@ func TestEnsureQwenSettingsPatches(t *testing.T) {
 	}`
 	_, path := writeQwenFixture(t, fixture)
 	n := newTestNode(t, &fakeExec{})
-	n.EnsureQwenSettings(qwenTestAlias)
+	n.EnsureQwenSettings(qwenTestAlias, 0)
 
 	doc := readJSON(t, path)
 	// selectedType → openai.
@@ -105,19 +105,63 @@ func TestEnsureQwenSettingsIdempotent(t *testing.T) {
 	}`
 	_, path := writeQwenFixture(t, fixture)
 	n := newTestNode(t, &fakeExec{})
-	n.EnsureQwenSettings(qwenTestAlias)
+	n.EnsureQwenSettings(qwenTestAlias, 0)
 	first, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Второй вызов — без изменений.
-	n.EnsureQwenSettings(qwenTestAlias)
+	n.EnsureQwenSettings(qwenTestAlias, 0)
 	second, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(first) != string(second) {
 		t.Fatal("второй вызов изменил файл, а должен быть идемпотентным")
+	}
+}
+
+// TestEnsureQwenSettingsContextWindow — item 3: contextWindow пишется в
+// model.generationConfig.contextWindowSize и идемпотентен (повтор тем же
+// значением — без изменений); 0 — не трогает.
+func TestEnsureQwenSettingsContextWindow(t *testing.T) {
+	// Файла нет: создаётся с contextWindowSize.
+	_, path := writeQwenFixture(t, "")
+	n := newTestNode(t, &fakeExec{})
+	res := n.EnsureQwenSettings(qwenTestAlias, 262144)
+	if res.Err != nil {
+		t.Fatal(res.Err)
+	}
+	doc := readJSON(t, path)
+	model, _ := doc["model"].(map[string]any)
+	gc, _ := model["generationConfig"].(map[string]any)
+	if int(gc["contextWindowSize"].(float64)) != 262144 {
+		t.Fatalf("contextWindowSize=%v, хочу 262144", gc["contextWindowSize"])
+	}
+	// Повтор тем же значением — идемпотентно (Changed=false).
+	res2 := n.EnsureQwenSettings(qwenTestAlias, 262144)
+	if res2.Changed {
+		t.Fatalf("повтор тем же contextWindow изменил файл: %v", res2.Changes)
+	}
+	// 0 — не трогает существующее значение.
+	res3 := n.EnsureQwenSettings(qwenTestAlias, 0)
+	if res3.Changed {
+		t.Fatalf("contextWindow=0 изменил файл: %v", res3.Changes)
+	}
+	doc = readJSON(t, path)
+	gc = doc["model"].(map[string]any)["generationConfig"].(map[string]any)
+	if int(gc["contextWindowSize"].(float64)) != 262144 {
+		t.Fatalf("после 0 contextWindowSize=%v, должен остаться 262144", gc["contextWindowSize"])
+	}
+	// Изменение значения — вносит изменение.
+	res4 := n.EnsureQwenSettings(qwenTestAlias, 131072)
+	if !res4.Changed {
+		t.Fatal("смена contextWindow не изменила файл")
+	}
+	doc = readJSON(t, path)
+	gc = doc["model"].(map[string]any)["generationConfig"].(map[string]any)
+	if int(gc["contextWindowSize"].(float64)) != 131072 {
+		t.Fatalf("contextWindowSize=%v, хочу 131072", gc["contextWindowSize"])
 	}
 }
 

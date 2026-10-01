@@ -471,6 +471,8 @@ func (s *Server) handleNodeQwenSettings(w http.ResponseWriter, r *http.Request) 
 	}
 	m := proto.New(proto.KindQwenSettings)
 	m.ModelAlias = s.cfg.Profiles.Qwen.ModelAlias
+	// item 3: размер контекста (min по серверам) → contextWindowSize кодера.
+	m.ContextWindow = s.MinContextWindow()
 	rep, err := s.dispatchToNodeTimeout(r.Context(), host, m, s.nodeOpTimeout())
 	if err != nil {
 		httpError(w, http.StatusServiceUnavailable, "NODE", err.Error())

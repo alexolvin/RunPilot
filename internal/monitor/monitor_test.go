@@ -29,9 +29,11 @@ type fakeFetcher struct {
 	metricsErr    error
 	modelsStatus  int
 	modelsBody    string
+	lastBearer    string // последний bearer (проверка аутентификации /v1/models)
 }
 
-func (f *fakeFetcher) get(ctx context.Context, url string) ([]byte, int, error) {
+func (f *fakeFetcher) get(ctx context.Context, url string, bearer string) ([]byte, int, error) {
+	f.lastBearer = bearer
 	if strings.HasSuffix(url, "/health") {
 		return []byte("ok"), f.healthStatus, nil
 	}

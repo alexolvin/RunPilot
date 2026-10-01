@@ -59,8 +59,10 @@ func embeddedNode(ctx context.Context, srv *api.Server, hub *api.Hub,
 		return
 	}
 	// W9 доп-3c: эндпоинт qwen code — встроенный узел без WS-канала,
-	// hello-ответ не приходит; правим конфиг на старте.
-	n.EnsureQwenSettings(cfg.Profiles.Qwen.ModelAlias)
+	// hello-ответ не приходит; правим конфиг на старте. Контекст (item 3)
+	// при старте ещё не известен (0) — обновится через spawn/config, когда
+	// координатор получит max_model_len из /v1/models.
+	n.EnsureQwenSettings(cfg.Profiles.Qwen.ModelAlias, 0)
 	host := node.Hostname()
 	im := &memConn{cmds: make(chan proto.Msg, embeddedCmdChanLen), done: ctx.Done()}
 	info := &api.NodeInfo{

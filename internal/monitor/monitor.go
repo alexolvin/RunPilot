@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -19,16 +20,20 @@ import (
 // tickPoll — период опроса дедлайнов в Run (не порог ТЗ).
 const tickPoll = tickPollMS * time.Millisecond
 
-// Fetcher — GET url → (body, status, err). В тестах — без сети.
-type Fetcher func(ctx context.Context, url string) ([]byte, int, error)
+// Fetcher — GET url → (body, status, err). bearer — заголовок Authorization
+// ("Bearer …"); пустой — без аутентификации. В тестах — без сети.
+type Fetcher func(ctx context.Context, url string, bearer string) ([]byte, int, error)
 
 // HTTPFetcher — продакшн-Fetcher; таймаут даёт вызывающий через ctx.
 func HTTPFetcher() Fetcher {
 	c := &http.Client{}
-	return func(ctx context.Context, url string) ([]byte, int, error) {
+	return func(ctx context.Context, url string, bearer string) ([]byte, int, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
 			return nil, 0, err
+		}
+		if bearer != "" {
+			req.Header.Set("Authorization", bearer)
 		}
 		resp, err := c.Do(req)
 		if err != nil {
@@ -38,6 +43,16 @@ func HTTPFetcher() Fetcher {
 		b, err := io.ReadAll(resp.Body)
 		return b, resp.StatusCode, err
 	}
+}
+
+// bearer — Authorization-заголовок сервера из KeyEnv (пустой — если переменная
+// не задана). Нужен /v1/models (vLLM отвечает 401 без ключа); health/metrics
+// обычно открыты, но ключ туда не мешает.
+func bearer(sc config.Server) string {
+	if key := os.Getenv(sc.Upstreams.OpenAI.KeyEnv); key != "" {
+		return "Bearer " + key
+	}
+	return ""
 }
 
 // ExternalSetter — scheduler.SetExternal.
@@ -172,6 +187,15 @@ type ModelObserver interface {
 	OnModels(name string, models []string)
 }
 
+// ContextObserver — наблюдатель размера контекста модели (item 3): на каждом
+// успешном GET /v1/models монитор сообщается max_model_len настроенной
+// модели сервера. Координатор берёт минимум по серверам и объявляет его
+// Qwen Code через settings.model.generationConfig.contextWindowSize (иначе
+// qwen гадает по имени модели и завышает — 1000k).
+type ContextObserver interface {
+	OnModelContext(name string, maxModelLen int)
+}
+
 // EventSink — v2 (S4/S5): запись события SERVER_FAULT (журнал) при переходе
 // сервера в карантин. Реализация — обёртка над store.EventRecord.
 type EventSink interface {
@@ -195,6 +219,9 @@ type Monitor struct {
 	// modelSink — v2 (S7/S8): наблюдатель моделей (OnModels). nil — без
 	// наблюдения моделей.
 	modelSink ModelObserver
+	// ctxSink — наблюдатель контекста модели (item 3, OnModelContext). nil —
+	// без наблюдения контекста.
+	ctxSink ContextObserver
 	// eventSink — v2 (S4/S5): запись SERVER_FAULT при переходе в карантин.
 	// nil — без записи события.
 	eventSink EventSink
@@ -210,6 +237,10 @@ type Monitor struct {
 // SetModelObserver — v2 (S7/S8): наблюдатель моделей (вызывается на каждом
 // успешном GET /v1/models).
 func (m *Monitor) SetModelObserver(o ModelObserver) { m.modelSink = o }
+
+// SetContextObserver — наблюдатель контекста модели (item 3): max_model_len
+// настроенной модели сервера (вызывается на каждом успешном GET /v1/models).
+func (m *Monitor) SetContextObserver(o ContextObserver) { m.ctxSink = o }
 
 // SetEventSink — v2 (S4/S5): запись SERVER_FAULT (журнал) при карантине.
 func (m *Monitor) SetEventSink(s EventSink) { m.eventSink = s }
@@ -337,7 +368,7 @@ func (m *Monitor) checkHealth(name string) {
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(m.cfg.Monitor.HealthTimeoutSec)*time.Second)
 	defer cancel()
-	_, status, err := m.fetch(ctx, sc.HealthURL)
+	_, status, err := m.fetch(ctx, sc.HealthURL, bearer(sc))
 	healthy := err == nil && status == http.StatusOK
 
 	ss.mu.Lock()
@@ -403,13 +434,15 @@ func (m *Monitor) checkModels(name string) {
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(m.cfg.Monitor.HealthTimeoutSec)*time.Second)
 	defer cancel()
-	body, status, err := m.fetch(ctx, base+"/v1/models")
+	// vLLM отвечает 401 на /v1/models без ключа — шлём bearer из KeyEnv.
+	body, status, err := m.fetch(ctx, base+"/v1/models", bearer(sc))
 	if err != nil || status != http.StatusOK {
 		return
 	}
 	var parsed struct {
 		Data []struct {
-			ID string `json:"id"`
+			ID          string `json:"id"`
+			MaxModelLen int    `json:"max_model_len"`
 		} `json:"data"`
 	}
 	if json.Unmarshal(body, &parsed) != nil {
@@ -422,6 +455,37 @@ func (m *Monitor) checkModels(name string) {
 		}
 	}
 	m.modelSink.OnModels(name, models)
+	m.reportModelContext(name, sc.Upstreams.OpenAI.Model, parsed.Data)
+}
+
+// reportModelContext — item 3: max_model_len настроенной модели сервера →
+// ContextObserver. Настроенная модель не найдена в списке — консервативно
+// берём минимум по всем моделям (ниже реального не будет, выше — опасно).
+func (m *Monitor) reportModelContext(name, want string,
+	data []struct {
+		ID          string `json:"id"`
+		MaxModelLen int    `json:"max_model_len"`
+	}) {
+	if m.ctxSink == nil {
+		return
+	}
+	maxLen := 0
+	for _, d := range data {
+		if d.ID == want && d.MaxModelLen > 0 {
+			maxLen = d.MaxModelLen
+			break
+		}
+	}
+	if maxLen == 0 {
+		for _, d := range data {
+			if d.MaxModelLen > 0 && (maxLen == 0 || d.MaxModelLen < maxLen) {
+				maxLen = d.MaxModelLen
+			}
+		}
+	}
+	if maxLen > 0 {
+		m.ctxSink.OnModelContext(name, maxLen)
+	}
 }
 
 // fetchMetrics — GET metrics_url (раздел 10 ТЗ): парсинг, ext =
@@ -435,7 +499,7 @@ func (m *Monitor) fetchMetrics(name string) {
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(m.cfg.Monitor.MetricsTimeoutSec)*time.Second)
 	defer cancel()
-	body, status, err := m.fetch(ctx, sc.MetricsURL)
+	body, status, err := m.fetch(ctx, sc.MetricsURL, bearer(sc))
 
 	ext := 0
 	if err != nil || status != http.StatusOK {

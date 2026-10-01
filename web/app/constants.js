@@ -23,6 +23,8 @@ export const UI = {
   // выделялся на фоне текста страницы (страница = 14 px).
   termInlineFontSizePx: 12,
   termScrollback: 2000,
+  // Терминал: сколько показывать фидбек «Скопировано» (мс).
+  termCopyFlashMs: 1500,
   // Баннер «Нет связи» не позже (TW10: ui.offline_banner_ms).
   offlineBannerMs: 250,
   // Максимум видимых подсказок команд.

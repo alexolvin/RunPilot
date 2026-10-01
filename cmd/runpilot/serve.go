@@ -183,6 +183,11 @@ func newServeCmd() *cobra.Command {
 			// v2 (S7/S8): наблюдение моделей — monitor → шлюз (сравнение,
 			// SERVER_MODEL_CHANGED / MODEL_PROBLEM).
 			mon.SetModelObserver(gateway.NewModelWatch(gw, clk))
+			// item 3: наблюдение контекста — monitor → координатор (min по
+			// серверам → msg.ContextWindow → qwen contextWindowSize).
+			ctxObs := &ctxObserver{}
+			mon.SetContextObserver(ctxObs)
+			srv.SetMinContextWindow(ctxObs.Min)
 			// v2 (S4/S5): отказы OOM/ENGINE_DEAD — шлюз → монитор (окно
 			// отказов + карантин); SERVER_FAULT → журнал.
 			gw.SetFaultReporter(mon)
@@ -386,6 +391,42 @@ func toSnap(p *api.PaneInfo) scheduler.PaneSnap {
 		ReceivedAt: p.ReceivedAt,
 		Host:       p.Host,
 	}
+}
+
+// ctxObserver — item 3: наблюдатель контекста модели (monitor.ContextObserver).
+// На каждом успешном GET /v1/models монитор сообщает max_model_len настроенной
+// модели сервера. Держим последнее известное значение по каждому серверу и
+// отдаём минимум по всем (>0) — именно меньший из доступных контекстов
+// объявляется Qwen Code (чтобы не обещать лишнего).
+type ctxObserver struct {
+	mu     sync.Mutex
+	byName map[string]int
+}
+
+// OnModelContext — max_model_len настроенной модели сервера.
+func (o *ctxObserver) OnModelContext(name string, maxModelLen int) {
+	if maxModelLen <= 0 {
+		return
+	}
+	o.mu.Lock()
+	if o.byName == nil {
+		o.byName = map[string]int{}
+	}
+	o.byName[name] = maxModelLen
+	o.mu.Unlock()
+}
+
+// Min — наименьший известный max_model_len по серверам (0 — ещё неизвестен).
+func (o *ctxObserver) Min() int {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	min := 0
+	for _, v := range o.byName {
+		if v > 0 && (min == 0 || v < min) {
+			min = v
+		}
+	}
+	return min
 }
 
 // heartbeatLoop — W7 (6.5): meta.last_alive_at каждые interval (монотонные

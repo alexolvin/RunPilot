@@ -15,6 +15,9 @@ export const T = {
   terminal: {
     title: 'Терминал',
     close: 'Закрыть терминал',
+    copy: 'Скопировать',
+    copied: 'Скопировано',
+    selectHint: 'Shift + выделение мышью — выделить текст',
     connecting: 'Подключение…',
     disconnected: 'Соединение закрыто',
     errLimit: 'Достигнут лимит терминалов на узле',

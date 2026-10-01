@@ -211,6 +211,10 @@ type Msg struct {
 	// OPENAI_BASE_URL шлюза не перебивалось собственным конфигом qwen.
 	ModelAlias string `json:"model_alias,omitempty"`
 	GatewayURL string `json:"gateway_url,omitempty"`
+	// item 3: размер контекста модели (min по серверам из /v1/models) — узел
+	// пишет его в settings.model.generationConfig.contextWindowSize, чтобы
+	// qwen объявлял реальный контекст, а не гадание по имени (1000k).
+	ContextWindow int `json:"context_window,omitempty"`
 
 	// node_health (14.4): {tmux_version, qwen_path, qwen_version,
 	// disk_free_mb, time}. TmuxVersion/QwenPath/QwenVersion/DiskFreeMB — те же

@@ -62,6 +62,7 @@ function useIsPhone() {
 function useXterm(sid, fontSize, onErr) {
   const boxRef = useRef(null);
   const wsRef = useRef(null);
+  const termRef = useRef(null);
   const openedRef = useRef(false);
   const ctrlRef = useRef(false);
   const encRef = useRef(new TextEncoder());
@@ -90,6 +91,7 @@ function useXterm(sid, fontSize, onErr) {
     // xterm по умолчанию держит дефолтные 24 строки — терминал занимал ~2/3
     // панели. fit() считает cols/rows под текущий размер; ResizeObserver
     // пересчитывает при изменении (включая первый layout).
+    termRef.current = term;
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(box);
@@ -149,8 +151,30 @@ function useXterm(sid, fontSize, onErr) {
       wsRef.current = null;
       openedRef.current = false;
       term.dispose();
+      termRef.current = null;
     };
   }, [sid, fontSize]);
+
+  // copySelection — копирование из xterm в буфер обмена (item: текст не
+  // копируется). Если выделение есть (Shift+drag) — оно; иначе видимый
+  // экран (не весь скроллбэк). navigator.clipboard — secure context (https).
+  const copySelection = async () => {
+    const term = termRef.current;
+    if (!term) return false;
+    let text = term.getSelection();
+    if (!text) {
+      const buf = term.buffer.active;
+      const lines = [];
+      for (let y = buf.viewportY; y < buf.viewportY + term.rows; y++) {
+        const line = buf.getLine(y);
+        if (line) lines.push(line.translateToString(true));
+      }
+      text = lines.join('\n').replace(/\n+$/, '');
+    }
+    if (!text) return false;
+    try { await navigator.clipboard.writeText(text); return true; }
+    catch { return false; }
+  };
 
   // Строка клавиш (телефон): raw-байты в PTY; Ctrl — модификатор-переключатель.
   const sendKey = (k) => {
@@ -165,7 +189,22 @@ function useXterm(sid, fontSize, onErr) {
     if (ctrlRef.current) { ctrlRef.current = false; setCtrlOn(false); }
   };
 
-  return { boxRef, status, errMsg, ctrlOn, sendKey };
+  return { boxRef, status, errMsg, ctrlOn, sendKey, copySelection };
+}
+
+// useCopyButton — состояние кнопки «Скопировать» + фидбек «Скопировано».
+function useCopyButton(copySelection) {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef(null);
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  const onCopy = async () => {
+    const ok = await copySelection();
+    if (!ok) return;
+    setCopied(true);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setCopied(false), UI.termCopyFlashMs);
+  };
+  return { copied, onCopy };
 }
 
 // KeyRow — строка клавиш (телефон): Esc/Tab/Ctrl/стрелки/Enter.
@@ -198,7 +237,8 @@ export function TerminalPage() {
 
 function TerminalOverlay({ sid }) {
   const close = () => actions.closeTerminal();
-  const { boxRef, status, errMsg, ctrlOn, sendKey } = useXterm(sid, UI.termFontSizePx, close);
+  const { boxRef, status, errMsg, ctrlOn, sendKey, copySelection } = useXterm(sid, UI.termFontSizePx, close);
+  const { copied, onCopy } = useCopyButton(copySelection);
   const isPhone = useIsPhone();
   const pct = UI.terminalViewportPct;
   return html`<div class="term-overlay" onClick=${close}>
@@ -210,6 +250,8 @@ function TerminalOverlay({ sid }) {
           <span class="term-sid mono">${sid}</span>
         </h2>
         ${statusLabel(status) ? html`<span class="term-status ${status}">${statusLabel(status)}</span>` : null}
+        <button class="term-copy" type="button" title=${T.terminal.selectHint}
+          onClick=${onCopy}>${copied ? T.terminal.copied : T.terminal.copy}</button>
         <button class="term-close" type="button" aria-label=${T.terminal.close}
           onClick=${close}>
           ${Icon({ name: 'x' })}
@@ -227,7 +269,8 @@ function TerminalOverlay({ sid }) {
 // Ошибка открытия (панель отсутствует, узел офлайн, лимит) — подпись под
 // контейнером, карточка остаётся.
 export function TerminalInline({ sid }) {
-  const { boxRef, status, errMsg, ctrlOn, sendKey } = useXterm(sid, UI.termInlineFontSizePx);
+  const { boxRef, status, errMsg, ctrlOn, sendKey, copySelection } = useXterm(sid, UI.termInlineFontSizePx);
+  const { copied, onCopy } = useCopyButton(copySelection);
   const isPhone = useIsPhone();
   return html`<div class="term-inline">
     <div class="term-head term-inline-head">
@@ -235,6 +278,8 @@ export function TerminalInline({ sid }) {
       ${statusLabel(status) ? html`<span class="term-status ${status}">${statusLabel(status)}</span>`
         : status === 'live' ? html`<span class="livescreen-live livescreen-live--live">${T.session.screenLive}</span>`
         : null}
+      <button class="term-copy term-copy--inline" type="button" title=${T.terminal.selectHint}
+        onClick=${onCopy}>${copied ? T.terminal.copied : T.terminal.copy}</button>
     </div>
     <div class="term-body term-inline-body" ref=${boxRef}></div>
     ${status === 'error' ? html`<div class="term-err">${errMsg}</div>` : null}

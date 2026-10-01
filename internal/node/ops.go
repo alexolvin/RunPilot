@@ -133,7 +133,7 @@ func (n *Node) spawn(ctx context.Context, m proto.Msg) (*Reply, error) {
 	// сессии не перебивалось собственным конфигом qwen (не фатально: при
 	// ошибке кодер запустится, но может ходить мимо шлюза).
 	if alias := m.Env["OPENAI_MODEL"]; alias != "" {
-		if res := n.EnsureQwenSettings(alias); res.Err != nil {
+		if res := n.EnsureQwenSettings(alias, m.ContextWindow); res.Err != nil {
 			n.log.Warn("node: spawn: settings.json не приведён", "err", res.Err.Error())
 		}
 	}
@@ -360,7 +360,7 @@ func (n *Node) config(ctx context.Context, m proto.Msg) (*Reply, error) {
 	// ~/.qwen/settings.json в порядок, чтобы окружение сессии шлюза
 	// (OPENAI_BASE_URL/OPENAI_MODEL) не перебивалось конфигом qwen.
 	if m.ModelAlias != "" {
-		n.EnsureQwenSettings(m.ModelAlias)
+		n.EnsureQwenSettings(m.ModelAlias, m.ContextWindow)
 	}
 	return &Reply{CmdID: m.CmdID, Result: ResSent}, nil
 }
@@ -369,7 +369,7 @@ func (n *Node) config(ctx context.Context, m proto.Msg) (*Reply, error) {
 // веб-кнопка «Внести коррекции» в диалоге новой сессии. Возвращает исход,
 // чтобы оператор увидел результат ПЕРЕД запуском кодера.
 func (n *Node) qwenSettings(ctx context.Context, m proto.Msg) (*Reply, error) {
-	res := n.EnsureQwenSettings(m.ModelAlias)
+	res := n.EnsureQwenSettings(m.ModelAlias, m.ContextWindow)
 	switch {
 	case res.Err != nil:
 		return &Reply{CmdID: m.CmdID, Result: proto.ResQwenSettingsError, Detail: res.Err.Error()}, nil

@@ -76,6 +76,8 @@ func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 	m.Env = env
 	m.Args = req.Args
 	m.SID = newSID
+	// item 3: размер контекста (min по серверам) → contextWindowSize кодера.
+	m.ContextWindow = s.MinContextWindow()
 	// Таймаут «панель готова» — из конфига (web.spawn_ready_sec, default 5).
 	timeout := time.Duration(s.cfg.Web.SpawnReadySec) * time.Second
 	// Spawn ДО записи: при неудаче (DIR_FORBIDDEN и пр.) записи не остаётся.

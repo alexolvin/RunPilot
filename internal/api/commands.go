@@ -67,6 +67,12 @@ func (s *Server) CmdPaste(ctx context.Context, sid, text string, enqueue bool) (
 	switch reply.Result {
 	case proto.ResPasted:
 		s.auditPaste(ctx, sid, text)
+		// Вставка подтверждена: ввод панели теперь не пуст. Обновляем снимок
+		// хаба сразу, чтобы следующий Enqueue не увидел устаревшее
+		// InputEmpty=true (staleness race: снимок иначе освежается только по
+		// периодическому циклу узла KindPanes, а Enqueue идёт немедленно).
+		p.InputEmpty = false
+		s.hub.SetPane(info.Host, p)
 		if enqueue {
 			if e := s.sched.Enqueue(sid, model.QueueEntry{SID: sid}, false); e != nil {
 				return command.Outcome{Code: "ENQUEUE", Text: e.Error()}, nil

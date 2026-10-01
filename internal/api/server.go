@@ -51,6 +51,12 @@ type Server struct {
 	// serverReg — реестр серверов в работе (W6 CRUD): AddOrUpdate/Remove.
 	serverReg serverReg
 
+	// minContextFn — item 3: минимальный размер контекста по серверам
+	// (из /v1/models, monitor → serve.go ctxObserver). nil — контекст
+	// неизвестен (0 → узел не меняет contextWindowSize). Ставится до
+	// подключения узлов; чтение — в обработчиках (обёртка thread-safe).
+	minContextFn func() int
+
 	// Активные SSE-подключения (cancel их контекста = разрыв для клиента;
 	// используется стендом для проверки RESYNC, v2 CONTROL 2).
 	sseMu      sync.Mutex
@@ -210,6 +216,20 @@ func (s *Server) SetScheduler(sch *scheduler.Scheduler) { s.sched = sch }
 
 // SetMonitor — монитор (Э6): серверная часть doctor (/api/v1/doctor).
 func (s *Server) SetMonitor(mon *monitor.Monitor) { s.mon = mon }
+
+// SetMinContextWindow — item 3: источник минимального размера контекста
+// (обёртка monitor/ctxObserver). Вызывается при отправке config/spawn/
+// qwen_settings узлу (msg.ContextWindow), чтобы кодер объявлял реальный
+// контекст, а не гадание по имени модели.
+func (s *Server) SetMinContextWindow(fn func() int) { s.minContextFn = fn }
+
+// MinContextWindow — текущий минимум (0 — неизвестен).
+func (s *Server) MinContextWindow() int {
+	if s.minContextFn == nil {
+		return 0
+	}
+	return s.minContextFn()
+}
 
 // SetServerDrain — drain/undrain сервера (Э5); шлюз меняет состояние,
 // планировщик узнаёт через Servers.OnChange.
@@ -747,6 +767,8 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 	cfgMsg := proto.New(proto.KindConfig)
 	cfgMsg.ModelAlias = s.cfg.Profiles.Qwen.ModelAlias
 	cfgMsg.GatewayURL = s.cfg.Coordinator.GatewayURL
+	// item 3: размер контекста (min по серверам) → contextWindowSize.
+	cfgMsg.ContextWindow = s.MinContextWindow()
 	if err := lc.WriteJSON(cfgMsg); err != nil {
 		s.log.Warn("api: node: config (hello-ответ): "+err.Error(), "host", host)
 		return
