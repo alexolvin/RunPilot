@@ -5,15 +5,19 @@ package node
 // code может перебить его собственным ~/.qwen/settings.json:
 //   - security.auth.selectedType != "openai" → OPENAI_*-окружение не
 //     используется (auth по умолчанию);
-//   - modelProviders с id = model_alias → qwen берёт baseUrl из записи,
-//     а не из окружения.
+//   - modelProviders (любой) → qwen берёт baseUrl из записи (прямой доступ
+//     в обход шлюза), а не из окружения.
 //
 // ensureQwenSettings приводит файл в порядок (то, что проверяет doctor
-// qwen_settings, раздел 7 ТЗ): selectedType="openai" и ни одной записи
-// modelProviders с id = model_alias. Идемпотентно; при первом изменении —
-// резервная копия settings.json.runpilot.bak; каждое изменение — в журнал.
-// Ошибки не фатальны (WARN) — узел работает, аqm-сессии просто могут
-// ходить мимо шлюза, и оператор видит это по doctor/мониторингу.
+// qwen_settings, раздел 7 ТЗ): selectedType="openai" и modelProviders пуст —
+// кодер обязан ходить через шлюз. Удаляются ВСЕ modelProviders, а не только
+// с id = model_alias: чужой id с прямым baseUrl всё равно уводит сессию мимо
+// координатора (живой баг: провайдеры qwen3.8-27b прямым baseUrl, алиас не
+// совпадает — кнопки «всё в порядке», а кодер на прямых эндпоинтах).
+// Идемпотентно; при первом изменении — резервная копия
+// settings.json.runpilot.bak; каждое изменение — в журнал.
+// Ошибки не фатальны (WARN) — узел работает, сессии просто могут ходить
+// мимо шлюза, и оператор видит это по doctor/мониторингу.
 
 import (
 	"encoding/json"
@@ -46,7 +50,9 @@ func qwenSettingsPath() (string, error) {
 // EnsureQwenSettings — см. комментарий вверху. Вызывается из config
 // (hello-ответ координатора) — на старте и при каждом reconnect, из spawn
 // (автоматическое подключение кодера к шлюзу перед запуском) и из операции
-// qwen_settings (явная проверка с отчётом в веб). Возвращает результат.
+// qwen_settings (явная проверка с отчётом в веб). modelAlias — только для
+// sanity-проверки (пустой — ошибка); на содержание modelProviders он не
+// влияет (удаляются все, см. patchQwenSettings). Возвращает результат.
 func (n *Node) EnsureQwenSettings(modelAlias string) QwenSettingsResult {
 	if modelAlias == "" {
 		return QwenSettingsResult{Err: fmt.Errorf("пустой model_alias")}
@@ -104,28 +110,19 @@ func (n *Node) patchQwenSettings(path string, data []byte, modelAlias string) Qw
 		auth["selectedType"] = "openai"
 		changes = append(changes, "security.auth.selectedType: "+sel+" → openai")
 	}
-	// 2) modelProviders: записи с id = model_alias (перебивают OPENAI_*).
+	// 2) modelProviders: любой раздел с прямыми baseUrl перебивает OPENAI_*
+	//    окружение и уводит сессию мимо шлюза — удаляется целиком.
 	if mp, ok := doc["modelProviders"].(map[string]any); ok {
-		for prov, listAny := range mp {
-			list, ok := listAny.([]any)
-			if !ok {
-				continue
+		nonEmpty := false
+		for _, listAny := range mp {
+			if list, ok := listAny.([]any); ok && len(list) > 0 {
+				nonEmpty = true
+				break
 			}
-			var kept []any
-			removed := 0
-			for _, item := range list {
-				m, _ := item.(map[string]any)
-				id, _ := m["id"].(string)
-				if id == modelAlias {
-					removed++
-					continue
-				}
-				kept = append(kept, item)
-			}
-			if removed > 0 {
-				mp[prov] = kept
-				changes = append(changes, "modelProviders."+prov+": убраны записи с id="+modelAlias)
-			}
+		}
+		if nonEmpty {
+			delete(doc, "modelProviders")
+			changes = append(changes, "modelProviders: убран прямой доступ (кодер идёт через шлюз)")
 		}
 	}
 	if len(changes) == 0 {

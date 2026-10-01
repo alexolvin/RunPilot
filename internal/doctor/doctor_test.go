@@ -19,6 +19,12 @@ func TestDefaultChecksValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("defaults должны быть валидны: %v", err)
 	}
+	// Изолированный HOME со здоровым settings.json: тест не зависит от
+	// реальной ~/.qwen/settings.json машины (doctor обязан ловить прямой
+	// доступ — см. TestQwenSettingsFailDirectProvider).
+	home := t.TempDir()
+	writeSettings(t, home, `{"security": {"auth": {"selectedType": "openai"}}}`)
+	withHome(t, home)
 	rs := runAll(t, cfg, "defaults")
 	for _, r := range rs {
 		if r.Level == FAIL {
@@ -65,9 +71,9 @@ func withHome(t *testing.T, home string) {
 
 func TestQwenSettingsOK(t *testing.T) {
 	home := t.TempDir()
+	// OK: selectedType=openai и modelProviders нет (кодер ходит через шлюз).
 	writeSettings(t, home, `{
-		"security": {"auth": {"selectedType": "openai"}},
-		"modelProviders": {"openai": [{"id": "qwen3.8-27b"}]}
+		"security": {"auth": {"selectedType": "openai"}}
 	}`)
 	withHome(t, home)
 	cfg := config.Defaults()
@@ -95,20 +101,20 @@ func TestQwenSettingsFailSelectedType(t *testing.T) {
 	t.Fatal("нет строки qwen_settings")
 }
 
-func TestQwenSettingsFailModelAlias(t *testing.T) {
+func TestQwenSettingsFailDirectProvider(t *testing.T) {
 	home := t.TempDir()
-	cfg := config.Defaults()
-	cfg.Profiles.Qwen.ModelAlias = "e2-fake-model"
+	// Любой прямой провайдер (даже с id, не равным ModelAlias) уводит сессию
+	// мимо шлюза — FAIL.
 	writeSettings(t, home, `{
 		"security": {"auth": {"selectedType": "openai"}},
-		"modelProviders": {"openai": [{"id": "other"}, {"id": "e2-fake-model"}]}
+		"modelProviders": {"openai": [{"id": "qwen3.8-27b", "baseUrl": "http://127.0.0.1:8004/v1"}]}
 	}`)
 	withHome(t, home)
-	rs := runAll(t, cfg, "defaults")
+	rs := runAll(t, config.Defaults(), "defaults")
 	for _, r := range rs {
 		if r.Check == "qwen_settings" {
 			if r.Level != FAIL {
-				t.Fatalf("ModelAlias в modelProviders: %s", r)
+				t.Fatalf("прямой провайдер: %s", r)
 			}
 			if !strings.Contains(r.Detail, "modelProviders") {
 				t.Fatalf("в detail должен быть ключ: %q", r.Detail)

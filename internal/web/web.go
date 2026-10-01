@@ -48,11 +48,13 @@ const (
 
 // csp — Content-Security-Policy веба (v2 раздел 16): внешних ресурсов нет.
 // script-src-elem: 'self' для внешних <script src>, + hash для ЕДИНСТВЕННОГО
-// инлайн-скрипта — importmap в index.html/login.html (одна строка, без пробелов
-// вокруг JSON). Если тело importmap меняется — пересчитать hash:
+// инлайн-скрипта — importmap. Тело importmap ОДИНАКОВО в index.html и
+// login.html (одна строка, без пробелов вокруг JSON) — один hash покрывает оба.
+// Если тело importmap меняется (в ОБОИХ файлах) — пересчитать hash:
 //   printf '%s' '<тело>' | openssl dgst -sha256 -binary | openssl base64 -A
+// Регрессионная проверка «hash == тело importmap» — TestCSPImportMapHash.
 const csp = "default-src 'self'; connect-src 'self'; img-src 'self' data:; " +
-	"font-src 'self'; script-src-elem 'self' 'sha256-KBPPaJeCSJEzdexAGIBnK6aSqP/v9NX1rVt98NijAaI='; " +
+	"font-src 'self'; script-src-elem 'self' 'sha256-KmgfA2MRZFHH1i6FTDy9bKsDsG/BZ8yJ94fff5obgeQ='; " +
 	"frame-ancestors 'none'"
 
 // Server — веб-слушатель.

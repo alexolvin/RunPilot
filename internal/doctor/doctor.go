@@ -207,9 +207,10 @@ func parseTmuxVersion(out string) (int, int, bool) {
 }
 
 // checkQwenSettings — клиентская проверка (раздел 7 ТЗ): в
-// ~/.qwen/settings.json задано security.auth.selectedType = "openai" и нет
-// modelProviders с id, равным ModelAlias. Нарушение — FAIL с путём файла
-// и ключом.
+// ~/.qwen/settings.json задано security.auth.selectedType = "openai" и
+// modelProviders пуст (кодер обязан ходить через шлюз). Любая запись
+// modelProviders несёт прямой baseUrl и уводит сессию мимо координатора —
+// FAIL с путём файла и ключом.
 func checkQwenSettings(ctx *Context) Result {
 	home, err := homeDir()
 	if err != nil {
@@ -238,31 +239,20 @@ func checkQwenSettings(ctx *Context) Result {
 		return result("qwen_settings", FAIL,
 			path+": security.auth.selectedType = "+fmt.Sprintf("%v", sel)+" (нужно openai)")
 	}
-	// modelProviders: provider → []{id: …}; id, равный ModelAlias, запрещён.
-	alias := ""
-	if ctx.Cfg != nil {
-		alias = ctx.Cfg.Profiles.Qwen.ModelAlias
-	}
+	// modelProviders: любой раздел с прямыми baseUrl запрещён (кодер должен
+	// ходить через шлюз; EnsureQwenSettings такой раздел удаляет).
 	if mp, ok := d["modelProviders"].(map[string]any); ok {
 		for prov, modelsAny := range mp {
 			models, ok := modelsAny.([]any)
-			if !ok {
+			if !ok || len(models) == 0 {
 				continue
 			}
-			for i, mAny := range models {
-				m, ok := mAny.(map[string]any)
-				if !ok {
-					continue
-				}
-				if id, _ := m["id"].(string); id == alias && alias != "" {
-					return result("qwen_settings", FAIL,
-						fmt.Sprintf("%s: modelProviders.%s[%d].id = %s совпадает с ModelAlias",
-							path, prov, i, id))
-				}
-			}
+			return result("qwen_settings", FAIL,
+				fmt.Sprintf("%s: modelProviders.%s — прямой доступ в обход шлюза (нужно пусто)",
+					path, prov))
 		}
 	}
-	return result("qwen_settings", PASS, "selectedType=openai, ModelAlias в modelProviders отсутствует")
+	return result("qwen_settings", PASS, "selectedType=openai, modelProviders пуст (кодер через шлюз)")
 }
 
 // checkFileMode — файлы БД и конфигурации с режимом 0600 (раздел 14).

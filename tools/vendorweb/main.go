@@ -41,6 +41,9 @@ var spec = []file{
 	// для W8 достаточно ядра Terminal).
 	{pkg: "@xterm/xterm", version: "6.0.0", inTar: "package/lib/xterm.mjs", dest: "web/vendor/xterm.mjs"},
 	{pkg: "@xterm/xterm", version: "6.0.0", inTar: "package/css/xterm.css", dest: "web/vendor/xterm.css"},
+	// FitAddon (W9): подгоняет xterm под контейнер .term-body (без него
+	// терминал держит дефолтные 24 строки и занимает ~2/3 панели).
+	{pkg: "@xterm/addon-fit", version: "0.11.0", inTar: "package/lib/addon-fit.mjs", dest: "web/vendor/xterm-addon-fit.mjs"},
 }
 
 func fontSpecs() []file {

@@ -11,6 +11,7 @@
 import { html } from '../html.js';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
 import { useStore, actions } from '../store.js';
 import { UI, BP } from '../constants.js';
 import { T } from '../i18n/ru.js';
@@ -85,7 +86,17 @@ function useXterm(sid, fontSize, onErr) {
       // xterm наследует color от контейнера (theme.foreground v6 не применяется).
       theme: { background: 'transparent' },
     });
+    // FitAddon (W9): контейнер .term-body имеет flex:1 (высота известна), но
+    // xterm по умолчанию держит дефолтные 24 строки — терминал занимал ~2/3
+    // панели. fit() считает cols/rows под текущий размер; ResizeObserver
+    // пересчитывает при изменении (включая первый layout).
+    const fit = new FitAddon();
+    term.loadAddon(fit);
     term.open(box);
+    const doFit = () => { try { fit.fit(); } catch { /* контейнер ещё без размера */ } };
+    doFit();
+    const ro = new ResizeObserver(doFit);
+    ro.observe(box);
     term.focus();
 
     const send = (bytes) => {
@@ -130,6 +141,7 @@ function useXterm(sid, fontSize, onErr) {
     ws.onclose = onFail;
 
     return () => {
+      ro.disconnect();
       ws.onmessage = null;
       ws.onerror = null;
       ws.onclose = null;

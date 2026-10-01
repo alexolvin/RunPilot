@@ -41,6 +41,10 @@ var expectedState = map[string]detect.State{
 	"idle_input_pasted_long":    detect.Idle,
 	"compress":                  detect.Idle,
 	"quit":                      detect.Idle,
+	// W9: Qwen Code 0.24.7 — idle-маркер сменился с «>» на «*   …» (фикстуры
+	// 0.24.7/idle_empty_0247). Классифицируется как IDLE через idle_regex
+	// «^\*\s|^>».
+	"idle_empty_0247":           detect.Idle,
 	"wait_compact":              detect.WaitUI,
 	"wait_connecting":           detect.WaitUI,
 	"wait_rate_limit":           detect.Busy,

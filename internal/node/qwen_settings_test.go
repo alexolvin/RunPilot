@@ -81,15 +81,10 @@ func TestEnsureQwenSettingsPatches(t *testing.T) {
 	if auth["selectedType"] != "openai" {
 		t.Fatalf("selectedType=%v, хочу openai", auth["selectedType"])
 	}
-	// Запись с id=model_alias убрана, чужая модель сохранена.
-	mp, _ := doc["modelProviders"].(map[string]any)
-	list, _ := mp["openai"].([]any)
-	if len(list) != 1 {
-		t.Fatalf("modelProviders.openai = %v, хочу 1 запись", list)
-	}
-	m0, _ := list[0].(map[string]any)
-	if m0["id"] != "other-model" {
-		t.Fatalf("осталась запись id=%v, хочу other-model", m0["id"])
+	// Весь раздел modelProviders удалён: любой прямой baseUrl (даже с чужим id)
+	// перебивает OPENAI_*-окружение и уводит сессию мимо шлюза.
+	if mp, ok := doc["modelProviders"]; ok {
+		t.Fatalf("modelProviders = %v, должен быть удалён целиком", mp)
 	}
 	// Чужие поля не тронуты.
 	model, _ := doc["model"].(map[string]any)

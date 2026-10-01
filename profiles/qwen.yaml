@@ -33,7 +33,11 @@ tab_width: 8
 busy_regex: 'Enter to steer|esc to cancel'
 approval_regex: 'Waiting for user confirmation'
 wait_regex: 'Initializing|Context (8[5-9]|9[0-9]|100)% used|plan mode \(shift \+ tab to cycle\)|Retrying in [0-9]+s'
-idle_regex: '^>'
+# idle_regex: 0.24.4/0.24.5 — строка ввода «^>»; 0.24.7 (W9) — маркер сменился
+# на «*   …» (фикстуры 0.24.7/idle_empty_0247). «^>» оставлен для обратной
+# совместимости; порядок классификации wait→busy→approval→idle делает «^\*\s»
+# безопасным (busy/wait/approval определяются раньше).
+idle_regex: '^\*\s|^>'
 placeholder_regex: '^Type your message'
 input_top_regex: '^>'
 input_bottom_regex: '^─+$'
