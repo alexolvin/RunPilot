@@ -102,8 +102,6 @@ type ServerSlotRow struct {
 type GPUCard struct {
 	Index       int     `json:"index"`
 	UtilPercent int     `json:"util_percent"`
-	VRAMUsedGB  float64 `json:"vram_used_gb"`
-	VRAMTotalGB float64 `json:"vram_total_gb"`
 	TempC       int     `json:"temp_c"`
 	PowerW      int     `json:"power_w"`
 }
@@ -118,8 +116,6 @@ type ServerRow struct {
 	SlotInfo []ServerSlotRow `json:"slots_info"`
 
 	GPU   *int     `json:"gpu,omitempty"`
-	VRAM  *float64 `json:"vram_used_gb,omitempty"`
-	VRAMT *float64 `json:"vram_total_gb,omitempty"`
 	KV    *float64 `json:"kv_pct,omitempty"`
 	GEN   *float64 `json:"gen_tok_s,omitempty"`
 	EXT   *int     `json:"ext,omitempty"`

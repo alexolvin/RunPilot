@@ -28,7 +28,7 @@ func (a standServers) List() []scheduler.ServerView { return a.views }
 // БД на каждый List() и намеряет живые метрики из статичного среза по имени.
 // CRUD веб-API (мастер, удаление) попадает в БД → серверы появляются/
 // «удаляются»/исчезают в /state, как в продакшн (реестр шлюза + монитор).
-// Метрики (KV/Gen/GPU/VRAM) не хранятся в таблице server — их несёт монитор;
+// Метрики (KV/Gen/GPU) не хранятся в таблице server — их несёт монитор;
 // в стенде это фиксированный срез met (только для сидированных серверов).
 type dbServers struct {
 	st  *store.Store
@@ -47,7 +47,7 @@ func (d *dbServers) List() []scheduler.ServerView {
 		if m, ok := d.met[s.Name]; ok {
 			v.Running, v.Waiting = m.Running, m.Waiting
 			v.KV, v.GenTokS, v.Ext, v.Missing = m.KV, m.GenTokS, m.Ext, m.Missing
-			v.GPUPct, v.VRAMUsed, v.VRAMTotal = m.GPUPct, m.VRAMUsed, m.VRAMTotal
+			v.GPUPct = m.GPUPct
 			v.GPUCards, v.State = m.GPUCards, m.State
 		}
 		out = append(out, v)
@@ -68,12 +68,11 @@ func pInt(v int) *int           { return &v }
 func pFloat(v float64) *float64 { return &v }
 
 func srvView(name string, prio, slots int, state model.ServerState,
-	kv, gen float64, gpu int, vu, vt float64) scheduler.ServerView {
+	kv, gen float64, gpu int) scheduler.ServerView {
 	return scheduler.ServerView{
 		Name: name, Priority: prio, Slots: slots, State: state,
 		Accept: []string{"*"},
 		KV: pFloat(kv), GenTokS: pFloat(gen), GPUPct: pInt(gpu),
-		VRAMUsed: pFloat(vu), VRAMTotal: pFloat(vt),
 	}
 }
 
@@ -162,8 +161,8 @@ func seedPane(hub *api.Hub, host, sid, name, state string) {
 
 func seedNormal(st *store.Store, hub *api.Hub, now time.Time) *dbServers {
 	views := []scheduler.ServerView{
-		srvView(nSrvOne, nOnePrio, nOneSlots, model.ServerUp, nOneKV, nOneGen, nOneGPU, nOneVU, nOneVT),
-		srvView(nSrvTwo, nTwoPrio, nTwoSlots, model.ServerUp, nTwoKV, nTwoGen, nTwoGPU, nTwoVU, nTwoVT),
+		srvView(nSrvOne, nOnePrio, nOneSlots, model.ServerUp, nOneKV, nOneGen, nOneGPU),
+		srvView(nSrvTwo, nTwoPrio, nTwoSlots, model.ServerUp, nTwoKV, nTwoGen, nTwoGPU),
 	}
 	met := make(map[string]scheduler.ServerView, len(views))
 	for _, v := range views {
@@ -221,8 +220,8 @@ func queueWait(i int) time.Duration { return time.Duration(nEventStepSec*(i+nSlo
 // PROMPT (ждёт подтверждения), UNMANAGED-панель, внешняя нагрузка (cron).
 func seedAttention(st *store.Store, hub *api.Hub, now time.Time) *standServers {
 	views := []scheduler.ServerView{
-		srvView(nSrvOne, nOnePrio, nOneSlots, model.ServerUp, nOneKV, nOneGen, nOneGPU, nOneVU, nOneVT),
-		srvView(nSrvTwo, nTwoPrio, nTwoSlots, model.ServerUp, nTwoKV, nTwoGen, nTwoGPU, nTwoVU, nTwoVT),
+		srvView(nSrvOne, nOnePrio, nOneSlots, model.ServerUp, nOneKV, nOneGen, nOneGPU),
+		srvView(nSrvTwo, nTwoPrio, nTwoSlots, model.ServerUp, nTwoKV, nTwoGen, nTwoGPU),
 	}
 	views[0].Ext = pInt(aExtLoad) // внешняя нагрузка от cron на srv-01
 
@@ -264,7 +263,7 @@ func seedMany(st *store.Store, hub *api.Hub, now time.Time) *standServers {
 		name := fmt.Sprintf("%s%d", mSrvPrefix, i+1)
 		views = append(views, srvView(name, mSrvPrio, mSlotEach, model.ServerUp,
 			mKVBase+float64(i)*mKVStep, mGenBase+float64(i)*mGenStep,
-			mGPUBase+i*mGPUStep, mVU, mVT))
+			mGPUBase+i*mGPUStep))
 	}
 	nodes := make([]string, mNodeN)
 	for i := 0; i < mNodeN; i++ {
@@ -308,10 +307,10 @@ func seedMany(st *store.Store, hub *api.Hub, now time.Time) *standServers {
 
 func seedFaults(st *store.Store, hub *api.Hub, now time.Time) *standServers {
 	views := []scheduler.ServerView{
-		srvView(fSrvOne, fSrvPrioUp, fSlots, model.ServerUp, fOneKV, fOneGen, fOneGPU, fOneVU, fOneVT),
-		srvView(fSrvTwo, fSrvPrioUp, fSlots, model.ServerState("DOWN"), 0, 0, 0, 0, 0),
-		srvView(fSrvThr, fSrvPrioUp, fSlots, model.ServerState("QUARANTINED"), 0, 0, 0, 0, 0),
-		srvView(fSrvFou, fSrvPrioLow, fSlots, model.ServerState("MODEL_PROBLEM"), 0, 0, 0, 0, 0),
+		srvView(fSrvOne, fSrvPrioUp, fSlots, model.ServerUp, fOneKV, fOneGen, fOneGPU),
+		srvView(fSrvTwo, fSrvPrioUp, fSlots, model.ServerState("DOWN"), 0, 0, 0),
+		srvView(fSrvThr, fSrvPrioUp, fSlots, model.ServerState("QUARANTINED"), 0, 0, 0),
+		srvView(fSrvFou, fSrvPrioLow, fSlots, model.ServerState("MODEL_PROBLEM"), 0, 0, 0),
 	}
 	seedNode(hub, nNodeHost, nNodeIP, nNodeVer, []string{nSockA})
 	var idx int
@@ -394,8 +393,8 @@ func addExternal(st *store.Store, host string, pid int, source, exe, flags, targ
 // один процесс завершён оператором («Завершить»).
 func seedW7Ext(st *store.Store, hub *api.Hub, now time.Time) *standServers {
 	views := []scheduler.ServerView{
-		srvView(nSrvOne, nOnePrio, nOneSlots, model.ServerUp, nOneKV, nOneGen, nOneGPU, nOneVU, nOneVT),
-		srvView(nSrvTwo, nTwoPrio, nTwoSlots, model.ServerUp, nTwoKV, nTwoGen, nTwoGPU, nTwoVU, nTwoVT),
+		srvView(nSrvOne, nOnePrio, nOneSlots, model.ServerUp, nOneKV, nOneGen, nOneGPU),
+		srvView(nSrvTwo, nTwoPrio, nTwoSlots, model.ServerUp, nTwoKV, nTwoGen, nTwoGPU),
 	}
 	views[0].Ext = pInt(aExtLoad) // S10: внешняя нагрузка на srv-01
 
@@ -426,8 +425,8 @@ func seedW7Ext(st *store.Store, hub *api.Hub, now time.Time) *standServers {
 // wnSkewMS; node-01 — штатный.
 func seedW7Node(st *store.Store, hub *api.Hub, now time.Time) *standServers {
 	views := []scheduler.ServerView{
-		srvView(nSrvOne, nOnePrio, nOneSlots, model.ServerUp, nOneKV, nOneGen, nOneGPU, nOneVU, nOneVT),
-		srvView(nSrvTwo, nTwoPrio, nTwoSlots, model.ServerUp, nTwoKV, nTwoGen, nTwoGPU, nTwoVU, nTwoVT),
+		srvView(nSrvOne, nOnePrio, nOneSlots, model.ServerUp, nOneKV, nOneGen, nOneGPU),
+		srvView(nSrvTwo, nTwoPrio, nTwoSlots, model.ServerUp, nTwoKV, nTwoGen, nTwoGPU),
 	}
 	seedNode(hub, nNodeHost, nNodeIP, nNodeVer, []string{nSockA, nSockB})
 	seedNode(hub, wnNodeHost, wnNodeIP, nNodeVer, []string{nSockA})
@@ -458,7 +457,7 @@ func seedW7Node(st *store.Store, hub *api.Hub, now time.Time) *standServers {
 // untested → бейдж «версия не проверена»).
 func seedW7Untested(st *store.Store, hub *api.Hub, now time.Time) *standServers {
 	views := []scheduler.ServerView{
-		srvView(nSrvOne, nOnePrio, nOneSlots, model.ServerUp, nOneKV, nOneGen, nOneGPU, nOneVU, nOneVT),
+		srvView(nSrvOne, nOnePrio, nOneSlots, model.ServerUp, nOneKV, nOneGen, nOneGPU),
 	}
 	seedNode(hub, nNodeHost, nNodeIP, nNodeVer, []string{nSockA})
 	var idx int

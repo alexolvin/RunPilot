@@ -2,7 +2,7 @@
 // API, /web/* и SSE НЕ кэшируются (всегда к серверу). Network-first.
 // Регистрация — на этапе W9 (приёмка/PWA): в W3 не активируется, чтобы
 // конвейер скриншотов был детерминированным (нет фоновых загрузок кэша).
-const CACHE = 'runpilot-shell-v1';
+const CACHE = 'runpilot-shell-v2';
 const SHELL = [
   '/styles/tokens.css', '/styles/layout.css', '/styles/components.css',
   '/app/main.js', '/app/html.js', '/app/store.js', '/app/api.js', '/app/router.js',

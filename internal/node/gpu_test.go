@@ -55,10 +55,10 @@ func TestRunGUNvidia(t *testing.T) {
 			t.Fatalf("команда = %s, хочу nvidia-smi", name)
 		}
 		joined := argsToString(args)
-		if joined != "--query-gpu=index,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw --format=csv,noheader,nounits" {
+		if joined != "--query-gpu=index,utilization.gpu,temperature.gpu,power.draw --format=csv,noheader,nounits" {
 			t.Fatalf("аргументы = %q", joined)
 		}
-		return "0, 98, 23056, 24576, 65, 337.84\n1, 100, 23056, 24576, 63, 325.40\n", nil
+		return "0, 98, 65, 337.84\n1, 100, 63, 325.40\n", nil
 	}
 	ch, _ := startGPU(t, "nvidia", "node-a", ex)
 	select {
@@ -76,9 +76,6 @@ func TestRunGUNvidia(t *testing.T) {
 		if c0.Index != 0 || c0.UtilPercent != 98 || c0.TempC != 65 || c0.PowerW != 337 {
 			t.Errorf("card0 = %+v", c0)
 		}
-		if c0.VRAMUsedGB != 23056/1024.0 || c0.VRAMTotalGB != 24576/1024.0 {
-			t.Errorf("card0 vram = %v/%v", c0.VRAMUsedGB, c0.VRAMTotalGB)
-		}
 		if c1.Index != 1 || c1.UtilPercent != 100 || c1.PowerW != 325 {
 			t.Errorf("card1 = %+v", c1)
 		}
@@ -94,7 +91,7 @@ func TestRunGUAMd(t *testing.T) {
 		if name != "rocm-smi" {
 			t.Fatalf("команда = %s, хочу rocm-smi", name)
 		}
-		return `{"card0":{"GPU use (%)":87,"GPU temp (degC)":61,"GPU power (watts)":312.5,"VRAM Total Memory (B)":68719476736,"VRAM Total Used Memory (B)":57982058496}}`, nil
+		return `{"card0":{"GPU use (%)":87,"GPU temp (degC)":61,"GPU power (watts)":312.5}}`, nil
 	}
 	ch, _ := startGPU(t, "amd", "srv2", ex)
 	select {
@@ -103,7 +100,7 @@ func TestRunGUAMd(t *testing.T) {
 			t.Fatalf("msg = %+v", m)
 		}
 		c := m.Cards[0]
-		if c.UtilPercent != 87 || c.VRAMTotalGB != 64 || c.VRAMUsedGB != 54 {
+		if c.UtilPercent != 87 || c.TempC != 61 || c.PowerW != 312 {
 			t.Errorf("card = %+v", c)
 		}
 	case <-time.After(3 * time.Second):

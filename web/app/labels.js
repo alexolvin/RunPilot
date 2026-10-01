@@ -56,9 +56,6 @@ export function fmtPct(n) {
 export function fmtTokS(n) {
   return n === null || n === undefined ? T.units.none : `${round2(n)} ${T.units.tokS}`;
 }
-export function fmtGB(n) {
-  return n === null || n === undefined ? T.units.none : `${round2(n)} ${T.units.gb}`;
-}
 export function fmtMS(n) {
   return n === null || n === undefined ? T.units.none : `${n} ${T.units.ms}`;
 }

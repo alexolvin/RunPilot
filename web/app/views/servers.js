@@ -8,7 +8,7 @@ import { get, post, patch, del } from '../api.js';
 import { T } from '../i18n/ru.js';
 import { HTTP, W6 } from '../constants.js';
 import { stateColorVar } from '../state-style.js';
-import { serverStateLabel, fmtPct, fmtTokS, fmtGB } from '../labels.js';
+import { serverStateLabel, fmtPct, fmtTokS } from '../labels.js';
 import { ServerCard } from '../components/server-card.js';
 import { Sparkline } from '../components/sparkline.js';
 import { EmptyState } from '../components/empty-state.js';
@@ -76,9 +76,6 @@ function ServerDetail({ name }) {
       <${Stat} label=${T.servers.gen} value=${server.missing ? T.units.none : fmtTokS(server.gen_tok_s)} />
       <${Stat} label=${T.servers.gpu}
         value=${server.gpu == null ? T.units.none : fmtPct(server.gpu)} />
-      <${Stat} label=${T.servers.vram}
-        value=${server.vram_used_gb == null ? T.units.none
-          : fmtGB(server.vram_used_gb) + ' / ' + fmtGB(server.vram_total_gb)} />
     </div>
     <${Section} title=${sparkTitle}>
       ${hist.length

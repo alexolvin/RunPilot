@@ -32,10 +32,6 @@ const (
 	nTwoGen   = 46.0
 	nOneGPU   = 82
 	nTwoGPU   = 33
-	nOneVU    = 32.0
-	nOneVT    = 40.0
-	nTwoVU    = 8.0
-	nTwoVT    = 24.0
 
 	// Профиль «faults»: серверы в разных состояниях.
 	fSrvOne     = "srv-01"
@@ -46,8 +42,6 @@ const (
 	fOneKV      = 30.0
 	fOneGen     = 80.0
 	fOneGPU     = 55
-	fOneVU      = 12.0
-	fOneVT      = 16.0
 	fSrvPrioUp  = 10
 	fSrvPrioLow = 5
 
@@ -66,8 +60,6 @@ const (
 	mGenStep    = 20.0
 	mGPUBase    = 60
 	mGPUStep    = 10
-	mVU         = 24.0
-	mVT         = 32.0
 	mRunCut     = 4 // i % mSlotEach < 4 → RUNNING
 	mQueueCut   = 6 // i % mSlotEach < 6 → QUEUED
 	mHoldAt     = 6 // i % mSlotEach == 6 → HOLD

@@ -10,15 +10,13 @@ import (
 )
 
 // Мониторинг (v2 раздел 11.9): живые графики за monitor.history_window_min
-// по серверам (генерация ток/с, KV%, GPU, VRAM, EXT) + за 24 часа из таблицы
+// по серверам (генерация ток/с, KV%, GPU, EXT) + за 24 часа из таблицы
 // ходов (исходы, средняя длительность) + p95 задержки диспетчеризации и TTFB
 // шлюза. Данные — из монитора, планировщика и хранилища (R3).
 
 // monCurrent — текущие метрики сервера (nil/пусто = «—»).
 type monCurrent struct {
 	GPU     *int     `json:"gpu,omitempty"`
-	VRAM    *float64 `json:"vram_used_gb,omitempty"`
-	VRAMT   *float64 `json:"vram_total_gb,omitempty"`
 	KV      *float64 `json:"kv_pct,omitempty"`
 	GEN     *float64 `json:"gen_tok_s,omitempty"`
 	EXT     *int     `json:"ext,omitempty"`
@@ -78,7 +76,7 @@ func (s *Server) handleMonitoring(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, sr := range serverRows {
 		m := monServer{Name: sr.Name, State: sr.State, Current: monCurrent{
-			GPU: sr.GPU, VRAM: sr.VRAM, VRAMT: sr.VRAMT, KV: sr.KV, GEN: sr.GEN,
+			GPU: sr.GPU, KV: sr.KV, GEN: sr.GEN,
 			EXT: sr.EXT, Missing: sr.Missing,
 		}}
 		// История — из монитора (окно monitor.history_window_min).

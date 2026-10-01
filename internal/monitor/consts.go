@@ -3,12 +3,10 @@ package monitor
 
 const (
 	// nvidiaFieldCount — число полей в строке nvidia-smi CSV.
-	nvidiaFieldCount = 6
+	nvidiaFieldCount = 4
 	// gpuField* — позиции полей nvidia-smi CSV (0=index, 1=util).
-	gpuFieldMemUsed  = 2
-	gpuFieldMemTotal = 3
-	gpuFieldTemp     = 4
-	gpuFieldPower    = 5
+	gpuFieldTemp  = 2
+	gpuFieldPower = 3
 	// floatBitSize — разрядность strconv.ParseFloat.
 	floatBitSize = 64
 	// kibi — байт в кибибайте (конверсии памяти MiB/GB/B).

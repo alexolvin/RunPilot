@@ -279,12 +279,10 @@ type Pane struct {
 
 // GPUCard — карта из телеметрии (Э6).
 type GPUCard struct {
-	Index       int     `json:"index"`
-	UtilPercent int     `json:"util_percent"`
-	VRAMUsedGB  float64 `json:"vram_used_gb"`
-	VRAMTotalGB float64 `json:"vram_total_gb"`
-	TempC       int     `json:"temp_c"`
-	PowerW      int     `json:"power_w"`
+	Index       int `json:"index"`
+	UtilPercent int `json:"util_percent"`
+	TempC       int `json:"temp_c"`
+	PowerW      int `json:"power_w"`
 }
 
 // ExternalProc — внешний кодер вне tmux/runpilot (8.2 ТЗ). Node шлёт source

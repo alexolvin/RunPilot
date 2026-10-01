@@ -11,10 +11,9 @@ import (
 )
 
 // ParseNvidia — вывод
-// nvidia-smi --query-gpu=index,utilization.gpu,memory.used,memory.total,
-// temperature.gpu,power.draw --format=csv,noheader,nounits.
-// Строка на карту: «index, util %, mem MiB, mem MiB, temp °C, power W»;
-// память переводится MiB → GB.
+// nvidia-smi --query-gpu=index,utilization.gpu,temperature.gpu,power.draw
+// --format=csv,noheader,nounits.
+// Строка на карту: «index, util %, temp °C, power W».
 func ParseNvidia(out []byte) ([]proto.GPUCard, error) {
 	var cards []proto.GPUCard
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
@@ -34,14 +33,6 @@ func ParseNvidia(out []byte) ([]proto.GPUCard, error) {
 		if card.UtilPercent, err = strconv.Atoi(strings.TrimSpace(f[1])); err != nil {
 			return nil, fmt.Errorf("monitor: nvidia: utilization: %w", err)
 		}
-		memUsed, err := strconv.Atoi(strings.TrimSpace(f[gpuFieldMemUsed]))
-		if err != nil {
-			return nil, fmt.Errorf("monitor: nvidia: memory.used: %w", err)
-		}
-		memTotal, err := strconv.Atoi(strings.TrimSpace(f[gpuFieldMemTotal]))
-		if err != nil {
-			return nil, fmt.Errorf("monitor: nvidia: memory.total: %w", err)
-		}
 		if card.TempC, err = strconv.Atoi(strings.TrimSpace(f[gpuFieldTemp])); err != nil {
 			return nil, fmt.Errorf("monitor: nvidia: temperature: %w", err)
 		}
@@ -49,8 +40,6 @@ func ParseNvidia(out []byte) ([]proto.GPUCard, error) {
 		if err != nil {
 			return nil, fmt.Errorf("monitor: nvidia: power.draw: %w", err)
 		}
-		card.VRAMUsedGB = float64(memUsed) / kibi
-		card.VRAMTotalGB = float64(memTotal) / kibi
 		card.PowerW = int(power)
 		cards = append(cards, card)
 	}
@@ -62,9 +51,8 @@ func ParseNvidia(out []byte) ([]proto.GPUCard, error) {
 }
 
 // ParseROCm — вывод
-// rocm-smi --showuse --showmeminfo vram --showtemp --showpower --json:
-// {"cardN": {"GPU use (%)": …, "GPU temp (degC)": …, "GPU power (watts)": …,
-// "VRAM Total Memory (B)": …, "VRAM Total Used Memory (B)": …}}.
+// rocm-smi --showuse --showtemp --showpower --json:
+// {"cardN": {"GPU use (%)": …, "GPU temp (degC)": …, "GPU power (watts)": …}}.
 // Значения — число или строка (зависит от версии rocm-smi).
 func ParseROCm(out []byte) ([]proto.GPUCard, error) {
 	var raw map[string]map[string]any
@@ -93,16 +81,6 @@ func ParseROCm(out []byte) ([]proto.GPUCard, error) {
 			return nil, fmt.Errorf("monitor: rocm: %s: GPU power: %w", key, err)
 		} else {
 			card.PowerW = int(v)
-		}
-		if v, err := numAny(fields["VRAM Total Memory (B)"]); err != nil {
-			return nil, fmt.Errorf("monitor: rocm: %s: VRAM Total: %w", key, err)
-		} else {
-			card.VRAMTotalGB = v / kibi / kibi / kibi
-		}
-		if v, err := numAny(fields["VRAM Total Used Memory (B)"]); err != nil {
-			return nil, fmt.Errorf("monitor: rocm: %s: VRAM Used: %w", key, err)
-		} else {
-			card.VRAMUsedGB = v / kibi / kibi / kibi
 		}
 		cards = append(cards, card)
 	}

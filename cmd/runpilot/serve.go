@@ -343,18 +343,13 @@ func (a *gwServers) List() []scheduler.ServerView {
 			if g, ok := a.hub.GPU(s.Cfg.Name); ok {
 				v.GPUCards = g.Cards
 				maxUtil := g.Cards[0].UtilPercent
-				var used, total float64
 				for _, c := range g.Cards {
 					if c.UtilPercent > maxUtil {
 						maxUtil = c.UtilPercent
 					}
-					used += c.VRAMUsedGB
-					total += c.VRAMTotalGB
 				}
 				u := maxUtil
 				v.GPUPct = &u
-				vu, vt := used, total
-				v.VRAMUsed, v.VRAMTotal = &vu, &vt
 			}
 		}
 		out = append(out, v)

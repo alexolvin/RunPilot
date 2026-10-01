@@ -87,7 +87,7 @@ function normServer(s) {
   return {
     name: s.name, state: s.state, running: used, total, free: total - used,
     kv_pct: s.kv_pct, gen_tok_s: s.gen_tok_s,
-    gpu: s.gpu, vram_used_gb: s.vram_used_gb, vram_total_gb: s.vram_total_gb,
+    gpu: s.gpu,
     ext: s.ext, slots_info: s.slots_info || [],
     removing: s.removing || false,
     missing: s.metrics_missing || false,

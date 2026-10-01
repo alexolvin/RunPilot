@@ -18,12 +18,12 @@ func gpuCommand(gpu string) (name string, args []string, ok bool) {
 	switch gpu {
 	case "nvidia":
 		return "nvidia-smi", []string{
-			"--query-gpu=index,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw",
+			"--query-gpu=index,utilization.gpu,temperature.gpu,power.draw",
 			"--format=csv,noheader,nounits",
 		}, true
 	case "amd":
 		return "rocm-smi", []string{
-			"--showuse", "--showmeminfo", "vram", "--showtemp", "--showpower", "--json",
+			"--showuse", "--showtemp", "--showpower", "--json",
 		}, true
 	default:
 		return "", nil, false

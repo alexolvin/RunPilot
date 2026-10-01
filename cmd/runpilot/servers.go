@@ -33,13 +33,12 @@ func newServersCmd() *cobra.Command {
 					fmt.Sprintf("%d/%d", r.Used, r.Slots),
 					slotSummary(r.SlotInfo),
 					metricInt(r.GPU, "%d%%"),
-					metricVRAM(r.VRAM, r.VRAMT),
 					metricFloat(r.KV, "%d%%"),
 					metricFloat(r.GEN, "%d"),
 					metricInt(r.EXT, "%d"),
 				})
 			}
-			printTable([]string{"SERVER", "PRIO", "STATE", "SLOTS", "SESSIONS", "GPU", "VRAM", "KV", "GEN", "EXT"}, tbl)
+			printTable([]string{"SERVER", "PRIO", "STATE", "SLOTS", "SESSIONS", "GPU", "KV", "GEN", "EXT"}, tbl)
 			return nil
 		},
 	}
@@ -61,14 +60,6 @@ func metricFloat(v *float64, format string) string {
 		return "—"
 	}
 	return fmt.Sprintf(format, int(*v))
-}
-
-// metricVRAM — «23/24» (GB, сумма по картам).
-func metricVRAM(used, total *float64) string {
-	if used == nil || total == nil {
-		return "—"
-	}
-	return fmt.Sprintf("%.0f/%.0f", *used, *total)
 }
 
 // slotSummary — занятые слоты: «srv:session» через запятую.

@@ -44,11 +44,9 @@ type ServerView struct {
 	Missing bool     // metrics_missing (раздел 5 ТЗ)
 
 	// GPU-телеметрия узла (раздел 10 ТЗ): на строке сервера — максимум
-	// утилизации и сумма VRAM; разбивка по картам — в карточке.
-	GPUPct    *int
-	VRAMUsed  *float64 // GB
-	VRAMTotal *float64 // GB
-	GPUCards  []proto.GPUCard
+	// утилизации; разбивка по картам — в карточке.
+	GPUPct   *int
+	GPUCards []proto.GPUCard
 }
 
 // Servers — источник сведений о серверах (в порядке убывания priority).

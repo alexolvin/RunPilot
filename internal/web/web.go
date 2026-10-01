@@ -138,6 +138,8 @@ func (s *Server) Handler() http.Handler {
 		mux.Handle("GET /manifest.webmanifest", s.staticFile("manifest.webmanifest", "application/manifest+json"))
 		mux.Handle("GET /favicon.ico", s.staticFile("favicon.ico", "image/x-icon"))
 		mux.Handle("GET /icon.svg", s.staticFile("icon.svg", "image/svg+xml"))
+		mux.Handle("GET /icon-32.png", s.staticFile("icon-32.png", "image/png"))
+		mux.Handle("GET /icon-180.png", s.staticFile("icon-180.png", "image/png"))
 	}
 	// Страница входа — единственная HTML-страница без cookie.
 	mux.HandleFunc("GET /web/login", s.handleLoginEntry)
