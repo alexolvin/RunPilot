@@ -4,6 +4,7 @@
 
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-70b000.svg)](LICENSE)
+[![ci](https://github.com/alexolvin/RunPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/alexolvin/RunPilot/actions/workflows/ci.yml)
 
 **RunPilot** is a self-hosted control plane for AI coding agents. It
 schedules, proxies, monitors and visualizes coding-agent sessions (Qwen Code
@@ -27,20 +28,20 @@ single **gateway** sits in front of your LLM servers so the coders talk to one
 URL. There is no separate frontend build step — the web UI is embedded into the
 binary.
 
-| Role | Command | Runs on |
-|---|---|---|
-| Coordinator | `runpilot serve` | your hub machine |
-| Node | `runpilot node` | each worker machine |
-| Client | `runpilot` | any machine that can reach the coordinator |
+| Role        | Command          | Runs on                                    |
+| ----------- | ---------------- | ------------------------------------------ |
+| Coordinator | `runpilot serve` | your hub machine                           |
+| Node        | `runpilot node`  | each worker machine                        |
+| Client      | `runpilot`       | any machine that can reach the coordinator |
 
 ```
                  ┌────────────────────────── hub ──────────────────────────┐
-                 │                                                          │
+                 │                                                         │
  coder ─────────►│  gateway :8787  ──►  LLM server A / B (vLLM)            │
- (in a tmux      │      │                                                   │
-  pane)          │      ▼                                                   │
-                 │  coordinator :8788  ──  scheduler · monitor · store      │
-                 │      ▲  WebSocket                                         │
+ (in a tmux      │      │                                                  │
+  pane)          │      ▼                                                  │
+                 │  coordinator :8788  ──  scheduler · monitor · store     │
+                 │      ▲  WebSocket                                       │
                  └──────┼──────────────────────────────────────────────────┘
                         │
                  ┌──────┴──────┐
@@ -125,6 +126,7 @@ from `~/.config/runpilot/env`. A node reads its own `config.yaml` and
 5. Open the web UI on the coordinator (default port `8790`) and log in with the
    token.
 6. Start a session — from the web UI, or:
+
    ```sh
    ./runpilot run --agent qwen --name mytask --dir ~/proj
    ```
@@ -169,11 +171,11 @@ profiles:
 
 ### Environment variables
 
-| Variable | Purpose | Example (non-secret) | Required |
-|---|---|---|---|
-| `RUNPILOT_TOKEN` | Coordinator/operator credential (API + web login) | any long random string | yes |
-| `RUNPILOT_KEY_VLLM` | API key passed to the LLM server (name set per server via `key_env`) | your provider key | per server |
-| `RUNPILOT_TG_TOKEN` | Telegram bot token for alerts | your bot token | no |
+| Variable            | Purpose                                                              | Example (non-secret)   | Required   |
+| ------------------- | -------------------------------------------------------------------- | ---------------------- | ---------- |
+| `RUNPILOT_TOKEN`    | Coordinator/operator credential (API + web login)                    | any long random string | yes        |
+| `RUNPILOT_KEY_VLLM` | API key passed to the LLM server (name set per server via `key_env`) | your provider key      | per server |
+| `RUNPILOT_TG_TOKEN` | Telegram bot token for alerts                                        | your bot token         | no         |
 
 The node's token lives in the node's `secrets.env` (referenced by the installed
 `node` unit through `EnvironmentFile`). Values are read from the environment
@@ -186,13 +188,13 @@ hard-coded numbers in the hot path.
 
 `runpilot` is the client. Common commands:
 
-| Group | Commands |
-|---|---|
-| Roles | `serve`, `node`, `doctor`, `selftest`, `version` |
-| Sessions | `run`, `exec`, `ls`, `q`, `peek <t>`, `attach <t>`, `why <t>` |
-| Queue | `queue enqueue/dequeue/requeue/prio/pin/prefer/unpin/hold/unhold/set/cancel` |
-| Servers | `servers`, `server drain/undrain <s>`, `pause`, `resume` |
-| Ops | `events`, `stats`, `backup restore/rollback`, `service install`, `upgrade`, `tmux-setup` |
+| Group    | Commands                                                                                 |
+| -------- | ---------------------------------------------------------------------------------------- |
+| Roles    | `serve`, `node`, `doctor`, `selftest`, `version`                                         |
+| Sessions | `run`, `exec`, `ls`, `q`, `peek <t>`, `attach <t>`, `why <t>`                            |
+| Queue    | `queue enqueue/dequeue/requeue/prio/pin/prefer/unpin/hold/unhold/set/cancel`             |
+| Servers  | `servers`, `server drain/undrain <s>`, `pause`, `resume`                                 |
+| Ops      | `events`, `stats`, `backup restore/rollback`, `service install`, `upgrade`, `tmux-setup` |
 
 Run `runpilot <cmd> --help` for flags. Exit codes: `0` success, `1` runtime
 error or any `doctor` FAIL, `2` config schema/semantics violation.

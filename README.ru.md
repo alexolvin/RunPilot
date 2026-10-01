@@ -4,6 +4,7 @@
 
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-70b000.svg)](LICENSE)
+[![ci](https://github.com/alexolvin/RunPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/alexolvin/RunPilot/actions/workflows/ci.yml)
 
 **RunPilot** — self-hosted контрольная панель для AI-кодеров. Планирует,
 проксирует, мониторит и визуализирует сессии кодинг-агентов (Qwen Code в tmux)
@@ -26,20 +27,20 @@ RunPilot координирует кодинг-агентов, живущих в
 **шлюз** стоит перед LLM-серверами, чтобы кодеры обращались к одному URL. Отдельной
 сборки фронтенда нет — web UI встроен в бинарник.
 
-| Роль | Команда | Где работает |
-|---|---|---|
-| Координатор | `runpilot serve` | на хаб-машине |
-| Узел | `runpilot node` | на каждой рабочей машине |
-| Клиент | `runpilot` | с любой машины, достигающей координатор |
+| Роль        | Команда          | Где работает                            |
+| ----------- | ---------------- | --------------------------------------- |
+| Координатор | `runpilot serve` | на хаб-машине                           |
+| Узел        | `runpilot node`  | на каждой рабочей машине                |
+| Клиент      | `runpilot`       | с любой машины, достигающей координатор |
 
 ```
                  ┌────────────────────────── хаб ──────────────────────────┐
-                 │                                                          │
+                 │                                                         │
  кодер ─────────►│  шлюз :8787  ──►  LLM-сервер A / B (vLLM)               │
- (в tmux-панели) │      │                                                   │
-                 │      ▼                                                   │
-                 │  координатор :8788  ──  планировщик · монитор · store     │
-                 │      ▲  WebSocket                                         │
+ (в tmux-панели) │      │                                                  │
+                 │      ▼                                                  │
+                 │  координатор :8788  ──  планировщик · монитор · store   │
+                 │      ▲  WebSocket                                       │
                  └──────┼──────────────────────────────────────────────────┘
                         │
                  ┌──────┴──────┐
@@ -123,6 +124,7 @@ go build -o runpilot ./cmd/runpilot
 4. На каждом рабочем узле: `./runpilot node --config ~/.config/runpilot/config.yaml`.
 5. Откройте web UI на координаторе (порт по умолчанию `8790`) и войдите по токену.
 6. Запустите сессию — из web UI или:
+
    ```sh
    ./runpilot run --agent qwen --name mytask --dir ~/proj
    ```
@@ -166,11 +168,11 @@ profiles:
 
 ### Переменные окружения
 
-| Переменная | Назначение | Пример (не секрет) | Обязательно |
-|---|---|---|---|
-| `RUNPILOT_TOKEN` | Операторский токен (API + вход в web UI) | любая длинная случайная строка | да |
-| `RUNPILOT_KEY_VLLM` | API-ключ, передаваемый LLM-серверу (имя задаётся на сервер через `key_env`) | ваш ключ провайдера | на сервер |
-| `RUNPILOT_TG_TOKEN` | Токен Telegram-бота для алертов | ваш токен бота | нет |
+| Переменная          | Назначение                                                                  | Пример (не секрет)             | Обязательно |
+| ------------------- | --------------------------------------------------------------------------- | ------------------------------ | ----------- |
+| `RUNPILOT_TOKEN`    | Операторский токен (API + вход в web UI)                                    | любая длинная случайная строка | да          |
+| `RUNPILOT_KEY_VLLM` | API-ключ, передаваемый LLM-серверу (имя задаётся на сервер через `key_env`) | ваш ключ провайдера            | на сервер   |
+| `RUNPILOT_TG_TOKEN` | Токен Telegram-бота для алертов                                             | ваш токен бота                 | нет         |
 
 Токен узла хранится в `secrets.env` узла (подключается установленным unit
 `node` через `EnvironmentFile`). Значения читаются только из окружения и никогда
@@ -183,12 +185,12 @@ profiles:
 
 `runpilot` — клиент. Основные команды:
 
-| Группа | Команды |
-|---|---|
-| Роли | `serve`, `node`, `doctor`, `selftest`, `version` |
-| Сессии | `run`, `exec`, `ls`, `q`, `peek <t>`, `attach <t>`, `why <t>` |
-| Очередь | `queue enqueue/dequeue/requeue/prio/pin/prefer/unpin/hold/unhold/set/cancel` |
-| Серверы | `servers`, `server drain/undrain <s>`, `pause`, `resume` |
+| Группа   | Команды                                                                                  |
+| -------- | ---------------------------------------------------------------------------------------- |
+| Роли     | `serve`, `node`, `doctor`, `selftest`, `version`                                         |
+| Сессии   | `run`, `exec`, `ls`, `q`, `peek <t>`, `attach <t>`, `why <t>`                            |
+| Очередь  | `queue enqueue/dequeue/requeue/prio/pin/prefer/unpin/hold/unhold/set/cancel`             |
+| Серверы  | `servers`, `server drain/undrain <s>`, `pause`, `resume`                                 |
 | Операции | `events`, `stats`, `backup restore/rollback`, `service install`, `upgrade`, `tmux-setup` |
 
 Флаги — `runpilot <cmd> --help`. Коды выхода: `0` успех, `1` runtime-ошибка или
