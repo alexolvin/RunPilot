@@ -89,12 +89,12 @@
   --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 
   /* ---- Шкала размеров (9.2) ---- */
-  --font-size-xs:12px;
-  --font-size-sm:13px;
-  --font-size-md:14px;
-  --font-size-lg:16px;
-  --font-size-xl:20px;
-  --font-size-2xl:28px;
+  --font-size-xs:13px;
+  --font-size-sm:14px;
+  --font-size-md:15px;
+  --font-size-lg:18px;
+  --font-size-xl:22px;
+  --font-size-2xl:31px;
 
   /* ---- Сетка 4 px ---- */
   --space-1:4px;
