@@ -124,9 +124,23 @@ func TestPtyOpenEchoCloseNoLeak(t *testing.T) {
 	if w1, h1 := windowSize(t, socket, "w8t"); w1 != w0 || h1 != h0 {
 		t.Fatalf("размер окна после attach = %dx%d, был %dx%d", w1, h1, w0, h0)
 	}
-	// list-clients после attach: 1 клиент (attach-процесс).
-	if out, _ := tmuxOut(t, socket, "list-clients", "-t", "w8t"); strings.TrimSpace(out) == "" {
-		t.Fatalf("list-clients после attach: пусто, ожидал 1 клиент")
+	// list-clients после attach: 1 клиент (attach-процесс). Клиент
+	// регистрируется асинхронно — polling, чтобы не было гонок на медленных
+	// окружениях (CI): пока attach-процесс жив, клиент обязательно появится.
+	var clients string
+	listDeadline := time.Now().Add(3 * time.Second)
+	for {
+		if out, _ := tmuxOut(t, socket, "list-clients", "-t", "w8t"); strings.TrimSpace(out) != "" {
+			clients = out
+			break
+		}
+		if time.Now().After(listDeadline) {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if strings.TrimSpace(clients) == "" {
+		t.Fatalf("list-clients после attach: пусто за 3 с, ожидал 1 клиент")
 	}
 
 	// Эхо: нажатие клавиш → вывод PTY.
@@ -231,9 +245,22 @@ func TestPtyOpenWithoutTermEnv(t *testing.T) {
 	if reply.Result != proto.ResPtyOpened {
 		t.Fatalf("ptyOpen result=%q detail=%q, хочу PTY_OPENED", reply.Result, reply.Detail)
 	}
-	// Клиент attach жив (без фикса он тут же завершался).
-	if out, _ := tmuxOut(t, socket, "list-clients", "-t", "w9t"); strings.TrimSpace(out) == "" {
-		t.Fatal("list-clients: пусто — клиент attach завершился (TERM?)")
+	// Клиент attach жив (без фикса он тут же завершался). Клиент
+	// регистрируется асинхронно — polling (гонки на медленных окружениях/CI).
+	var clients string
+	listDeadline := time.Now().Add(3 * time.Second)
+	for {
+		if out, _ := tmuxOut(t, socket, "list-clients", "-t", "w9t"); strings.TrimSpace(out) != "" {
+			clients = out
+			break
+		}
+		if time.Now().After(listDeadline) {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if strings.TrimSpace(clients) == "" {
+		t.Fatal("list-clients: пусто за 3 с — клиент attach завершился (TERM?)")
 	}
 	// Эхо нажатий — клиент рендерит.
 	n.PtyWrite(1, []byte("echo w9noTERM_MARKER\n"))
