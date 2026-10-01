@@ -274,9 +274,13 @@ export const actions = {
     } else if (ev.kind === 'HOLD' && ev.sid && pl.reason) {
       patch.sessions = S.sessions.map((s) =>
         s.sid === ev.sid ? { ...s, hold_reason: pl.reason } : s);
-    } else if (ev.kind === 'SERVER_STATE' && ev.server && pl.to) {
-      patch.servers = S.servers.map((s) =>
-        s.name === ev.server ? { ...s, state: pl.to } : s);
+    } else if (ev.kind === 'SERVER_STATE' && ev.server) {
+      // Координатор шлёт {server, state}; принимаем и state, и to (устойчиво к
+      // вариантам контракта). Без этого live-смены состояния (в т.ч. REMOVING
+      // при удалении) не применялись — сервер «не исчезал» из карточки.
+      const st = pl.to || pl.state;
+      if (st) patch.servers = S.servers.map((s) =>
+        s.name === ev.server ? { ...s, state: st, removing: st === 'REMOVING' } : s);
     }
     patch.counts = computeCounts(
       patch.sessions || S.sessions, patch.servers || S.servers, S.nodes);
@@ -284,6 +288,11 @@ export const actions = {
   },
   setResyncing(v) {
     if (S.resyncing !== v) set({ resyncing: v });
+  },
+  // resync — полный срез /state после структурного изменения (удаление/создание
+  // сервера): события не несут «сервер удалён», список берём заново из /state.
+  resync() {
+    return doResync();
   },
 };
 

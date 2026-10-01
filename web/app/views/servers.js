@@ -4,7 +4,7 @@
 import { html } from '../html.js';
 import { useState, useEffect } from 'preact/hooks';
 import { useStore, actions } from '../store.js';
-import { get, post, del } from '../api.js';
+import { get, post, patch, del } from '../api.js';
 import { T } from '../i18n/ru.js';
 import { HTTP, W6 } from '../constants.js';
 import { stateColorVar } from '../state-style.js';
@@ -177,6 +177,21 @@ function ServerWizard({ onClose, server }) {
   const [err, setErr] = useState('');
   const set = (k) => (e) => setV((prev) => ({ ...prev, [k]: e.target.value }));
 
+  // URL апстрима → авто-подстановка health/metrics (base + '/health'|'/metrics'),
+  // пока в этих полях нет своего значения — вводить полные URL вручную не нужно.
+  const setUpUrl = (e) => {
+    const url = e.target.value;
+    setV((prev) => {
+      const base = url.replace(/\/+$/, '');
+      return {
+        ...prev,
+        upUrl: url,
+        health: prev.health !== '' ? prev.health : (base ? base + '/health' : ''),
+        metrics: prev.metrics !== '' ? prev.metrics : (base ? base + '/metrics' : ''),
+      };
+    });
+  };
+
   // Редактирование: конфигурация сервера (не живые метрики).
   useEffect(() => {
     if (!editing) return;
@@ -203,6 +218,7 @@ function ServerWizard({ onClose, server }) {
       : post('/api/v1/servers', serverBody(v));
     req.then((r) => {
       if (r.ok) {
+        actions.resync(); // создание/изменение сервера — обновляем срез
         onClose();
         actions.addToast({ kind: 'info',
           text: (editing ? T.servers.wEdit : T.servers.wizard) + ': ' + v.name });
@@ -254,7 +270,7 @@ function ServerWizard({ onClose, server }) {
         </div>
         <h3 class="section-title" style=${{ margin: 'var(--space-4) 0 var(--space-2)' }}>${T.servers.wUpstream}</h3>
         <div class="field">
-          <label>${T.servers.wUpUrl}<input value=${v.upUrl} placeholder=${T.servers.wUpUrlPh} onInput=${set('upUrl')} /></label>
+          <label>${T.servers.wUpUrl}<input value=${v.upUrl} placeholder=${T.servers.wUpUrlPh} onInput=${setUpUrl} /></label>
         </div>
         <div class="field-row">
           <div class="field">
@@ -295,7 +311,10 @@ function ServerDelete({ name, used, onClose }) {
     setBusy(true); setErr('');
     del('/api/v1/servers/' + encodeURIComponent(name) + '?mode=' + mode)
       .then((r) => {
-        if (r.ok || r.status === HTTP.accepted) { onClose(); navigate('servers'); return; }
+        if (r.ok || r.status === HTTP.accepted) {
+          actions.resync(); // сервер удалён — обновляем список из /state
+          onClose(); navigate('servers'); return;
+        }
         setErr((r.data && r.data.detail) || (r.data && r.data.code) || ('HTTP ' + r.status));
       })
       .catch(() => setErr('network'))
