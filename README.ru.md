@@ -275,4 +275,4 @@ go test -race ./...   # полный набор тестов
 
 ## Лицензия
 
-[MIT](LICENSE) © RunPilot contributors.
+[MIT](LICENSE) © Alex Olvin.

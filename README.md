@@ -278,4 +278,4 @@ This project follows a [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-[MIT](LICENSE) © RunPilot contributors.
+[MIT](LICENSE) © Alex Olvin.
