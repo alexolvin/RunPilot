@@ -6,7 +6,7 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/go-rod/rod v0.116.2
 	github.com/gorilla/websocket v1.5.3
-	github.com/prometheus/client_model v0.6.2
+	github.com/prometheus/client_model v0.6.3
 	github.com/prometheus/common v0.71.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/sys v0.48.0
