@@ -131,10 +131,14 @@ func (n *Node) spawn(ctx context.Context, m proto.Msg) (*Reply, error) {
 	// Автоматическое подключение кодера к шлюзу (доп-3i): перед запуском
 	// приводим ~/.qwen/settings.json в порядок, чтобы OPENAI_*-окружение
 	// сессии не перебивалось собственным конфигом qwen (не фатально: при
-	// ошибке кодер запустится, но может ходить мимо шлюза).
+	// ошибке/коллизии кодер запустится, но может ходить мимо шлюза).
 	if alias := m.Env["OPENAI_MODEL"]; alias != "" {
 		if res := n.EnsureQwenSettings(alias, m.ContextWindow); res.Err != nil {
 			n.log.Warn("node: spawn: settings.json не приведён", "err", res.Err.Error())
+		} else {
+			for _, w := range res.Warnings {
+				n.log.Warn("node: spawn: "+w)
+			}
 		}
 	}
 	args := []string{"new-session", "-d", "-s", m.Name, "-c", m.Dir}
@@ -367,7 +371,9 @@ func (n *Node) config(ctx context.Context, m proto.Msg) (*Reply, error) {
 
 // qwenSettings — явная проверка/поправка ~/.qwen/settings.json (доп-3i):
 // веб-кнопка «Внести коррекции» в диалоге новой сессии. Возвращает исход,
-// чтобы оператор увидел результат ПЕРЕД запуском кодера.
+// чтобы оператор увидел результат ПЕРЕД запуском кодера. Warnings (коллизия
+// model_alias с id modelProviders) — всегда в Detail: это единственный
+// случай, когда кодер пойдёт мимо шлюза.
 func (n *Node) qwenSettings(ctx context.Context, m proto.Msg) (*Reply, error) {
 	res := n.EnsureQwenSettings(m.ModelAlias, m.ContextWindow)
 	switch {
@@ -375,9 +381,10 @@ func (n *Node) qwenSettings(ctx context.Context, m proto.Msg) (*Reply, error) {
 		return &Reply{CmdID: m.CmdID, Result: proto.ResQwenSettingsError, Detail: res.Err.Error()}, nil
 	case res.Changed:
 		return &Reply{CmdID: m.CmdID, Result: proto.ResQwenSettingsChanged,
-			Detail: strings.Join(res.Changes, "; ")}, nil
+			Detail: strings.Join(append(res.Changes, res.Warnings...), "; ")}, nil
 	default:
-		return &Reply{CmdID: m.CmdID, Result: proto.ResQwenSettingsOK}, nil
+		return &Reply{CmdID: m.CmdID, Result: proto.ResQwenSettingsOK,
+			Detail: strings.Join(res.Warnings, "; ")}, nil
 	}
 }
 

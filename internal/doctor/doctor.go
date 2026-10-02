@@ -239,18 +239,47 @@ func checkQwenSettings(ctx *Context) Result {
 		return result("qwen_settings", FAIL,
 			path+": security.auth.selectedType = "+fmt.Sprintf("%v", sel)+" (нужно openai)")
 	}
-	// modelProviders: любой раздел с прямыми baseUrl запрещён (кодер должен
-	// ходить через шлюз; EnsureQwenSettings такой раздел удаляет).
+	// modelProviders (политика 2026-10-02): записи оператора остаются
+	// живыми — в /model кодера доступны; шлюз по умолчанию (model_alias из
+	// env — Runtime Model, baseUrl из OPENAI_BASE_URL). Опасна только
+	// коллизия: id записи == model_alias превращает текущую модель в
+	// Provider Model — прямой baseUrl в обход шлюза.
+	collisions := 0
+	providers := 0
 	if mp, ok := d["modelProviders"].(map[string]any); ok {
-		for prov, modelsAny := range mp {
+		alias := ""
+		if ctx.Cfg != nil {
+			alias = ctx.Cfg.Profiles.Qwen.ModelAlias
+		}
+		for _, modelsAny := range mp {
 			models, ok := modelsAny.([]any)
-			if !ok || len(models) == 0 {
+			if !ok {
 				continue
 			}
-			return result("qwen_settings", FAIL,
-				fmt.Sprintf("%s: modelProviders.%s — прямой доступ в обход шлюза (нужно пусто)",
-					path, prov))
+			for _, entryAny := range models {
+				entry, ok := entryAny.(map[string]any)
+				if !ok {
+					continue
+				}
+				id, _ := entry["id"].(string)
+				if id == "" {
+					continue
+				}
+				providers++
+				if alias != "" && id == alias {
+					collisions++
+				}
+			}
 		}
+	}
+	if collisions > 0 {
+		return result("qwen_settings", FAIL,
+			fmt.Sprintf("%s: в modelProviders %d записей с id == model_alias — кодер пойдёт на прямой baseUrl (в обход шлюза); смените model_alias или id записей",
+				path, collisions))
+	}
+	if providers > 0 {
+		return result("qwen_settings", PASS,
+			fmt.Sprintf("selectedType=openai, modelProviders: %d эндов без коллизии (шлюз по умолчанию, переключение в /model)", providers))
 	}
 	return result("qwen_settings", PASS, "selectedType=openai, modelProviders пуст (кодер через шлюз)")
 }

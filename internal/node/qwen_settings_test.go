@@ -1,8 +1,10 @@
 package node
 
-// W9 доп-3c: EnsureQwenSettings приводит ~/.qwen/settings.json в порядок,
-// чтобы окружение сессии шлюза (OPENAI_BASE_URL/OPENAI_MODEL) не перебивалось
-// конфигом qwen code. Идемпотентно, с резервной копией.
+// W9 доп-3c (политика 2026-10-02): EnsureQwenSettings приводит
+// ~/.qwen/settings.json в порядок (selectedType=openai), НО modelProviders
+// оператора не удаляет — эндпоинты остаются в /model кодера. Опасна только
+// коллизия id == model_alias (кодер уходит на прямой baseUrl): Warning.
+// Идемпотентно, с резервной копией.
 
 import (
 	"context"
@@ -74,6 +76,7 @@ func TestEnsureQwenSettingsPatches(t *testing.T) {
 	n := newTestNode(t, &fakeExec{})
 	n.EnsureQwenSettings(qwenTestAlias, 0)
 
+	res := n.EnsureQwenSettings(qwenTestAlias, 0)
 	doc := readJSON(t, path)
 	// selectedType → openai.
 	sec, _ := doc["security"].(map[string]any)
@@ -81,10 +84,22 @@ func TestEnsureQwenSettingsPatches(t *testing.T) {
 	if auth["selectedType"] != "openai" {
 		t.Fatalf("selectedType=%v, хочу openai", auth["selectedType"])
 	}
-	// Весь раздел modelProviders удалён: любой прямой baseUrl (даже с чужим id)
-	// перебивает OPENAI_*-окружение и уводит сессию мимо шлюза.
-	if mp, ok := doc["modelProviders"]; ok {
-		t.Fatalf("modelProviders = %v, должен быть удалён целиком", mp)
+	// modelProviders НЕ удалён: записи оператора остаются живыми (в /model
+	// кодера доступны), даже если одна из них совпадает с alias.
+	mp, ok := doc["modelProviders"].(map[string]any)
+	if !ok {
+		t.Fatal("modelProviders удалён, а должен остаться")
+	}
+	entries, _ := mp["openai"].([]any)
+	if len(entries) != 2 {
+		t.Fatalf("записей = %d, хочу 2 (обе сохранены)", len(entries))
+	}
+	// Коллизия id == alias — Warning, файл записями не тронут.
+	if len(res.Warnings) != 1 {
+		t.Fatalf("Warnings = %v, хочу 1 (коллизия id == alias)", res.Warnings)
+	}
+	if !strings.Contains(res.Warnings[0], qwenTestAlias) {
+		t.Errorf("Warning = %q, должен называть alias", res.Warnings[0])
 	}
 	// Чужие поля не тронуты.
 	model, _ := doc["model"].(map[string]any)
@@ -95,6 +110,40 @@ func TestEnsureQwenSettingsPatches(t *testing.T) {
 	bak := path + qwenSettingsBackupSuffix
 	if _, err := os.Stat(bak); err != nil {
 		t.Fatalf("нет резервной копии: %v", err)
+	}
+}
+
+// TestEnsureQwenSettingsKeepsProvidersNoCollision — записи modelProviders с
+// чужими id остаются, Warning нет: Runtime Model (alias из env) ходит через
+// OPENAI_BASE_URL (шлюз), provider-эндпоинты доступны в /model.
+func TestEnsureQwenSettingsKeepsProvidersNoCollision(t *testing.T) {
+	fixture := `{
+		"security": {"auth": {"selectedType": "openai"}},
+		"modelProviders": {
+			"openai": [
+				{"id": "qwen3.8-27b", "name": "local", "baseUrl": "http://127.0.0.1:8004/v1"}
+			],
+			"openai-vzu5": [
+				{"id": "qwen3.8-27b", "name": "vzu5", "baseUrl": "http://100.126.222.23:8004/v1"}
+			]
+		}
+	}`
+	_, path := writeQwenFixture(t, fixture)
+	n := newTestNode(t, &fakeExec{})
+	res := n.EnsureQwenSettings(qwenTestAlias, 0) // alias ≠ qwen3.8-27b
+	if res.Err != nil {
+		t.Fatal(res.Err)
+	}
+	if len(res.Warnings) != 0 {
+		t.Fatalf("Warnings = %v, хочу пусто (нет коллизии)", res.Warnings)
+	}
+	if res.Changed {
+		t.Fatalf("файл изменён без необходимости: %v", res.Changes)
+	}
+	doc := readJSON(t, path)
+	mp, _ := doc["modelProviders"].(map[string]any)
+	if len(mp) != 2 {
+		t.Fatalf("провайдеров = %d, хочу 2", len(mp))
 	}
 }
 

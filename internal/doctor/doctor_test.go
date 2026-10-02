@@ -20,8 +20,8 @@ func TestDefaultChecksValid(t *testing.T) {
 		t.Fatalf("defaults должны быть валидны: %v", err)
 	}
 	// Изолированный HOME со здоровым settings.json: тест не зависит от
-	// реальной ~/.qwen/settings.json машины (doctor обязан ловить прямой
-	// доступ — см. TestQwenSettingsFailDirectProvider).
+	// реальной ~/.qwen/settings.json машины (doctor обязан ловить коллизию
+	// id == model_alias — см. TestQwenSettingsFailAliasCollision).
 	home := t.TempDir()
 	writeSettings(t, home, `{"security": {"auth": {"selectedType": "openai"}}}`)
 	withHome(t, home)
@@ -101,10 +101,10 @@ func TestQwenSettingsFailSelectedType(t *testing.T) {
 	t.Fatal("нет строки qwen_settings")
 }
 
-func TestQwenSettingsFailDirectProvider(t *testing.T) {
+func TestQwenSettingsPassDirectProvider(t *testing.T) {
 	home := t.TempDir()
-	// Любой прямой провайдер (даже с id, не равным ModelAlias) уводит сессию
-	// мимо шлюза — FAIL.
+	// Прямой провайдер с id, НЕ равным ModelAlias (qwen3.6-27b в defaults),
+	// — это выбор оператора из /model, а не обход: PASS.
 	writeSettings(t, home, `{
 		"security": {"auth": {"selectedType": "openai"}},
 		"modelProviders": {"openai": [{"id": "qwen3.8-27b", "baseUrl": "http://127.0.0.1:8004/v1"}]}
@@ -113,11 +113,32 @@ func TestQwenSettingsFailDirectProvider(t *testing.T) {
 	rs := runAll(t, config.Defaults(), "defaults")
 	for _, r := range rs {
 		if r.Check == "qwen_settings" {
-			if r.Level != FAIL {
-				t.Fatalf("прямой провайдер: %s", r)
+			if r.Level != PASS {
+				t.Fatalf("провайдер без коллизии: %s", r)
 			}
-			if !strings.Contains(r.Detail, "modelProviders") {
-				t.Fatalf("в detail должен быть ключ: %q", r.Detail)
+			return
+		}
+	}
+	t.Fatal("нет строки qwen_settings")
+}
+
+func TestQwenSettingsFailAliasCollision(t *testing.T) {
+	home := t.TempDir()
+	// id == ModelAlias — текущая (шлюзовая) модель становится Provider
+	// Model: прямой baseUrl в обход шлюза — FAIL.
+	writeSettings(t, home, `{
+		"security": {"auth": {"selectedType": "openai"}},
+		"modelProviders": {"openai": [{"id": "qwen3.6-27b", "baseUrl": "http://127.0.0.1:8004/v1"}]}
+	}`)
+	withHome(t, home)
+	rs := runAll(t, config.Defaults(), "defaults")
+	for _, r := range rs {
+		if r.Check == "qwen_settings" {
+			if r.Level != FAIL {
+				t.Fatalf("коллизия id == alias: %s", r)
+			}
+			if !strings.Contains(r.Detail, "model_alias") {
+				t.Fatalf("в detail должна быть причина: %q", r.Detail)
 			}
 			return
 		}
