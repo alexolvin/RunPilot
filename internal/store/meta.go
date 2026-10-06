@@ -10,8 +10,9 @@ import (
 
 // Ключи meta (раздел 6.2/6.5 v2).
 const (
-	MetaKeyMode        = "mode"
-	MetaKeyLastAliveAt = "last_alive_at"
+	MetaKeyMode            = "mode"
+	MetaKeyLastAliveAt     = "last_alive_at"
+	MetaKeySchedulerPaused = "scheduler_paused"
 )
 
 // Mode — режим координатора (NORMAL/PAUSED/EMERGENCY/SAFE_MODE), "" если нет.
@@ -32,6 +33,33 @@ func (s *Store) SetMode(mode string) error {
 	return s.DoWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`INSERT INTO meta (key, value) VALUES (?, ?)
 			ON CONFLICT(key) DO UPDATE SET value=excluded.value`, MetaKeyMode, mode)
+		return err
+	})
+}
+
+// SchedulerPaused — пауза планировщика (пауза очереди, /pause): true, если
+// стоит. Пусто/нет записи — false (раздел: операторские состояния, п.1).
+func (s *Store) SchedulerPaused() (bool, error) {
+	var v string
+	err := s.db.QueryRow(`SELECT value FROM meta WHERE key = ?`, MetaKeySchedulerPaused).Scan(&v)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return v == "1", nil
+}
+
+// SetSchedulerPaused — записать паузу планировщика (п.1: переживает рестарт).
+func (s *Store) SetSchedulerPaused(on bool) error {
+	v := "0"
+	if on {
+		v = "1"
+	}
+	return s.DoWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(`INSERT INTO meta (key, value) VALUES (?, ?)
+			ON CONFLICT(key) DO UPDATE SET value=excluded.value`, MetaKeySchedulerPaused, v)
 		return err
 	})
 }

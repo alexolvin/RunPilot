@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"runpilot/internal/clock"
@@ -100,6 +101,11 @@ type Options struct {
 	// OnServerIdle — v2 (W6, 5.2): сервер, помеченный на удаление, стал
 	// свободен (нет активных ходов) → координатор завершает удаление.
 	OnServerIdle func(name string)
+	// OnStatus — п.6(c): после тика (состояния сессий/очереди/флага held
+	// могли измениться) координатор пересчитывает строки статуса и пушит
+	// изменившиеся узлам. Вызывается ВЫНЕ блокировки (координатор читает
+	// HeldStatus/SummaryText → s.mu). nil — пуш выключен (тесты).
+	OnStatus func()
 }
 
 type dispatchRec struct {
@@ -153,6 +159,10 @@ type Scheduler struct {
 	// W6 (5.2): серверы, ожидающие удаления; onServerIdle — хук завершения.
 	onServerIdle   func(name string)
 	serverRemoving map[string]bool
+
+	// onStatus — п.6(c): пуш строки статуса/сводки координатор → узлы после
+	// тика и смены состояния сервера (вне блокировки). nil — выключен.
+	onStatus func()
 
 	mu sync.Mutex
 
@@ -221,6 +231,10 @@ type Scheduler struct {
 
 	// Задержки диспетчеризации, мс (grant → SENT): приёмка p95.
 	latencies []int64
+
+	// closed — остановка (Start ctx done): таймеры COOLDOWN не тикают после
+	// остановки (страховка от тика после shutdown).
+	closed atomic.Bool
 }
 
 // New создаёт планировщик.
@@ -248,6 +262,7 @@ func New(o Options) *Scheduler {
 		log:               o.Log,
 		reload:            o.Reload,
 		onServerIdle:      o.OnServerIdle,
+		onStatus:          o.OnStatus,
 		serverRemoving:    map[string]bool{},
 		downSince:         map[string]time.Time{},
 		nodeSeen:          map[string]time.Time{},
@@ -275,6 +290,7 @@ func New(o Options) *Scheduler {
 func (s *Scheduler) Start(ctx context.Context) {
 	tick := time.Duration(s.cfg.Scheduler.TickMS) * time.Millisecond
 	go func() {
+		defer s.closed.Store(true)
 		t := time.NewTicker(tick)
 		defer t.Stop()
 		for {
@@ -291,6 +307,16 @@ func (s *Scheduler) Start(ctx context.Context) {
 // Tick — один проход планировщика: таймеры + основной цикл выдачи.
 func (s *Scheduler) Tick() {
 	s.mu.Lock()
+	fn := s.onStatus
+	// П.6(c): после разблокировки пушим строки статуса, изменившиеся за тик.
+	// onStatus читает HeldStatus/SummaryText → s.mu, поэтому вызов ВНЕ
+	// блокировки. defer зарегистрирован ДО defer-unlock → по LIFO работает
+	// ПОСЛЕ него; при панике unlock отработает первым (panic-safety).
+	defer func() {
+		if fn != nil {
+			fn()
+		}
+	}()
 	defer s.mu.Unlock()
 	// v2 (раздел 4.4): свежие рабочие настройки из БД — со следующего тика
 	// действуют новые пороги scheduler/monitor/notify и новые значения
@@ -421,6 +447,8 @@ func (s *Scheduler) NodeDrain(host string, on bool) {
 	} else {
 		delete(s.nodeDrain, host)
 	}
+	// п.1: drain узла переживает рестарт (operator_state).
+	_ = s.st.SetOperatorState(host, store.OperatorStateNodeDrain, on)
 	s.event(model.KindNodeState, "", host, map[string]any{"host": host, "drain": on, "ts": now})
 	sessions, err := s.st.ListSessions(false)
 	if err != nil {
@@ -434,6 +462,39 @@ func (s *Scheduler) NodeDrain(host string, on bool) {
 			s.sessionEvent(sess, model.EvNodeDrain, model.HoldNodeDrain)
 		}
 	}
+}
+
+// RestoreOperatorStates — п.1: восстановить операторские состояния при старте
+// координатора (до Start). Вызывается после LoadMode/RecoverFromCrash (активных
+// аренд нет — serverDownLocked от DRAINING безопасен):
+//   - пауза планировщика — s.paused (meta) + событие в журнал;
+//   - drain/pause сервера — через applyServerState (шлюз SetState → журнал);
+//   - drain узла — NodeDrain (→ журнал).
+// Возвращает списки восстановленных (для лога).
+func (s *Scheduler) RestoreOperatorStates(applyServerState func(name string, st model.ServerState)) (drain, pause, nodes []string) {
+	if on, _ := s.st.SchedulerPaused(); on {
+		s.mu.Lock()
+		s.paused = true
+		s.mu.Unlock()
+		s.event(model.KindMode, "", "", map[string]any{"mode": string(model.ModePaused), "restored": true})
+	}
+	drain, _ = s.st.OperatorStates(store.OperatorStateServerDrain)
+	for _, name := range drain {
+		if applyServerState != nil {
+			applyServerState(name, model.ServerDraining)
+		}
+	}
+	pause, _ = s.st.OperatorStates(store.OperatorStateServerPaused)
+	for _, name := range pause {
+		if applyServerState != nil {
+			applyServerState(name, model.ServerPaused)
+		}
+	}
+	nodes, _ = s.st.OperatorStates(store.OperatorStateNodeDrain)
+	for _, host := range nodes {
+		s.NodeDrain(host, true)
+	}
+	return drain, pause, nodes
 }
 
 // ServerState — смена состояния сервера (шлюз/монитор).
@@ -451,7 +512,12 @@ func (s *Scheduler) ServerState(name string, st model.ServerState) {
 	if st != model.ServerPaused {
 		s.serverDownLocked(name, now)
 	}
+	fn := s.onStatus
 	s.mu.Unlock()
+	if fn != nil {
+		// П.6(c): состояния серверов изменились → пересчитать сводку.
+		fn()
+	}
 }
 
 // CancelServerTurns — оператор: снять ходы с сервера (раздел 7.1 С4):
@@ -547,6 +613,9 @@ func (s *Scheduler) Pause(on bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.paused = on
+	// п.1: пауза планировщика переживает рестарт (meta.scheduler_paused).
+	_ = s.st.SetSchedulerPaused(on)
+	s.event(model.KindMode, "", "", map[string]any{"mode": string(model.ModePaused), "on": on})
 }
 
 // Mode — режим координатора (v2 раздел 3.1). Приоритет (W7): принудительный
@@ -598,6 +667,14 @@ func (s *Scheduler) SetEmergencyHook(fn func()) {
 	s.emergencyHook = fn
 }
 
+// SetOnStatus — п.6(c): хук пуша строки статуса координатор → узлы. Ставится
+// после создания планировщика и пушера (serve.go). nil — пуш выключен.
+func (s *Scheduler) SetOnStatus(fn func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onStatus = fn
+}
+
 // grantsBlocked — не выдавать НОВЫХ аренд (6.2: EMERGENCY — никаких, вкл.
 // неявные; 6.4: SAFE_MODE — нет новых, идущие обслуживаются).
 func (s *Scheduler) grantsBlocked() bool {
@@ -632,8 +709,16 @@ func (s *Scheduler) sessionEvent(sess store.SessionRecord, ev model.SessionEvent
 	}
 }
 
-// event — запись события (приложение Б ТЗ).
+// event — запись события (приложение Б ТЗ). TS — свежий снимок часов; для
+// событий из тика (LEASE_GRANT/LEASE_RELEASE) использовать eventAt, чтобы метка
+// была из now тика (инвариант «один now на тик», Б).
 func (s *Scheduler) event(kind, sid, server string, payload map[string]any) {
 	data, _ := json.Marshal(payload)
 	_ = s.st.EventRecord(model.Event{TS: s.clk.Now(), Kind: kind, SID: sid, Server: server, Payload: data})
+}
+
+// eventAt — как event, но с меткой now (для событий, издаваемых внутри тика).
+func (s *Scheduler) eventAt(now time.Time, kind, sid, server string, payload map[string]any) {
+	data, _ := json.Marshal(payload)
+	_ = s.st.EventRecord(model.Event{TS: now, Kind: kind, SID: sid, Server: server, Payload: data})
 }

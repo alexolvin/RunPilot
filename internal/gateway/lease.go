@@ -2,6 +2,8 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"time"
 
 	"runpilot/internal/model"
@@ -141,12 +143,24 @@ func (g *Gateway) pickServers(constraint model.Constraint, exclude []string) []*
 
 // holdPass — удержание (раздел 6 ТЗ, правило 4): запись очереди с
 // held_request=true и тем же class; ожидание до gateway.hold_max_sec;
-// слот выдан → проксировать; таймаут/отмена → запись остаётся с
-// held_request=false и mode=resume.
+// слот выдан ПЛАНИРОВЩИКОМ (LEASE_GRANT, «held»:true) → проксировать;
+// Esc/отмена → запись удалена + QUEUE_DEQUEUE (client_gone) + request.error;
+// таймаут → запись остаётся с held_request=false и mode=resume.
+//
+// П.10: аренду выдаёт ТОЛЬКО планировщик. Self-grant шлюза в удержании
+// отсутствует — шлюз не берёт слот сам, ждёт LEASE_GRANT своей sid.
+// (acquireNow при поступлении запроса — правило 3 — не меняется.)
+//
+// П.5: повторный вход в удержание (ретраи клиента) сохраняет исходные
+// enqueued_at / attempts / class — QueueUpsertHeld при CONFLICT берёт
+// MIN(enqueued_at), MAX(attempts), MIN(class).
 func (g *Gateway) holdPass(ctx context.Context, sess store.SessionRecord,
 	class model.QueueClass, constraint model.Constraint, exclude []string) (*leaseDecision, error) {
 	now := g.clk.Now()
-	_ = g.st.QueueUpsert(model.QueueEntry{
+	// П.5: enqueued_at/attempts/class — QueueUpsertHeld сохраняет исходные
+	// при CONFLICT (повтор не сбрасывает). Первый вход — now / 0 / class.
+	// п.6: HeldSince — время начала удержания (при ретрае MIN, не сбрасывается).
+	_ = g.st.QueueUpsertHeld(model.QueueEntry{
 		SID:         sess.SID,
 		Class:       class,
 		EnqueuedAt:  now,
@@ -154,6 +168,7 @@ func (g *Gateway) holdPass(ctx context.Context, sess store.SessionRecord,
 		Constraint:  constraint,
 		Mode:        model.QueueModeSubmit,
 		HeldRequest: true,
+		HeldSince:   now,
 	})
 	wake := g.subscribeWake()
 	defer g.unsubscribeWake(wake)
@@ -161,8 +176,8 @@ func (g *Gateway) holdPass(ctx context.Context, sess store.SessionRecord,
 	defer timer.Stop()
 
 	for {
-		// Аренду мог выдать планировщик (Э4) или параллельный запрос:
-		// действующая аренда — сразу в работу.
+		// Аренду выдаёт ТОЛЬКО планировщик (LEASE_GRANT, «held»:true):
+		// действующая аренда (создана планировщиком) → сразу в работу.
 		if lease, err := g.st.LeaseGet(sess.SID); err == nil {
 			if srv := g.servers.ByName(lease.Server); srv != nil {
 				g.sessionGrantedEvents(sess)
@@ -170,22 +185,35 @@ func (g *Gateway) holdPass(ctx context.Context, sess store.SessionRecord,
 					heldMS: g.clk.Now().Sub(now).Milliseconds()}, nil
 			}
 		}
-		if lease, srv := g.grant(class, constraint, exclude, sess.SID, model.LeaseOriginImplicit); srv != nil {
-			g.sessionGrantedEvents(sess)
-			return &leaseDecision{server: srv, lease: lease,
-				heldMS: g.clk.Now().Sub(now).Milliseconds()}, nil
-		}
 		select {
 		case <-ctx.Done():
-			g.heldToResume(sess.SID)
+			// П.4: Esc/отмена во время удержания — запись очереди удалена,
+			// сессия IDLE, событие QUEUE_DEQUEUE (reason: client_gone),
+			// request.error = CLIENT_GONE.
+			g.clientGone(sess.SID)
 			return nil, ctx.Err()
 		case <-timer.C:
 			g.heldToResume(sess.SID)
 			return nil, errHoldTimeout
 		case <-wake:
-			// Слот мог освободиться — проверять заново.
+			// Слот мог освободиться (LEASE_GRANT планировщика) — проверять заново.
 		}
 	}
+}
+
+// clientGone — Esc/отмена во время удержания (П.4): запись очереди удалена,
+// сессия IDLE, событие QUEUE_DEQUEUE (reason: client_gone),
+// request.error = CLIENT_GONE.
+func (g *Gateway) clientGone(sid string) {
+	_ = g.st.QueueDelete(sid)
+	payload, _ := json.Marshal(map[string]any{"reason": "client_gone"})
+	_ = g.st.EventRecord(model.Event{TS: g.clk.Now(), Kind: model.KindQueueDequeue, SID: sid, Payload: payload})
+	// П.4: request.error = CLIENT_GONE (запрос отменён клиентом до выдачи).
+	_ = g.st.RequestError(sid, "CLIENT_GONE", g.clk.Now())
+	if sess, err := g.st.GetSession(sid); err == nil && sess.State == model.SessionQueued {
+		g.applySessionEvent(sess, model.EvDequeue)
+	}
+	g.wake()
 }
 
 // grant — выбрать сервер (pin/prefer/accept/свободный слот) и создать
@@ -210,9 +238,14 @@ func (g *Gateway) grant(class model.QueueClass, constraint model.Constraint,
 			Origin:    origin,
 			GrantedAt: g.clk.Now(),
 		}
-		got, err := g.st.LeaseCreateIfAbsent(l, true)
+		// Инвариант слотов (п.1): атомарная проверка «свободен слот» —
+		// ErrSlotFull (слот занял планировщик/миграция в гонке) → следующий
+		// сервер, не ошибка.
+		got, err := g.st.LeaseCreateIfAbsent(l, srv.Cfg.Slots, true)
 		if err != nil {
-			g.log.Error("gateway: создать аренду", "sid", sid, "err", err)
+			if !errors.Is(err, store.ErrSlotFull) {
+				g.log.Error("gateway: создать аренду", "sid", sid, "err", err)
+			}
 			continue
 		}
 		// Аренду мог создать планировщик на другом сервере — используем её.

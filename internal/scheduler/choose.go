@@ -16,6 +16,15 @@ type slotRec struct {
 	taken     bool
 }
 
+// serverSlots — число слотов сервера (для инварианта слотов, п.1); 0, если
+// сервер не в конфигурации (такой слот в выдачу не попадает).
+func (s *Scheduler) serverSlots(name string) int {
+	if v, ok := s.viewOf(name); ok {
+		return v.Slots
+	}
+	return 0
+}
+
 // leasedSlots — занятые (PENDING/ACTIVE) слоты сервера.
 func (s *Scheduler) leasedSlots(name string) map[int]bool {
 	out := map[int]bool{}

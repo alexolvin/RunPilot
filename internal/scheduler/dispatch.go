@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"time"
 
@@ -115,9 +116,9 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 			SID: sess.SID, Server: f.Name, Slot: f.Slot,
 			State: model.LeaseActive, Origin: model.LeaseOriginImplicit,
 			GrantedAt: now,
-		}, true)
+		}, s.serverSlots(f.Name), true)
 		if err != nil {
-			s.log.Error("scheduler: held-аренда", "sid", sess.SID, "err", err)
+			s.grantErr(sess.SID, f, "held-аренда", err)
 			return
 		}
 		// Гонку выиграл другой участник (шлюз): аренду выдал не этот слот.
@@ -132,7 +133,7 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 		case model.SessionDetached:
 			s.sessionEvent(sess, model.EvResumeRequest, "")
 		}
-		s.event(model.KindLeaseGrant, sess.SID, f.Name, map[string]any{
+		s.eventAt(now, model.KindLeaseGrant, sess.SID, f.Name, map[string]any{
 			"server": f.Name, "slot": l.Slot, "origin": "IMPLICIT", "held": true,
 		})
 		s.wake()
@@ -147,9 +148,9 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 			SID: sess.SID, Server: f.Name, Slot: f.Slot,
 			State: model.LeaseActive, Origin: model.LeaseOriginDispatch,
 			GrantedAt: now,
-		}, false)
+		}, s.serverSlots(f.Name), false)
 		if err != nil {
-			s.log.Error("scheduler: JOB-аренда", "sid", sess.SID, "err", err)
+			s.grantErr(sess.SID, f, "JOB-аренда", err)
 			return
 		}
 		if l.State != model.LeaseActive {
@@ -163,7 +164,7 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 		s.sessionEvent(sess, model.EvStartConfirmed, "") // DISPATCHING→RUNNING
 		// Запись очереди: аренда выдана — она больше не в очереди.
 		_ = s.st.QueueDelete(sess.SID)
-		s.event(model.KindLeaseGrant, sess.SID, f.Name, map[string]any{
+		s.eventAt(now, model.KindLeaseGrant, sess.SID, f.Name, map[string]any{
 			"server": f.Name, "slot": f.Slot, "origin": "DISPATCH", "job": true,
 		})
 		s.wake()
@@ -176,9 +177,9 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 		SID: sess.SID, Server: f.Name, Slot: f.Slot,
 		State: model.LeasePending, Origin: model.LeaseOriginDispatch,
 		GrantedAt: now,
-	}, false)
+	}, s.serverSlots(f.Name), false)
 	if err != nil {
-		s.log.Error("scheduler: аренда", "sid", sess.SID, "err", err)
+		s.grantErr(sess.SID, f, "аренда", err)
 		return
 	}
 	if l.State != model.LeasePending {
@@ -187,7 +188,7 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 	}
 	s.slotLeased(f.Name, f.Slot)
 	s.sessionEvent(sess, model.EvLeaseGranted, "")
-	s.event(model.KindLeaseGrant, sess.SID, f.Name, map[string]any{
+	s.eventAt(now, model.KindLeaseGrant, sess.SID, f.Name, map[string]any{
 		"server": f.Name, "slot": f.Slot, "origin": "DISPATCH",
 	})
 
@@ -214,10 +215,29 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 	if e.Mode == model.QueueModeResume {
 		msg.ResumeText = s.resumeText
 	}
+	if e.Mode == model.QueueModeSubmit {
+		// «Команда для запуска» (раздел постановки в очередь): заряд
+		// воспроизводится узлом атомарно. Пусто = старое поведение (ввод,
+		// представленный заранее + Enter).
+		msg.LaunchCommand = sess.LaunchCommand
+	}
 	if s.noAsyncDispatch {
 		return // тест: reply инжектится через InjectReply
 	}
 	go s.runDispatch(sess.SID, paneID, msg, now)
+}
+
+// grantErr — ошибка выдачи аренды: ErrSlotFull — обычная гонка (слот между
+// проверкой и вставкой занял другой участник: шлюз/миграция) → DEBUG;
+// прочее — ошибка записи → ERROR. Запись остаётся в очереди (повтор в
+// следующем тике).
+func (s *Scheduler) grantErr(sid string, f slotRec, what string, err error) {
+	if errors.Is(err, store.ErrSlotFull) {
+		s.log.Debug("scheduler: "+what+": слот занят другим участником (гонка)",
+			"sid", sid, "server", f.Name, "slot", f.Slot)
+		return
+	}
+	s.log.Error("scheduler: "+what, "sid", sid, "err", err)
 }
 
 // runDispatch — команда узлу + ожидание reply (таймаут держим сами:
@@ -342,6 +362,9 @@ func (s *Scheduler) confirmNowLocked(sid string, now time.Time, entry model.Queu
 	}
 	// Запись очереди: подтверждение — она не нужна.
 	_ = s.st.QueueDelete(sid)
+	// «Команда для запуска» потреблена: заряд воспроизведён при подтверждении.
+	// (При сбое/перепостановке до подтверждения она сохраняется для повтора.)
+	_ = s.st.SetSessionLaunchCommand(sid, "")
 	s.ensureTurn(sid, now, grantedAt)
 	s.wake()
 	_ = entry

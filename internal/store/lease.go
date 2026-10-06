@@ -9,6 +9,10 @@ import (
 	"runpilot/internal/model"
 )
 
+// ErrSlotFull — на сервере уже `slots` действующих аренд (PENDING/ACTIVE/
+// RECOVERING); новая аренда отклоняется (инвариант слотов, п.1).
+var ErrSlotFull = errors.New("store: server slot full")
+
 // LeaseCreate — новая аренда (раздел 4 ТЗ). Возвращает id.
 func (s *Store) LeaseCreate(l model.Lease) (int64, error) {
 	l.GrantedAt = l.GrantedAt.UTC()
@@ -33,7 +37,13 @@ VALUES (?, ?, ?, ?, ?, ?, ?)`,
 // возвращается существующая; иначе создаётся новая. deleteQueue — удалить
 // запись очереди в той же транзакции (неявные и held-выдачи; плановая
 // выдача PENDING запись сохраняет для возврата в очередь).
-func (s *Store) LeaseCreateIfAbsent(l model.Lease, deleteQueue bool) (*model.Lease, error) {
+//
+// Инвариант слотов (п.1): создание НОВОЙ аренды выполняется в одной
+// транзакции с проверкой «действующих аренд сервера (PENDING/ACTIVE/
+// RECOVERING) < slots»; при занятом слоте — ErrSlotFull. Проверка и вставка
+// атомарны — гонка «свот свободен» между планировщиком, acquireNow и
+// миграцией исключена.
+func (s *Store) LeaseCreateIfAbsent(l model.Lease, slots int, deleteQueue bool) (*model.Lease, error) {
 	l.GrantedAt = l.GrantedAt.UTC()
 	var id int64
 	err := s.DoWrite(func(tx *sql.Tx) error {
@@ -45,6 +55,9 @@ ORDER BY granted_at DESC, id DESC LIMIT 1`, l.SID).Scan(&id)
 			return nil // чужая действующая аренда — используем её
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if err := checkServerSlots(tx, l.Server, slots); err != nil {
 			return err
 		}
 		res, err := tx.Exec(`
@@ -70,6 +83,23 @@ VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		return nil, fmt.Errorf("lease_create_if_absent: %w", err)
 	}
 	return s.LeaseGetByID(id)
+}
+
+// checkServerSlots — инвариант слотов (п.1): действующих аренд сервера
+// (PENDING/ACTIVE/RECOVERING) меньше slots. Вызывается В ТРАНЗАКЦИИ вместе
+// с созданием аренды — проверка и вставка атомарны.
+func checkServerSlots(tx *sql.Tx, server string, slots int) error {
+	var n int
+	if err := tx.QueryRow(`
+SELECT COUNT(*) FROM lease
+WHERE server = ? AND state IN ('PENDING', 'ACTIVE', 'RECOVERING')`,
+		server).Scan(&n); err != nil {
+		return err
+	}
+	if n >= slots {
+		return ErrSlotFull
+	}
+	return nil
 }
 
 // LeaseGet — действующая аренда sid: последняя не-RELEASED (PENDING /

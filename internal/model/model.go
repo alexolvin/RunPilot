@@ -275,6 +275,13 @@ type QueueEntry struct {
 	HeldRequest      bool
 	IneligibleReason string
 	IneligibleSince  time.Time
+	// Attempts — счётчик автоперепостановок (П.5: при CONFLICT QueueUpsert
+	// сохраняет MAX(старое, новое) — повтор не сбрасывает).
+	Attempts int
+	// HeldSince — время начала удержания (время по internal/clock). Уставляется
+	// при входе в удержание (holdPass), при ретрае сохраняется MIN. п.6:
+	// видимость удержания (веб-бейдж HELD + таймер now−held_since, tmux-статус).
+	HeldSince time.Time
 }
 
 // Lease — аренда слота (раздел 4).
@@ -361,6 +368,9 @@ const (
 	KindJobState = "JOB_STATE"
 	// v2 (8.2): внешний кодер вне tmux/runpilot. payload: source, target, exe.
 	KindExternalProc = "EXTERNAL_PROCESS"
+	// v2 (8.2): live-множество внешних кодеров изменилось (появился/исчез/
+	// сменил статус). Веб ре-берёт GET /externals (event-driven, не поллинг).
+	KindExternals = "EXTERNALS"
 )
 
 // Коды снятия аренды (раздел 8 ТЗ + диспетчеризация).

@@ -174,7 +174,7 @@ func TestJobWaitReturnsEnv(t *testing.T) {
 	if _, err := st.LeaseCreateIfAbsent(model.Lease{
 		SID: sid, Server: "srv1", Slot: 1, State: model.LeaseActive,
 		Origin: model.LeaseOriginDispatch, GrantedAt: time.Now(),
-	}, false); err != nil {
+	}, 1, false); err != nil {
 		t.Fatal(err)
 	}
 	status, out := jobReq(t, ts, "", http.MethodGet, "/api/v1/jobs/"+sid+"/wait?wait_sec=1", nil)
@@ -238,7 +238,7 @@ func TestJobFinish(t *testing.T) {
 	if _, err := st.LeaseCreateIfAbsent(model.Lease{
 		SID: sid, Server: "srv1", Slot: 1, State: model.LeaseActive,
 		Origin: model.LeaseOriginDispatch, GrantedAt: time.Now(),
-	}, false); err != nil {
+	}, 1, false); err != nil {
 		t.Fatal(err)
 	}
 	status, out := jobReq(t, ts, "", http.MethodPost, "/api/v1/jobs/"+sid+"/finish",

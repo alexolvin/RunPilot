@@ -11,6 +11,7 @@ import (
 
 // QueueUpsert — запись очереди (queue_entry, раздел 4 ТЗ).
 // Обновляет существующую запись с тем же sid (перепостановка).
+// При CONFLICT — перезапись всех значений (S11, requeue, recordSkip).
 func (s *Store) QueueUpsert(e model.QueueEntry) error {
 	return s.DoWrite(func(tx *sql.Tx) error {
 		kind := string(e.Constraint.Kind)
@@ -21,8 +22,8 @@ func (s *Store) QueueUpsert(e model.QueueEntry) error {
 		_, err := tx.Exec(`
 INSERT INTO queue_entry
 	(sid, class, enqueued_at, not_before, constraint_kind, constraint_server,
-	 after_sid, mode, held_request, ineligible_reason, ineligible_since)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	 after_sid, mode, held_request, ineligible_reason, ineligible_since, attempts, held_since)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(sid) DO UPDATE SET
 	class = excluded.class,
 	enqueued_at = excluded.enqueued_at,
@@ -33,11 +34,51 @@ ON CONFLICT(sid) DO UPDATE SET
 	mode = excluded.mode,
 	held_request = excluded.held_request,
 	ineligible_reason = excluded.ineligible_reason,
-	ineligible_since = excluded.ineligible_since`,
+	ineligible_since = excluded.ineligible_since,
+	attempts = excluded.attempts,
+	held_since = excluded.held_since`,
 			e.SID, int(e.Class), e.EnqueuedAt.Format(time.RFC3339Nano),
 			e.NotBefore.Format(time.RFC3339Nano), kind, server, e.AfterSID,
 			string(e.Mode), boolInt(e.HeldRequest), e.IneligibleReason,
-			e.IneligibleSince.Format(time.RFC3339Nano))
+			e.IneligibleSince.Format(time.RFC3339Nano), e.Attempts,
+			e.HeldSince.Format(time.RFC3339Nano))
+		return err
+	})
+}
+
+// QueueUpsertHeld — upsert только для пути удержания (holdPass).
+// При CONFLICT — слияние: enqueued_at=MIN, attempts=MAX, class=MIN
+// (повтор клиента не сбрасывает позицию/счётчик/приоритет).
+func (s *Store) QueueUpsertHeld(e model.QueueEntry) error {
+	return s.DoWrite(func(tx *sql.Tx) error {
+		kind := string(e.Constraint.Kind)
+		server := e.Constraint.Server
+		if e.Constraint.Kind == model.ConstraintNone {
+			kind = "none"
+		}
+		_, err := tx.Exec(`
+INSERT INTO queue_entry
+	(sid, class, enqueued_at, not_before, constraint_kind, constraint_server,
+	 after_sid, mode, held_request, ineligible_reason, ineligible_since, attempts, held_since)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(sid) DO UPDATE SET
+	class = MIN(queue_entry.class, excluded.class),
+	enqueued_at = MIN(queue_entry.enqueued_at, excluded.enqueued_at),
+	not_before = excluded.not_before,
+	constraint_kind = excluded.constraint_kind,
+	constraint_server = excluded.constraint_server,
+	after_sid = excluded.after_sid,
+	mode = excluded.mode,
+	held_request = excluded.held_request,
+	ineligible_reason = excluded.ineligible_reason,
+	ineligible_since = excluded.ineligible_since,
+	attempts = MAX(queue_entry.attempts, excluded.attempts),
+	held_since = MIN(queue_entry.held_since, excluded.held_since)`,
+			e.SID, int(e.Class), e.EnqueuedAt.Format(time.RFC3339Nano),
+			e.NotBefore.Format(time.RFC3339Nano), kind, server, e.AfterSID,
+			string(e.Mode), boolInt(e.HeldRequest), e.IneligibleReason,
+			e.IneligibleSince.Format(time.RFC3339Nano), e.Attempts,
+			e.HeldSince.Format(time.RFC3339Nano))
 		return err
 	})
 }
@@ -46,15 +87,15 @@ ON CONFLICT(sid) DO UPDATE SET
 func (s *Store) QueueGet(sid string) (*model.QueueEntry, error) {
 	row := s.db.QueryRow(`
 SELECT sid, class, enqueued_at, not_before, constraint_kind, constraint_server,
-	after_sid, mode, held_request, ineligible_reason, ineligible_since
+	after_sid, mode, held_request, ineligible_reason, ineligible_since, attempts, held_since
 FROM queue_entry WHERE sid = ?`, sid)
 	var e model.QueueEntry
 	var class int
-	var enq, notBefore, inelig string
+	var enq, notBefore, inelig, heldSince string
 	var held int
 	var kind, server, mode string
 	if err := row.Scan(&e.SID, &class, &enq, &notBefore, &kind, &server,
-		&e.AfterSID, &mode, &held, &e.IneligibleReason, &inelig); err != nil {
+		&e.AfterSID, &mode, &held, &e.IneligibleReason, &inelig, &e.Attempts, &heldSince); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -68,6 +109,8 @@ FROM queue_entry WHERE sid = ?`, sid)
 	e.NotBefore = t
 	t, _ = time.Parse(time.RFC3339Nano, inelig)
 	e.IneligibleSince = t
+	t, _ = time.Parse(time.RFC3339Nano, heldSince)
+	e.HeldSince = t
 	e.Mode = model.QueueMode(mode)
 	e.HeldRequest = held != 0
 	return &e, nil
@@ -85,6 +128,21 @@ func (s *Store) QueueDelete(sid string) error {
 // Режимы передаются в model.QueueMode; пустой режим не меняется.
 func (s *Store) QueueSetHeldRequest(sid string, held bool, mode model.QueueMode) error {
 	return s.DoWrite(func(tx *sql.Tx) error {
+		// п.6: когда удержание снято (held=false), held_since очищается
+		// (запись больше не удерживает запрос).
+		if !held {
+			zero := time.Time{}.Format(time.RFC3339Nano)
+			if mode != "" {
+				if _, err := tx.Exec(`UPDATE queue_entry SET held_request = 0, mode = ?, held_since = ? WHERE sid = ?`,
+					string(mode), zero, sid); err != nil {
+					return err
+				}
+			} else if _, err := tx.Exec(`UPDATE queue_entry SET held_request = 0, held_since = ? WHERE sid = ?`,
+				zero, sid); err != nil {
+				return err
+			}
+			return nil
+		}
 		var res sql.Result
 		var err error
 		if mode != "" {
@@ -134,7 +192,7 @@ FROM queue_entry m WHERE m.sid = ?`, sid, sid).Scan(&pos)
 func (s *Store) QueueList() ([]model.QueueEntry, error) {
 	rows, err := s.db.Query(`
 SELECT sid, class, enqueued_at, not_before, constraint_kind, constraint_server,
-	after_sid, mode, held_request, ineligible_reason, ineligible_since
+	after_sid, mode, held_request, ineligible_reason, ineligible_since, attempts, held_since
 FROM queue_entry
 ORDER BY class, enqueued_at, sid`)
 	if err != nil {
@@ -145,11 +203,11 @@ ORDER BY class, enqueued_at, sid`)
 	for rows.Next() {
 		var e model.QueueEntry
 		var class int
-		var enq, notBefore, inelig string
+		var enq, notBefore, inelig, heldSince string
 		var held int
 		var kind, server, mode string
 		if err := rows.Scan(&e.SID, &class, &enq, &notBefore, &kind, &server,
-			&e.AfterSID, &mode, &held, &e.IneligibleReason, &inelig); err != nil {
+			&e.AfterSID, &mode, &held, &e.IneligibleReason, &inelig, &e.Attempts, &heldSince); err != nil {
 			return nil, err
 		}
 		e.Class = model.QueueClass(class)
@@ -160,6 +218,8 @@ ORDER BY class, enqueued_at, sid`)
 		e.NotBefore = t
 		t, _ = time.Parse(time.RFC3339Nano, inelig)
 		e.IneligibleSince = t
+		t, _ = time.Parse(time.RFC3339Nano, heldSince)
+		e.HeldSince = t
 		e.Mode = model.QueueMode(mode)
 		e.HeldRequest = held != 0
 		out = append(out, e)
