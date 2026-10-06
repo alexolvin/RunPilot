@@ -1,7 +1,7 @@
 # HANDOFF
 Обновлено: 2026-10-06 (QWEN_CODE_API_TIMEOUT_MS управляемых сессий + lint + выкат)
 
-## QWEN_CODE_API_TIMEOUT_MS для управляемых сессий + lint + выкат (2026-10-06) — ТЕКУЩЕ
+## QWEN_CODE_API_TIMEOUT_MS для управляемых сессий + lint + выкат (2026-10-06) — ВЫПОЛНЕНО
 
 > Симптом: после перезапуска `phonebroker` на vzu5-claw у процесса qwen нет
 > `QWEN_CODE_API_TIMEOUT_MS` → client-side timeout 120 s, не переживает
@@ -30,8 +30,16 @@
   9a4c8d7 (= HEAD), vcs.modified=false. Состояние до/после совпадает (оба узла,
   0 сессий). Бэкап: `runpilot.bak-4904a65-20261006T204121Z`. Артефакт:
   `docs/evidence/coordinator-deploy-2026-10-06/deploy.md`.
-- **п.4 — оператору строки (upgrade-node.sh v2 + проверка) — ⏳.**
-- **п.5 — HANDOFF после каждого пункта — в процессе.**
+- **п.4 — оператору строки — ✅ DONE.**
+  1 строка (на vzu5-claw):
+  `upgrade-node.sh c87f8d86f79fe012ff72c5effed02562695d3154cda581f917f3cfdb4f631cd4 3p14-aaa`
+  (SHA256 = бинарник 9a4c8d7 на 3p14-aaa; v2 ставит бинарник ТОЛЬКО при совпадении
+  SHA256 + предпроверка doctor до замены + атомарный откат).
+  1 проверка (на vzu5-claw после перезапуска phonebroker):
+  `runpilot doctor | grep coder_timeout_env` → PASS «все N управляемых сессий:
+  переменная на месте» (WARN «нет QWEN_CODE_API_TIMEOUT_MS» = переменная ещё нет).
+- **п.5 — HANDOFF после каждого пункта — ✅** (обновлялся после п.1 `ed4e2e5`, п.2
+  `1b6e4d8`, п.3 `ed70c5b`; итог — после п.4).
 
 ## Доработка после провала v1 на vzu5-claw: 4 пункта (2026-10-06) — ВЫПОЛНЕНО
 
