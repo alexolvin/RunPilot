@@ -69,6 +69,18 @@ func result(name string, l Level, detail string) Result {
 // homeDir — переопределяется в тестах.
 var homeDir = os.UserHomeDir
 
+// tmuxListPanes / readProcEnviron — точки инъекции для checkCoderTimeoutEnv
+// (в тестах подменяются без реального tmux и /proc).
+var (
+	tmuxListPanes = func(socket string) ([]byte, error) {
+		return exec.Command("tmux", "-L", socket, "list-panes", "-a",
+			"-F", "#{pane_dead}\t#{pane_pid}\t#{session_name}\t#{@runpilot_sid}").Output()
+	}
+	readProcEnviron = func(pid string) ([]byte, error) {
+		return os.ReadFile("/proc/" + pid + "/environ")
+	}
+)
+
 // DefaultChecks — проверки каркаса (Э0/Э2) + мониторинг (Э6).
 func DefaultChecks() []Check {
 	return []Check{
@@ -79,6 +91,7 @@ func DefaultChecks() []Check {
 		{Name: "tmux", Run: checkTmux},
 		{Name: "qwen_settings", Run: checkQwenSettings},
 		{Name: "qwen_timeout_guard", Run: checkQwenTimeoutGuard},
+		{Name: "coder_timeout_env", Run: checkCoderTimeoutEnv},
 		{Name: "file_mode", Run: checkFileMode},
 		{Name: "metrics", Run: checkMetrics},
 		{Name: "require_direct", Run: checkRequireDirect},
@@ -390,4 +403,63 @@ func checkFileMode(ctx *Context) Result {
 		return result("file_mode", PASS, "файлы ещё не созданы")
 	}
 	return result("file_mode", PASS, "0600: "+strings.Join(checked, ", "))
+}
+
+// checkCoderTimeoutEnv — у каждой живой УПРАВЛЯЕМОЙ сессии узла (панель с
+// @runpilot_sid) в env процесса кодера есть QWEN_CODE_API_TIMEOUT_MS. Читает
+// /proc/<pane_pid>/environ (tmux new-session запускает кодера как процесс
+// панели, поэтому pane_pid = PID кодера). Нет переменной → WARN (не FAIL):
+// предпроверка upgrade-node.sh не должна блокировать обновление узла со
+// СТАРЫМИ сессиями, запущенными до фикса spawnEnv.
+func checkCoderTimeoutEnv(ctx *Context) Result {
+	const name = "coder_timeout_env"
+	if ctx.Cfg == nil {
+		return result(name, WARN, "нет конфигурации — проверку пропускаем")
+	}
+	sockets := ctx.Cfg.Node.TmuxSockets
+	if len(sockets) == 0 {
+		return result(name, PASS, "нет управляемых сессий (tmux_sockets пуст)")
+	}
+	type managedPane struct{ pid, sessName, sid string }
+	var panes []managedPane
+	for _, socket := range sockets {
+		out, err := tmuxListPanes(socket)
+		if err != nil {
+			continue // нет tmux-сервера на сокете — управляемых сессий нет
+		}
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if line == "" {
+				continue
+			}
+			f := strings.Split(line, "\t")
+			if len(f) < paneFieldCount || f[paneFieldSID] == "" || f[paneFieldDead] == paneDeadFlag {
+				continue // не управляемая (нет @runpilot_sid) или мёртвая панель
+			}
+			panes = append(panes, managedPane{pid: f[paneFieldPID], sessName: f[paneFieldName], sid: f[paneFieldSID]})
+		}
+	}
+	if len(panes) == 0 {
+		return result(name, PASS, "нет живых управляемых сессий")
+	}
+	var missing []string
+	for _, p := range panes {
+		environ, err := readProcEnviron(p.pid)
+		if err != nil || !procEnvHas(environ, "QWEN_CODE_API_TIMEOUT_MS") {
+			missing = append(missing, fmt.Sprintf("%s (%s)", p.sid, p.sessName))
+		}
+	}
+	if len(missing) > 0 {
+		return result(name, WARN, "нет QWEN_CODE_API_TIMEOUT_MS: "+strings.Join(missing, ", "))
+	}
+	return result(name, PASS, fmt.Sprintf("все %d управляемых сессий: переменная на месте", len(panes)))
+}
+
+// procEnvHas — есть ли переменная в NUL-разделённом /proc/<pid>/environ.
+func procEnvHas(environ []byte, key string) bool {
+	for _, kv := range strings.Split(string(environ), "\x00") {
+		if strings.HasPrefix(kv, key+"=") {
+			return true
+		}
+	}
+	return false
 }

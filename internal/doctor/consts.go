@@ -16,4 +16,12 @@ const (
 	// statusRedirectLow/High — диапазон HTTP-кодов редиректов [300, 400).
 	statusRedirectLow  = 300
 	statusRedirectHigh = 400
+	// Позиции полей формата checkCoderTimeoutEnv:
+	// "#{pane_dead}\t#{pane_pid}\t#{session_name}\t#{@runpilot_sid}".
+	paneFieldDead    = 0
+	paneFieldPID     = 1
+	paneFieldName    = 2
+	paneFieldSID     = 3
+	paneFieldCount   = 4
+	paneDeadFlag     = "1" // #{pane_dead} для мёртвой панели
 )

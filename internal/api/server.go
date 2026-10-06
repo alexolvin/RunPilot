@@ -523,7 +523,7 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(RunResponse{
 		SID:             newSID,
-		ClientTimeoutMS: s.cfg.Profiles.Qwen.ClientTimeoutSec * 1000,
+		ClientTimeoutMS: s.cfg.Profiles.Qwen.ClientTimeoutMS(),
 	})
 }
 

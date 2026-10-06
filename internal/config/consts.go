@@ -13,4 +13,6 @@ const (
 	// hoursPerDay / minutesPerHour — диапазоны часов и минут.
 	hoursPerDay   = 24
 	minutesPerHour = 60
+	// msPerSec — миллисекунд в секунде (client_timeout_sec -> client_timeout_ms).
+	msPerSec = 1000
 )

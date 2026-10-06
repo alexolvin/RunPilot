@@ -214,6 +214,13 @@ type ProfileQwen struct {
 	ClientTimeoutSec int `yaml:"client_timeout_sec"`
 }
 
+// ClientTimeoutMS — таймаут генерирующего запроса кодера в миллисекундах
+// (источник QWEN_CODE_API_TIMEOUT_MS): ClientTimeoutSec × 1000. Единственная
+// точка преобразования сек→мс (R2: без магического 1000 в business-коде).
+func (q ProfileQwen) ClientTimeoutMS() int {
+	return q.ClientTimeoutSec * msPerSec
+}
+
 type Notify struct {
 	Telegram Telegram `yaml:"telegram"`
 	// v2 (раздел 4.2): рабочие ключи оповещений о событиях.

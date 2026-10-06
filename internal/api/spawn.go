@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"text/template"
 	"time"
 
@@ -169,23 +170,29 @@ func (s *Server) pickNode(name string) (string, error) {
 	return nodes[0].Host, nil
 }
 
-// spawnEnv — окружение агента из шаблона профиля (раздел 7 ТЗ).
+// spawnEnv — окружение кодера управляемой сессии узла (spawn/adopt): env из
+// шаблона профиля (раздел 7 ТЗ) + QWEN_CODE_API_TIMEOUT_MS из координатора
+// (client_timeout_ms). Таймаут ставится ПОСЛЕ env профиля — как в runpilot run
+// (coderEnv): перекрывает операторский override. Без него управляемая сессия
+// не переживала silent-hold (client-side timeout qwen = 120s).
 func (s *Server) spawnEnv(sidv string) (map[string]string, error) {
-	if s.prof == nil {
-		return map[string]string{}, nil
-	}
-	data := map[string]any{
-		"Gateway":    s.cfg.Coordinator.GatewayURL,
-		"SID":        sidv,
-		"ModelAlias": s.cfg.Profiles.Qwen.ModelAlias,
-	}
 	out := map[string]string{}
-	for k, v := range s.prof.Env {
-		var buf bytes.Buffer
-		if err := template.Must(template.New("env").Parse(v)).Execute(&buf, data); err != nil {
-			return nil, fmt.Errorf("шаблон env %s: %w", k, err)
+	if s.prof != nil {
+		data := map[string]any{
+			"Gateway":    s.cfg.Coordinator.GatewayURL,
+			"SID":        sidv,
+			"ModelAlias": s.cfg.Profiles.Qwen.ModelAlias,
 		}
-		out[k] = buf.String()
+		for k, v := range s.prof.Env {
+			var buf bytes.Buffer
+			if err := template.Must(template.New("env").Parse(v)).Execute(&buf, data); err != nil {
+				return nil, fmt.Errorf("шаблон env %s: %w", k, err)
+			}
+			out[k] = buf.String()
+		}
+	}
+	if ms := s.cfg.Profiles.Qwen.ClientTimeoutMS(); ms > 0 {
+		out["QWEN_CODE_API_TIMEOUT_MS"] = strconv.Itoa(ms)
 	}
 	return out, nil
 }
