@@ -1,5 +1,63 @@
 # HANDOFF
-Обновлено: 2026-10-06 (QWEN_CODE_API_TIMEOUT_MS управляемых сессий + lint + выкат)
+Обновлено: 2026-10-07 (W11: upgrade-node.sh / doctor coder-процесс / кодер вне очереди / строки оператору / выкат 5dd21db)
+
+## W11 — 6 пунктов (2026-10-07) — ВЫПОЛНЕНО
+
+> Директива (6 пунктов). Данные оператора: (a) на vzu5-claw только `qwen`
+> (PID 212415) **без** `OPENAI_BASE_URL` и без `*_SID` (ручной запуск вне
+> runpilot); (b) `upgrade-node.sh` (v2) упал на шаге 3/6:
+> `/tmp/runpilot.node.new.PSJWaM: Permission denied` (бинарник не изменился, узел
+> на 4904a65). Порядок: 1 → 2 → 3 → 4 → 5 → 6 (отчёт).
+
+- **п.1 — upgrade-node.sh: temp-файл в каталоге целевого + chmod 0755 — ✅ DONE**
+  (коммит `85f1ea5`). Корень бага v2: временный бинарник создавался в
+  `${TMPDIR:-/tmp}` без +x (umask 077) → `run_doctor "$TMP_BIN"` падал на
+  «Permission denied» (шаг 3/6). Фикс: `mktemp -p "$(dirname "$NODE_BIN")"`,
+  `chmod 0755` сразу после сверки SHA256, предпроверка запускает именно этот
+  файл, при PASS тот же файл `mv -f` на место, `trap EXIT` удаляет остаток.
+  Песочница `upgrade-node.sandbox-test.sh` — полный проход 1–6 на PASS-пути
+  (umask 077 → PASS; исполняемый файл в каталоге целевого, 0755; после —
+  временных нет); **16/16**. `shellcheck` — 0. Артефакт:
+  `docs/evidence/upgrade-node-v3-2026-10-07/upgrade-node.md`.
+- **п.2 — doctor `coder_timeout_env`: env процесса кодера, не pane_pid — ✅ DONE**
+  (коммит `449281c`). Проверка читала `/proc/<pane_pid>/environ` (обёртка bash),
+  а не процесс кодера. Фикс: standalone ps-дерево (`ps -A -o pid=,ppid=,args=`)
+  + `procTree.coderPID(root, cmdline_regex)` (BFS, включает корень); переменная
+  читается из `/proc/<coder>/environ`. Тест: у обёртки есть / у кодера нет →
+  WARN; у кодера есть → PASS. Артефакт:
+  `docs/evidence/doctor-coder-process-2026-10-07/coder-process.md`.
+- **п.3 — «кодер вне очереди»: doctor WARN + UNMANAGED в вебе — ✅ DONE**
+  (коммит `5dd21db`). Doctor: новый чек `coder_out_of_queue` — qwen без
+  `OPENAI_BASE_URL` → **WARN «кодер вне очереди: <pid> (cwd=<cwd>)»** (PID + cwd
+  из `readlink /proc/<pid>/cwd`). cwd по цепочке: `proto.ExternalProc` →
+  `node.ScanExternal/readProcCwd` → `model.ExternalProcess` → миграция
+  `015_external_process_cwd` (схема 14→15) → `store` (INSERT/SELECT/scan) →
+  `api externalView/handleExternals/applyExternals`. Веб (`queue.js
+  ExternalRow`): `target=unknown` → бейдж **«Вне очереди»** +
+  `runpilot run --dir <cwd>` + «Копировать». Скриншот (headless Chrome,
+  изолированный экземпляр, прод не тронут):
+  `docs/evidence/coder-out-of-queue-2026-10-07/unmanaged-external.png` (+ `-row`).
+  В проде doctor сразу поймал 3 реальных qwen вне очереди (MoxMate/SimBridge/
+  RunPilot) — см. п.5.
+- **п.4 — самодостаточные строки оператору (HANDOFF + deploy/README) — ✅ DONE.**
+  Дефект: строка `upgrade-node.sh <sha> 3p14-aaa` без пути — скрипт ещё не на
+  узле. Самодостаточная строка (на узле, чистая машина) — в
+  `deploy/README.md` + этот HANDOFF:
+  ```
+  scp 3p14-aaa:/mdisk/myhub/RunPilot/deploy/upgrade-node.sh /tmp/upgrade-node.sh \
+    && bash /tmp/upgrade-node.sh 823a2432a9b76bd5001a9ae402b43d046df7caf5d1f049a7484b7b6090714ec1 3p14-aaa
+  ```
+  (SHA = бинарник координатора HEAD `5dd21db`; `vcs.modified=false`).
+- **п.5 — ворота + выкат координатора 3p14-aaa из HEAD `5dd21db` — ✅ DONE.**
+  Ворота: `go test -race ./…` (21 ok / 0 FAIL) + `make staticcheck` (0) +
+  `make lint` (OK). Бинарник из чистого HEAD (`vcs.modified=false`, SHA
+  `823a2432…`) → атомарная установка (бэкап `runpilot.bak-20261006T224425Z`
+  [9a4c8d7 / `c87f8d86…`] + `mv -f`) → `systemctl --user restart runpilot`
+  (MainPID 946261) → doctor **PASS** + `/proc/<pid>/exe` vcs=`5dd21db` →
+  состояние 0/0/0 (до/после) → миграция 015 (колонка `cwd`) → embedded-узел
+  подключен. Артефакт: `docs/evidence/coordinator-deploy-2026-10-07/deploy.md`.
+- **п.6 — отчёт: для каждого пункта новый коммит + путь артефакта** (см. итог
+  сессии).
 
 ## QWEN_CODE_API_TIMEOUT_MS для управляемых сессий + lint + выкат (2026-10-06) — ВЫПОЛНЕНО
 
