@@ -48,7 +48,8 @@
     && bash /tmp/upgrade-node.sh 823a2432a9b76bd5001a9ae402b43d046df7caf5d1f049a7484b7b6090714ec1 3p14-aaa
   ```
   (SHA = бинарник координатора HEAD `5dd21db`; `vcs.modified=false`).
-- **п.5 — ворота + выкат координатора 3p14-aaa из HEAD `5dd21db` — ✅ DONE.**
+- **п.5 — ворота + выкат координатора 3p14-aaa из HEAD `5dd21db` — ✅ DONE**
+  (коммит `296b0d6`).
   Ворота: `go test -race ./…` (21 ok / 0 FAIL) + `make staticcheck` (0) +
   `make lint` (OK). Бинарник из чистого HEAD (`vcs.modified=false`, SHA
   `823a2432…`) → атомарная установка (бэкап `runpilot.bak-20261006T224425Z`
