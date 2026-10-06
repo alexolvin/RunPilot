@@ -4,11 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 
 	"github.com/spf13/cobra"
 
 	"runpilot/internal/doctor"
 	"runpilot/internal/store"
+	"runpilot/profiles"
 )
 
 // errDoctorFail — хотя бы один FAIL; main преобразует в код выхода 1.
@@ -30,7 +32,14 @@ func newDoctorCmd() *cobra.Command {
 					}
 				}
 			}
-			results := doctor.Run(&doctor.Context{Cfg: cfg, CfgPath: resolvedPath}, doctor.DefaultChecks())
+			// cmdline_regex профиля кодера — чтобы doctor нашёл ПРОЦЕСС КОДЕРА
+			// (потомок pane_pid), а не обёртку. Best-effort: не загрузился → nil
+			// (coder_timeout_env деградирует до pane_pid).
+			var cmdline *regexp.Regexp
+			if prof, perr := profiles.LoadQwen(); perr == nil {
+				cmdline = prof.Cmdline()
+			}
+			results := doctor.Run(&doctor.Context{Cfg: cfg, CfgPath: resolvedPath, Cmdline: cmdline}, doctor.DefaultChecks())
 			for _, r := range results {
 				fmt.Println(r)
 			}

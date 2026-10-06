@@ -24,4 +24,10 @@ const (
 	paneFieldSID     = 3
 	paneFieldCount   = 4
 	paneDeadFlag     = "1" // #{pane_dead} для мёртвой панели
+	// Позиции полей вывода `ps -A -o pid=,ppid=,args=` (buildProcTree):
+	// pid и ppid — одиночные поля, args — всё остальное (spaces схлопнуты).
+	psFieldPID       = 0
+	psFieldPPID      = 1
+	psFieldArgsStart = 2
+	psMinFields      = 3
 )

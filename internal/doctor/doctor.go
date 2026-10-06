@@ -54,6 +54,9 @@ func (r Result) String() string {
 type Context struct {
 	Cfg     *config.Config
 	CfgPath string
+	// Cmdline — cmdline_regex профиля кодера (profiles.Qwen.Cmdline()); nil —
+	// профиль не загружен, проверки деградируют до pane_pid.
+	Cmdline *regexp.Regexp
 }
 
 // Check — одна проверка.
@@ -69,12 +72,19 @@ func result(name string, l Level, detail string) Result {
 // homeDir — переопределяется в тестах.
 var homeDir = os.UserHomeDir
 
-// tmuxListPanes / readProcEnviron — точки инъекции для checkCoderTimeoutEnv
-// (в тестах подменяются без реального tmux и /proc).
+// tmuxListPanes / psOutput / readProcEnviron — точки инъекции для
+// checkCoderTimeoutEnv / checkCoderOutOfQueue (в тестах подменяются без
+// реального tmux, ps и /proc).
 var (
 	tmuxListPanes = func(socket string) ([]byte, error) {
 		return exec.Command("tmux", "-L", socket, "list-panes", "-a",
 			"-F", "#{pane_dead}\t#{pane_pid}\t#{session_name}\t#{@runpilot_sid}").Output()
+	}
+	// psOutput — таблица процессов «pid ppid args» (один вызов ps); из неё
+	// строится дерево, чтобы найти ПРОЦЕСС КОДЕРА (потомок pane_pid, совпадающий
+	// с cmdline_regex), а не обёртку.
+	psOutput = func() ([]byte, error) {
+		return exec.Command("ps", "-A", "-o", "pid=,ppid=,args=").Output()
 	}
 	readProcEnviron = func(pid string) ([]byte, error) {
 		return os.ReadFile("/proc/" + pid + "/environ")
@@ -406,11 +416,11 @@ func checkFileMode(ctx *Context) Result {
 }
 
 // checkCoderTimeoutEnv — у каждой живой УПРАВЛЯЕМОЙ сессии узла (панель с
-// @runpilot_sid) в env процесса кодера есть QWEN_CODE_API_TIMEOUT_MS. Читает
-// /proc/<pane_pid>/environ (tmux new-session запускает кодера как процесс
-// панели, поэтому pane_pid = PID кодера). Нет переменной → WARN (не FAIL):
-// предпроверка upgrade-node.sh не должна блокировать обновление узла со
-// СТАРЫМИ сессиями, запущенными до фикса spawnEnv.
+// @runpilot_sid) в env ПРОЦЕССА КОДЕРА есть QWEN_CODE_API_TIMEOUT_MS. Кодер —
+// потомок pane_pid, совпадающий с cmdline_regex профиля (BFS по ps-дереву; после
+// bash→qwen exec кодером часто бывает сам pane_pid — тогда совпадение на корне).
+// Нет переменной → WARN (не FAIL): предпроверка upgrade-node.sh не должна
+// блокировать обновление узла со СТАРЫМИ сессиями, запущенными до фикса spawnEnv.
 func checkCoderTimeoutEnv(ctx *Context) Result {
 	const name = "coder_timeout_env"
 	if ctx.Cfg == nil {
@@ -441,10 +451,21 @@ func checkCoderTimeoutEnv(ctx *Context) Result {
 	if len(panes) == 0 {
 		return result(name, PASS, "нет живых управляемых сессий")
 	}
+	psOut, _ := psOutput()
+	tree := buildProcTree(psOut)
 	var missing []string
 	for _, p := range panes {
-		environ, err := readProcEnviron(p.pid)
-		if err != nil || !procEnvHas(environ, "QWEN_CODE_API_TIMEOUT_MS") {
+		pid, err := strconv.Atoi(p.pid)
+		if err != nil {
+			missing = append(missing, fmt.Sprintf("%s (%s)", p.sid, p.sessName))
+			continue
+		}
+		coder := tree.coderPID(pid, ctx.Cmdline)
+		if coder == 0 {
+			coder = pid // дерево пустое/нет совпадения — деградируем до pane_pid
+		}
+		environ, eerr := readProcEnviron(strconv.Itoa(coder))
+		if eerr != nil || !procEnvHas(environ, "QWEN_CODE_API_TIMEOUT_MS") {
 			missing = append(missing, fmt.Sprintf("%s (%s)", p.sid, p.sessName))
 		}
 	}
@@ -452,6 +473,62 @@ func checkCoderTimeoutEnv(ctx *Context) Result {
 		return result(name, WARN, "нет QWEN_CODE_API_TIMEOUT_MS: "+strings.Join(missing, ", "))
 	}
 	return result(name, PASS, fmt.Sprintf("все %d управляемых сессий: переменная на месте", len(panes)))
+}
+
+// procTree — дерево процессов из одного вывода `ps -A -o pid=,ppid=,args=`.
+type procTree struct {
+	args     map[int]string
+	children map[int][]int
+}
+
+// buildProcTree парсит вывод ps в дерево (args — всё после ppid, spaces схлопнуты).
+func buildProcTree(psOut []byte) *procTree {
+	t := &procTree{args: map[int]string{}, children: map[int][]int{}}
+	for _, line := range strings.Split(strings.TrimSpace(string(psOut)), "\n") {
+		if line == "" {
+			continue
+		}
+		f := strings.Fields(line)
+		if len(f) < psMinFields {
+			continue
+		}
+		pid, err1 := strconv.Atoi(f[psFieldPID])
+		ppid, err2 := strconv.Atoi(f[psFieldPPID])
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		t.args[pid] = strings.Join(f[psFieldArgsStart:], " ")
+		t.children[ppid] = append(t.children[ppid], pid)
+	}
+	return t
+}
+
+// coderPID — первый в BFS-порядке процесс в поддереве под root (включая root),
+// чей args совпадает с re. re==nil → root; нет совпадения → 0.
+func (t *procTree) coderPID(root int, re *regexp.Regexp) int {
+	if re == nil {
+		return root
+	}
+	if re.MatchString(t.args[root]) {
+		return root
+	}
+	seen := map[int]bool{root: true}
+	queue := []int{root}
+	for len(queue) > 0 {
+		p := queue[0]
+		queue = queue[1:]
+		for _, c := range t.children[p] {
+			if seen[c] {
+				continue
+			}
+			seen[c] = true
+			queue = append(queue, c)
+			if re.MatchString(t.args[c]) {
+				return c
+			}
+		}
+	}
+	return 0
 }
 
 // procEnvHas — есть ли переменная в NUL-разделённом /proc/<pid>/environ.
