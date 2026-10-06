@@ -22,8 +22,14 @@
   `base10`/`intBitSize`) и lint-web (`queue.js` 1000 → `FMT.msPerSec`). Ворота
   выката теперь: `go test -race ./...` + `staticcheck ./...` + `make lint`.
   Проверено: 21 ok / 0 FAIL, staticcheck 0, make lint 0.
-- **п.3 — выкат координатора 3p14-aaa из HEAD — ⏳ (в работе).** Ворота п.2;
-  0 активных аренд → рестарт → doctor PASS; vcs.revision=HEAD, vcs.modified=false.
+- **п.3 — выкат координатора 3p14-aaa из HEAD — ✅ DONE.** Ворота п.2 прошли
+  (test -race 21 ok, staticcheck 0, make lint 0). 0 активных аренд (sessions=null,
+  mode=NORMAL) → **атомарная** установка (cp в temp + mv -f — не ETXTBSY) →
+  `systemctl --user restart runpilot.service` (PID 348326 → 685037) → doctor
+  **все PASS** (включая `coder_timeout_env`). Запущенный процесс: vcs.revision=
+  9a4c8d7 (= HEAD), vcs.modified=false. Состояние до/после совпадает (оба узла,
+  0 сессий). Бэкап: `runpilot.bak-4904a65-20261006T204121Z`. Артефакт:
+  `docs/evidence/coordinator-deploy-2026-10-06/deploy.md`.
 - **п.4 — оператору строки (upgrade-node.sh v2 + проверка) — ⏳.**
 - **п.5 — HANDOFF после каждого пункта — в процессе.**
 
