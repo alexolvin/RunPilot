@@ -580,6 +580,10 @@
 .section-action{margin-left:auto;display:inline-flex}
 .detail-actions{display:flex;gap:var(--space-3);flex-wrap:wrap}
 .ext-hint{margin:var(--space-2) 0 0;font-size:var(--font-size-xs);color:var(--color-text-muted)}
+/* п.3: «кодер вне очереди» — команда перезапуска под runpilot. */
+.ext-restart{display:flex;align-items:center;gap:var(--space-2);margin-top:var(--space-1);flex-wrap:wrap}
+.ext-restart-label{font-size:var(--font-size-xs);color:var(--color-text-muted)}
+.ext-restart-cmd{font-size:var(--font-size-xs);padding:2px var(--space-2);border-radius:var(--radius-control);background:color-mix(in srgb,var(--color-text-muted) 14%,transparent)}
 
 /* ---- W8: терминал в браузере (13.4) ---- */
 /* Оверлей выше диалогов (50) и командной строки (60). */

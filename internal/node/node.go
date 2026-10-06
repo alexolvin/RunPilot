@@ -257,7 +257,7 @@ func (n *Node) cycle(ctx context.Context, send func(proto.Msg) error) error {
 	// включая пустой (как UNMANAGED выше) — координатор сверяет живое
 	// множество и помечает исчезнувшие GONE. Пустой список не отбрасываем:
 	// иначе «труп» после перезапуска кодера оставался ACTIVE в БД вечно.
-	ext := ScanExternal(table, panePIDs, n.prof.Cmdline(), readOpenAIBaseURL)
+	ext := ScanExternal(table, panePIDs, n.prof.Cmdline(), readOpenAIBaseURL, readProcCwd)
 	em := proto.New(proto.KindExternal)
 	em.Externals = ext
 	if err := send(em); err != nil {

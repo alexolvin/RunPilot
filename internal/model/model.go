@@ -467,6 +467,7 @@ type ExternalProcess struct {
 	Source    string
 	Exe       string
 	Flags     string // пробельный список имён флагов
+	CWD       string // readlink /proc/<pid>/cwd (для команды перезапуска)
 	Target    string
 	Status    string
 	FirstSeen time.Time

@@ -22,16 +22,17 @@ func (s *Store) ExternalUpsert(p *model.ExternalProcess) (bool, error) {
 		isNew = exists == 0
 		_, err := tx.Exec(`
 INSERT INTO external_process
-  (host, pid, uid, start_time, source, exe, flags, target, status, first_seen, last_seen)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (host, pid, uid, start_time, source, exe, flags, cwd, target, status, first_seen, last_seen)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(host, pid, start_time) DO UPDATE SET
   uid = excluded.uid,
   source = excluded.source,
+  cwd = excluded.cwd,
   target = excluded.target,
   flags = excluded.flags,
   status = excluded.status,
   last_seen = excluded.last_seen`,
-			p.Host, p.PID, p.UID, p.StartTime, p.Source, p.Exe, p.Flags, p.Target,
+			p.Host, p.PID, p.UID, p.StartTime, p.Source, p.Exe, p.Flags, p.CWD, p.Target,
 			p.Status, ts(p.FirstSeen), ts(p.LastSeen))
 		return err
 	})
@@ -43,7 +44,7 @@ ON CONFLICT(host, pid, start_time) DO UPDATE SET
 
 // ExternalList — все внешние кодеры (для web/API).
 func (s *Store) ExternalList() ([]model.ExternalProcess, error) {
-	rows, err := s.db.Query(`SELECT host, pid, uid, start_time, source, exe, flags, target, status, first_seen, last_seen FROM external_process ORDER BY last_seen DESC`)
+	rows, err := s.db.Query(`SELECT host, pid, uid, start_time, source, exe, flags, cwd, target, status, first_seen, last_seen FROM external_process ORDER BY last_seen DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +54,7 @@ func (s *Store) ExternalList() ([]model.ExternalProcess, error) {
 
 // ExternalListByStatus — внешние кодеры со статусом.
 func (s *Store) ExternalListByStatus(status string) ([]model.ExternalProcess, error) {
-	rows, err := s.db.Query(`SELECT host, pid, uid, start_time, source, exe, flags, target, status, first_seen, last_seen FROM external_process WHERE status = ? ORDER BY last_seen DESC`, status)
+	rows, err := s.db.Query(`SELECT host, pid, uid, start_time, source, exe, flags, cwd, target, status, first_seen, last_seen FROM external_process WHERE status = ? ORDER BY last_seen DESC`, status)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +67,7 @@ func scanExternals(rows *sql.Rows) ([]model.ExternalProcess, error) {
 	for rows.Next() {
 		var p model.ExternalProcess
 		var first, last string
-		if err := rows.Scan(&p.Host, &p.PID, &p.UID, &p.StartTime, &p.Source, &p.Exe, &p.Flags, &p.Target, &p.Status, &first, &last); err != nil {
+		if err := rows.Scan(&p.Host, &p.PID, &p.UID, &p.StartTime, &p.Source, &p.Exe, &p.Flags, &p.CWD, &p.Target, &p.Status, &first, &last); err != nil {
 			return nil, err
 		}
 		p.FirstSeen, _ = time.Parse(time.RFC3339Nano, first)

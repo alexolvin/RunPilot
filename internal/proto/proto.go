@@ -299,6 +299,7 @@ type ExternalProc struct {
 	Flags         []string `json:"flags,omitempty"`
 	Source        string   `json:"source"` // cron|systemd|sshd|tmux|other
 	OpenAIBaseURL string   `json:"openai_base_url,omitempty"`
+	CWD           string   `json:"cwd,omitempty"` // readlink /proc/<pid>/cwd (для команды перезапуска)
 }
 
 // UnmanagedPane — панель с кодером, запущенным не через runpilot (8.3 X1):

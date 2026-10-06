@@ -37,6 +37,7 @@ const (
 	procDir          = "/proc"
 	procEnvironName  = "environ"
 	procStatusName   = "status"
+	procCwdName      = "cwd"
 	procEnvSep       = "\x00"
 	openaiBaseURLKey = "OPENAI_BASE_URL="
 	procUidField     = "Uid:"

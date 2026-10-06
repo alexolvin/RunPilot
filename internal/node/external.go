@@ -15,7 +15,7 @@ import (
 // cmdline_regex, вне любой tmux-панели (внутри tmux — UNMANAGED, текущее
 // поведение) и вне runpilot exec. environ(pid) — OPENAI_BASE_URL из /proc environ;
 // по нему координатор выводит target. source — цепочка родителей до PID 1.
-func ScanExternal(t *procTable, panePIDs map[int]bool, cmdlineRe *regexp.Regexp, environ func(pid int) string) []proto.ExternalProc {
+func ScanExternal(t *procTable, panePIDs map[int]bool, cmdlineRe *regexp.Regexp, environ func(pid int) string, cwd func(pid int) string) []proto.ExternalProc {
 	var out []proto.ExternalProc
 	for pid, args := range t.args {
 		if !cmdlineRe.MatchString(args) {
@@ -37,10 +37,21 @@ func ScanExternal(t *procTable, panePIDs map[int]bool, cmdlineRe *regexp.Regexp,
 			Flags:         flags,
 			Source:        t.sourceOf(pid),
 			OpenAIBaseURL: environ(pid),
+			CWD:           cwd(pid),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].PID < out[j].PID })
 	return out
+}
+
+// readProcCwd — cwd процесса (readlink /proc/<pid>/cwd); пустая строка при
+// ошибке (процесс исчез/нет прав). Для команды перезапуска внешнего кодера.
+func readProcCwd(pid int) string {
+	b, err := os.Readlink(procCwdPath(pid))
+	if err != nil {
+		return ""
+	}
+	return b
 }
 
 // sourceOf — источник по цепочке родителей (включая сам процесс) до PID 1:
@@ -138,6 +149,11 @@ func procEnvironPath(pid int) string {
 // procStatusPath — путь к /proc/<pid>/status.
 func procStatusPath(pid int) string {
 	return procDir + "/" + strconv.Itoa(pid) + "/" + procStatusName
+}
+
+// procCwdPath — путь к /proc/<pid>/cwd (символическая ссылка).
+func procCwdPath(pid int) string {
+	return procDir + "/" + strconv.Itoa(pid) + "/" + procCwdName
 }
 
 // verifyKillTarget — сверка идентичности процесса перед kill (8.2 ТЗ):

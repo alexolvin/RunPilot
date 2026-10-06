@@ -482,6 +482,10 @@ export const T = {
     stKilled: 'завершён',
     stGone: 'пропал',
     stIgnored: 'игнорируется',
+    unmanaged: 'Вне очереди',
+    restart: 'Перезапустить под runpilot:',
+    copy: 'Копировать',
+    copied: 'Скопировано',
     hint: 'Запустите кодера через runpilot exec — тогда он увидит очередь и слоты.',
   },
 

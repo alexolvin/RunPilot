@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -89,6 +90,15 @@ var (
 	readProcEnviron = func(pid string) ([]byte, error) {
 		return os.ReadFile("/proc/" + pid + "/environ")
 	}
+	// procCwd — cwd процесса (readlink /proc/<pid>/cwd); для WARN «кодер вне
+	// очереди» (checkCoderOutOfQueue).
+	procCwd = func(pid string) string {
+		b, err := os.Readlink("/proc/" + pid + "/cwd")
+		if err != nil {
+			return "?"
+		}
+		return b
+	}
 )
 
 // DefaultChecks — проверки каркаса (Э0/Э2) + мониторинг (Э6).
@@ -102,6 +112,7 @@ func DefaultChecks() []Check {
 		{Name: "qwen_settings", Run: checkQwenSettings},
 		{Name: "qwen_timeout_guard", Run: checkQwenTimeoutGuard},
 		{Name: "coder_timeout_env", Run: checkCoderTimeoutEnv},
+		{Name: "coder_out_of_queue", Run: checkCoderOutOfQueue},
 		{Name: "file_mode", Run: checkFileMode},
 		{Name: "metrics", Run: checkMetrics},
 		{Name: "require_direct", Run: checkRequireDirect},
@@ -529,6 +540,44 @@ func (t *procTree) coderPID(root int, re *regexp.Regexp) int {
 		}
 	}
 	return 0
+}
+
+// checkCoderOutOfQueue — qwen-процесс (совпадает с cmdline_regex профиля),
+// идущий БЕЗ OPENAI_BASE_URL (не через шлюз координатора), — «кодер вне
+// очереди»: запущен вручную, вне управляемых сессий. WARN (не FAIL) с PID и cwd.
+// Управляемые сессии всегда имеют OPENAI_BASE_URL (ставит spawnEnv), поэтому
+// они сюда не попадают.
+func checkCoderOutOfQueue(ctx *Context) Result {
+	const name = "coder_out_of_queue"
+	if ctx.Cfg == nil {
+		return result(name, WARN, "нет конфигурации — проверку пропускаем")
+	}
+	if ctx.Cmdline == nil {
+		return result(name, PASS, "cmdline_regex не загружен — проверку пропускаем")
+	}
+	psOut, _ := psOutput()
+	tree := buildProcTree(psOut)
+	type ooq struct{ pid int; cwd string }
+	var found []ooq
+	for pid, args := range tree.args {
+		if !ctx.Cmdline.MatchString(args) {
+			continue
+		}
+		environ, err := readProcEnviron(strconv.Itoa(pid))
+		if err == nil && procEnvHas(environ, "OPENAI_BASE_URL") {
+			continue // идёт через шлюз — управляемая сессия
+		}
+		found = append(found, ooq{pid: pid, cwd: procCwd(strconv.Itoa(pid))})
+	}
+	if len(found) == 0 {
+		return result(name, PASS, "кодеров вне очереди нет")
+	}
+	sort.Slice(found, func(i, j int) bool { return found[i].pid < found[j].pid })
+	parts := make([]string, 0, len(found))
+	for _, f := range found {
+		parts = append(parts, fmt.Sprintf("%d (cwd=%s)", f.pid, f.cwd))
+	}
+	return result(name, WARN, "кодер вне очереди: "+strings.Join(parts, ", "))
 }
 
 // procEnvHas — есть ли переменная в NUL-разделённом /proc/<pid>/environ.

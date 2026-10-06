@@ -42,7 +42,9 @@ func TestScanExternalCron(t *testing.T) {
 	}
 	panePIDs := map[int]bool{100: true} // управляемая панель %10
 	envs := map[int]string{901: "http://127.0.0.1:9000/v1"}
-	ex := ScanExternal(table, panePIDs, re, func(pid int) string { return envs[pid] })
+	cwds := map[int]string{901: "/home/user/project"}
+	ex := ScanExternal(table, panePIDs, re,
+		func(pid int) string { return envs[pid] }, func(pid int) string { return cwds[pid] })
 	if len(ex) != 1 {
 		t.Fatalf("внешних: %d, хочу 1: %+v", len(ex), ex)
 	}
@@ -55,6 +57,9 @@ func TestScanExternalCron(t *testing.T) {
 	}
 	if e.OpenAIBaseURL != envs[901] {
 		t.Fatalf("base_url=%q, хочу %q", e.OpenAIBaseURL, envs[901])
+	}
+	if e.CWD != cwds[901] {
+		t.Fatalf("cwd=%q, хочу %q", e.CWD, cwds[901])
 	}
 	if e.Exe != "qwen" || len(e.Flags) != 1 || e.Flags[0] != "--approval-mode" {
 		t.Fatalf("exe=%q flags=%v", e.Exe, e.Flags)
@@ -85,7 +90,8 @@ func TestScanExternalSystemdAndExclusion(t *testing.T) {
 		t.Fatal(err)
 	}
 	panePIDs := map[int]bool{600: true}
-	ex := ScanExternal(table, panePIDs, re, func(pid int) string { return "" })
+	ex := ScanExternal(table, panePIDs, re,
+		func(pid int) string { return "" }, func(pid int) string { return "" })
 	if len(ex) != 1 {
 		t.Fatalf("внешних: %d, хочу 1 (только systemd-qwen): %+v", len(ex), ex)
 	}

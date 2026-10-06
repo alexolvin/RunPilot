@@ -8,7 +8,7 @@ import { get, post } from '../api.js';
 import { T } from '../i18n/ru.js';
 import { stateColorVar } from '../state-style.js';
 import { classLabel, whyText, fmtDur } from '../labels.js';
-import { UI, LAUNCH, FMT } from '../constants.js';
+import { UI, LAUNCH, FMT, W6 } from '../constants.js';
 import { ServerCard } from '../components/server-card.js';
 import { SessionRow } from '../components/session-row.js';
 import { EmptyState } from '../components/empty-state.js';
@@ -221,23 +221,7 @@ export function QueuePage() {
     ${s.externals.length
       ? html`<${Section} title=${T.externals.title} count=${s.externals.length}>
           <div class="srow-list">
-            ${s.externals.map((e) => html`
-              <div class="srow ext-row">
-                <div class="srow-main">
-                  <span class="srow-name mono" title=${e.exe + ' ' + (e.flags || '')}>${e.exe} ${e.flags || ''}</span>
-                  <span class="srow-sub">${e.host} · pid ${e.pid} · ${T.externals.source}: ${e.source}</span>
-                  <span class="srow-why">${T.externals.target}: <span class="mono">${e.target}</span></span>
-                </div>
-                <div class="srow-side">
-                  <${Badge} tone=${EXT_TONE[e.status] || 'var(--color-text-muted)'}
-                    label=${T.externals[EXT_STATUS[e.status]] || e.status} />
-                  ${e.status === 'ACTIVE' ? html`
-                    <${Button} variant="danger" label=${T.externals.kill}
-                      onClick=${() => externalKill(e)} />
-                    <${Button} variant="secondary" label=${T.externals.ignore}
-                      onClick=${() => externalIgnore(e)} />` : null}
-                </div>
-              </div>`)}
+            ${s.externals.map((e) => ExternalRow({ e }))}
           </div>
           <p class="ext-hint">${T.externals.hint}</p>
         </${Section}>`
@@ -257,6 +241,47 @@ function HeldTimer({ since }) {
     ? Math.max(0, Math.floor((Date.now() - start) / FMT.msPerSec))
     : null;
   return html`<span class="qrow-held" title=${T.queue.heldWait}>${fmtDur(sec)}</span>`;
+}
+
+// п.3: «кодер вне очереди» (target=unknown — без OPENAI_BASE_URL) — бейдж
+// UNMANAGED + команда перезапуска под runpilot (runpilot run --dir <cwd>).
+function ExternalRow({ e }) {
+  const [copied, setCopied] = useState(false);
+  const unmanaged = e.target === 'unknown';
+  const dir = e.cwd || '~';
+  const cmd = 'runpilot run --dir ' + dir;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(cmd);
+      setCopied(true);
+      setTimeout(() => setCopied(false), W6.copyFlashMs);
+    } catch { /* clipboard недоступен (не-secure context) */ }
+  };
+  return html`
+    <div class="srow ext-row">
+      <div class="srow-main">
+        <span class="srow-name mono" title=${e.exe + ' ' + (e.flags || '')}>${e.exe} ${e.flags || ''}</span>
+        <span class="srow-sub">${e.host} · pid ${e.pid} · ${T.externals.source}: ${e.source}</span>
+        <span class="srow-why">${T.externals.target}: <span class="mono">${e.target}</span></span>
+        ${unmanaged ? html`
+          <div class="ext-restart">
+            <span class="ext-restart-label">${T.externals.restart}</span>
+            <code class="mono ext-restart-cmd">${cmd}</code>
+            <${Button} variant="text" label=${copied ? T.externals.copied : T.externals.copy}
+              onClick=${copy} />
+          </div>` : null}
+      </div>
+      <div class="srow-side">
+        ${unmanaged ? html`<${Badge} tone="var(--color-warning)" label=${T.externals.unmanaged} />` : null}
+        <${Badge} tone=${EXT_TONE[e.status] || 'var(--color-text-muted)'}
+          label=${T.externals[EXT_STATUS[e.status]] || e.status} />
+        ${e.status === 'ACTIVE' ? html`
+          <${Button} variant="danger" label=${T.externals.kill}
+            onClick=${() => externalKill(e)} />
+          <${Button} variant="secondary" label=${T.externals.ignore}
+            onClick=${() => externalIgnore(e)} />` : null}
+      </div>
+    </div>`;
 }
 
 // W7 (8.2, J9/J11): «Завершить» — узел сверяет uid+start_time и шлёт TERM.

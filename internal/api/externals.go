@@ -24,6 +24,7 @@ type externalView struct {
 	Source    string `json:"source"`
 	Exe       string `json:"exe"`
 	Flags     string `json:"flags,omitempty"`
+	CWD       string `json:"cwd,omitempty"`
 	Target    string `json:"target"`
 	Status    string `json:"status"`
 	FirstSeen string `json:"first_seen"`
@@ -43,7 +44,7 @@ func (s *Server) handleExternals(w http.ResponseWriter, r *http.Request) {
 	for _, p := range live {
 		views = append(views, externalView{
 			Host: p.Host, PID: p.PID, UID: p.UID, StartTime: p.StartTime,
-			Source: p.Source, Exe: p.Exe, Flags: p.Flags, Target: p.Target,
+			Source: p.Source, Exe: p.Exe, Flags: p.Flags, CWD: p.CWD, Target: p.Target,
 			Status: p.Status, FirstSeen: p.FirstSeen.Format(time.RFC3339),
 			LastSeen: p.LastSeen.Format(time.RFC3339),
 		})
@@ -257,7 +258,7 @@ func (s *Server) applyExternals(host string, exts []proto.ExternalProc) {
 		}
 		p := &model.ExternalProcess{
 			Host: host, PID: e.PID, UID: e.UID, StartTime: startTime,
-			Source: e.Source, Exe: e.Exe, Flags: flags, Target: target,
+			Source: e.Source, Exe: e.Exe, Flags: flags, CWD: e.CWD, Target: target,
 			Status: status, FirstSeen: now, LastSeen: now,
 		}
 		isNew, err := s.store.ExternalUpsert(p)
