@@ -1,5 +1,31 @@
 # HANDOFF
-Обновлено: 2026-10-06 (доработка v1 → v2 после провала на vzu5-claw)
+Обновлено: 2026-10-06 (QWEN_CODE_API_TIMEOUT_MS управляемых сессий + lint + выкат)
+
+## QWEN_CODE_API_TIMEOUT_MS для управляемых сессий + lint + выкат (2026-10-06) — ТЕКУЩЕ
+
+> Симптом: после перезапуска `phonebroker` на vzu5-claw у процесса qwen нет
+> `QWEN_CODE_API_TIMEOUT_MS` → client-side timeout 120 s, не переживает
+> silent-hold. Порядок: 1 (spawnEnv + doctor WARN) → 2 (make lint = 0) →
+> 3 (выкат координатора из HEAD) → 4 (оператору строки) → 5 (HANDOFF).
+
+- **п.1 — spawnEnv ставит переменную + doctor `coder_timeout_env` — ✅ DONE**
+  (коммит `ed4e2e5`). Причина: `internal/api/spawn.go` `spawnEnv()` (spawn/adopt —
+  управляемые сессии узла) не ставила `QWEN_CODE_API_TIMEOUT_MS` (в отличие от
+  `coderEnv` в `runpilot run`). Фикс: spawnEnv ставит её = client_timeout_ms из
+  координатора (перекрывает override) → покрывает все 6 путей (карта + file:line —
+  в `docs/evidence/coder-timeout-env-2026-10-06/diagnosis.md`). Doctor: новый чек
+  `coder_timeout_env` читает `/proc/<pane_pid>/environ` живых управляемых сессий;
+  нет переменной → **WARN** с sid+именем (не FAIL, не блокирует откат). Тесты:
+  `TestSpawnEnvClientTimeout`, `TestCoderTimeoutEnv*`, `TestProcEnvHas`.
+- **п.2 — make lint = 0 — ✅ DONE** (коммит `1b6e4d8`). Убраны нарушения
+  lint-literals (`server.go` 1000 → `ClientTimeoutMS()`; fakellm 10/64 →
+  `base10`/`intBitSize`) и lint-web (`queue.js` 1000 → `FMT.msPerSec`). Ворота
+  выката теперь: `go test -race ./...` + `staticcheck ./...` + `make lint`.
+  Проверено: 21 ok / 0 FAIL, staticcheck 0, make lint 0.
+- **п.3 — выкат координатора 3p14-aaa из HEAD — ⏳ (в работе).** Ворота п.2;
+  0 активных аренд → рестарт → doctor PASS; vcs.revision=HEAD, vcs.modified=false.
+- **п.4 — оператору строки (upgrade-node.sh v2 + проверка) — ⏳.**
+- **п.5 — HANDOFF после каждого пункта — в процессе.**
 
 ## Доработка после провала v1 на vzu5-claw: 4 пункта (2026-10-06) — ВЫПОЛНЕНО
 
