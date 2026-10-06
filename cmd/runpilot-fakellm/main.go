@@ -2,8 +2,8 @@
 // и ручных проверок: /health, /v1/models, /metrics (формат vLLM),
 // /v1/chat/completions (SSE) + управляемые running/waiting.
 //
-// Отличия от fakellm в тестах — только контрольный эндпоинт
-// /_set-metrics (в тестах есть прямой Go API SetMetrics).
+// Отличия от fakellm в тестах — контрольные эндпоинты /_set-metrics,
+// /_set-delays и /_set-fail (в тестах есть прямой Go API).
 //
 // Флаги:
 //
@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"runpilot/internal/testutil/fakellm"
 )
@@ -37,6 +38,30 @@ func main() {
 		kv, _ := strconv.ParseFloat(q.Get("kv"), floatBitSize)
 		f.SetMetrics(running, waiting, kv)
 		fmt.Fprintf(w, "ok running=%d waiting=%d kv=%g\n", running, waiting, kv)
+	})
+	// Контрольный эндпоинт стенда: /_set-delays?firstByteMs=&chunkPauseMs=&chunks=.
+	// Задержки фиксируются на запрос в момент его приёма; смена настроек на
+	// уже идущие запросы не влияет (SetDelays читается в serveCompletion).
+	mux.HandleFunc("/_set-delays", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		firstMS, _ := strconv.ParseInt(q.Get("firstByteMs"), 10, 64)
+		chunkMS, _ := strconv.ParseInt(q.Get("chunkPauseMs"), 10, 64)
+		chunks, _ := strconv.Atoi(q.Get("chunks"))
+		f.SetDelays(time.Duration(firstMS)*time.Millisecond, time.Duration(chunkMS)*time.Millisecond, chunks)
+		fmt.Fprintf(w, "ok firstByteMs=%d chunkPauseMs=%d chunks=%d\n", firstMS, chunkMS, chunks)
+	})
+	// Контрольный эндпоинт стенда: /_set-fail?n=&mode=. mode: "" (выключить),
+	// "502"/"503"/"504"/"conn" — отказ до первого байта, "post" — после.
+	mux.HandleFunc("/_set-fail", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		n, _ := strconv.Atoi(q.Get("n"))
+		mode := q.Get("mode")
+		if mode == "post" {
+			f.SetFailAfter(n)
+		} else {
+			f.SetFailBefore(n, mode)
+		}
+		fmt.Fprintf(w, "ok n=%d mode=%q\n", n, mode)
 	})
 	mux.Handle("/", f.Handler())
 

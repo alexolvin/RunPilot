@@ -294,13 +294,15 @@ func TestHoldBodyExact(t *testing.T) {
 	}
 }
 
-// --- удержание: слот выдан во время ожидания ---
+// --- удержание: слот выдан ПЛАНИРОВЩИКОМ во время ожидания (П.10) ---
 
 func TestHoldSlotGranted(t *testing.T) {
 	a := fakellm.Start("srv-model")
 	defer a.Close()
 	t.Setenv("RUNPILOT_TEST_KEY", "k")
-	st, gw, ts := testEnv(t, []config.Server{srvCfg("a", 10, 1, a.URL, "RUNPILOT_TEST_KEY")})
+	// Шлюз + планировщик на виртуальных часах (П.10: аренду выдаёт только
+	// планировщик; self-grant шлюза из holdPass удалён).
+	st, gw, sch, _, ts := vclockEnv(t, []config.Server{srvCfg("a", 10, 1, a.URL, "RUNPILOT_TEST_KEY")})
 	holder := mkSession(t, st, model.SessionIdle)
 	waiter := mkSession(t, st, model.SessionIdle)
 
@@ -319,15 +321,17 @@ func TestHoldSlotGranted(t *testing.T) {
 		}
 		done <- r
 	}()
-	time.Sleep(200 * time.Millisecond) // waiter в удержании
+	time.Sleep(200 * time.Millisecond) // waiter в удержании (запись created)
 	gw.Release(holder, "TURN_DONE")
+	// Планировщик выдаёт waiter (LEASE_GRANT) — шлюз не берёт слот сам.
+	sch.Tick()
 	r := <-done
 	if r == nil || r.StatusCode != http.StatusOK {
 		t.Fatalf("после освобождения слота: %v, хочу 200", r)
 	}
-	// Аренда у ожидания (IMPLICIT), запись очереди удалена.
+	// Аренда у waiter (IMPLICIT), запись очереди удалена (выдал планировщик).
 	if _, err := st.QueueGet(waiter); err == nil {
-		t.Fatal("запись очереди должна быть удалена при захвате")
+		t.Fatal("запись очереди должна быть удалена при выдаче")
 	}
 }
 

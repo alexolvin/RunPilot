@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -107,7 +108,7 @@ func runAgent(cmd *cobra.Command, o runOpts) error {
 	}
 
 	// 1) Регистрация в координаторе (коллизии имён — раздел 8 ТЗ).
-	sid, err := registerRun(o)
+	sid, clientTimeoutMS, err := registerRun(o)
 	if err != nil {
 		if errors.Is(err, errNoCoordinator) {
 			// Координатор недоступен до старта qwen → 69 (X4 ТЗ).
@@ -117,8 +118,9 @@ func runAgent(cmd *cobra.Command, o runOpts) error {
 		return err
 	}
 
-	// 2) Окружение из шаблона профиля (раздел 7 ТЗ).
-	env, err := profileEnv(prof, sid)
+	// 2) Окружение кодера (раздел 7 ТЗ): env профиля + QWEN_CODE_API_TIMEOUT_MS
+	// из координатора.
+	env, err := coderEnv(prof, sid, clientTimeoutMS)
 	if err != nil {
 		return err
 	}
@@ -161,7 +163,9 @@ func runAgent(cmd *cobra.Command, o runOpts) error {
 }
 
 // registerRun — POST /api/v1/run; 409-коды проходят как RunCollision.
-func registerRun(o runOpts) (string, error) {
+// Возвращает sid и client_timeout_ms (таймаут запроса кодера, источник — только
+// координатор; 0, если координатор поле не вернул).
+func registerRun(o runOpts) (string, int, error) {
 	host, _ := os.Hostname()
 	body := map[string]any{
 		"name": o.name, "host": host,
@@ -171,16 +175,17 @@ func registerRun(o runOpts) (string, error) {
 		"auto_enqueue": o.autoEnqueue,
 	}
 	var out struct {
-		SID string `json:"sid"`
+		SID             string `json:"sid"`
+		ClientTimeoutMS int    `json:"client_timeout_ms"`
 	}
 	code, detail, status, err := clientDo("POST", "/api/v1/run", body, &out)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	if status == http.StatusConflict {
-		return "", &RunCollision{Code: code, Detail: detail}
+		return "", 0, &RunCollision{Code: code, Detail: detail}
 	}
-	return out.SID, nil
+	return out.SID, out.ClientTimeoutMS, nil
 }
 
 // reportPane — PATCH /api/v1/sessions/<sid>/pane.
@@ -216,6 +221,21 @@ func profileEnv(prof *profiles.Qwen, sid string) (map[string]string, error) {
 		out[k] = buf.String()
 	}
 	return out, nil
+}
+
+// coderEnv — env кодера: env из шаблона профиля (раздел 7 ТЗ) +
+// QWEN_CODE_API_TIMEOUT_MS из координатора (client_timeout_ms). Выставляется
+// ПОСЛЕ env профиля — перекрывает встроенный/override-профиль и окружение
+// оператора (tmux new-session -e задаёт значение явно).
+func coderEnv(prof *profiles.Qwen, sid string, clientTimeoutMS int) (map[string]string, error) {
+	env, err := profileEnv(prof, sid)
+	if err != nil {
+		return nil, err
+	}
+	if clientTimeoutMS > 0 {
+		env["QWEN_CODE_API_TIMEOUT_MS"] = strconv.Itoa(clientTimeoutMS)
+	}
+	return env, nil
 }
 
 // runHere — `--here`: текущая панель, exec агента.

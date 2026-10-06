@@ -4,7 +4,9 @@ package doctor
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -76,6 +78,7 @@ func DefaultChecks() []Check {
 		{Name: "secrets_env", Run: checkSecretsEnv},
 		{Name: "tmux", Run: checkTmux},
 		{Name: "qwen_settings", Run: checkQwenSettings},
+		{Name: "qwen_timeout_guard", Run: checkQwenTimeoutGuard},
 		{Name: "file_mode", Run: checkFileMode},
 		{Name: "metrics", Run: checkMetrics},
 		{Name: "require_direct", Run: checkRequireDirect},
@@ -282,6 +285,80 @@ func checkQwenSettings(ctx *Context) Result {
 			fmt.Sprintf("selectedType=openai, modelProviders: %d эндов без коллизии (шлюз по умолчанию, переключение в /model)", providers))
 	}
 	return result("qwen_settings", PASS, "selectedType=openai, modelProviders пуст (кодер через шлюз)")
+}
+
+// errStopWalk — маркер раннего выхода из qwenPkgContains.
+var errStopWalk = errors.New("stop")
+
+// checkQwenTimeoutGuard — п.8, клиентская проверка: в пакете установленного
+// qwen есть строка QWEN_CODE_API_TIMEOUT_MS (клиент поддерживает долгий
+// таймаут генерирующего запроса — без него шлюз не удержит запрос
+// hold_max_sec). Активная версия ищется по ~/.qwen/updates/npm/*/active.json
+// (managed npm, как scripts/patch_qwen_runpilot.py). Нет строки → FAIL с
+// версией qwen и путём пакета.
+func checkQwenTimeoutGuard(ctx *Context) Result {
+	const check = "qwen_timeout_guard"
+	home, err := homeDir()
+	if err != nil {
+		return result(check, WARN, "HOME не определён")
+	}
+	updBase := filepath.Join(home, ".qwen", "updates", "npm")
+	actives, _ := filepath.Glob(filepath.Join(updBase, "*", "active.json"))
+	if len(actives) == 0 {
+		return result(check, WARN,
+			"active.json не найден (авто-обновление qwen не использовалось?)")
+	}
+	var act struct{ Version string }
+	data, err := os.ReadFile(actives[0])
+	if err != nil {
+		return result(check, FAIL, actives[0]+": "+err.Error())
+	}
+	if err := json.Unmarshal(data, &act); err != nil {
+		return result(check, FAIL, actives[0]+": не JSON: "+err.Error())
+	}
+	pkg := filepath.Join(filepath.Dir(actives[0]), "versions", act.Version,
+		"node_modules", "@qwen-code", "qwen-code")
+	if fi, err := os.Stat(pkg); err != nil || !fi.IsDir() {
+		return result(check, FAIL,
+			fmt.Sprintf("qwen %s: пакет не найден: %s", act.Version, pkg))
+	}
+	if !qwenPkgContains(pkg, "QWEN_CODE_API_TIMEOUT_MS") {
+		return result(check, FAIL, fmt.Sprintf(
+			"qwen %s: строки QWEN_CODE_API_TIMEOUT_MS нет в пакете %s — клиент не поддержит удержание запроса",
+			act.Version, pkg))
+	}
+	return result(check, PASS,
+		fmt.Sprintf("qwen %s: QWEN_CODE_API_TIMEOUT_MS присутствует (%s)", act.Version, pkg))
+}
+
+// qwenPkgContains — есть ли подстрока в каком-либо .js файле пакета
+// (рекурсивно, не заглядывая в зависимости node_modules).
+func qwenPkgContains(pkg, substr string) bool {
+	found := false
+	_ = filepath.WalkDir(pkg, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // нечитаемое пропускаем
+		}
+		if d.IsDir() {
+			if d.Name() == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(d.Name(), ".js") {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+		if strings.Contains(string(data), substr) {
+			found = true
+			return errStopWalk
+		}
+		return nil
+	})
+	return found
 }
 
 // checkFileMode — файлы БД и конфигурации с режимом 0600 (раздел 14).

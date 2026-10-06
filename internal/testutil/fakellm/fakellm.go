@@ -290,7 +290,13 @@ func (s *Server) writeSSE(w http.ResponseWriter, chunks int, pause time.Duration
 		if i > 0 && pause > 0 {
 			time.Sleep(pause)
 		}
-		fmt.Fprintf(w, "data: {\"id\":\"gen-1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"c%d\"},\"finish_reason\":null}]}\n\n", i)
+		// Финальный чанк несёт finish_reason:"stop" (формат OpenAI); иначе
+		// qwen считает, что «stream ended without a finish reason».
+		fr := "null"
+		if i == chunks-1 {
+			fr = `"stop"`
+		}
+		fmt.Fprintf(w, "data: {\"id\":\"gen-1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"c%d\"},\"finish_reason\":%s}]}\n\n", i, fr)
 		if flusher != nil {
 			flusher.Flush()
 		}

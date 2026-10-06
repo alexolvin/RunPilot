@@ -190,6 +190,9 @@ func Schema() []SettingField {
 		// Профиль Qwen Code (раздел 4.4: для новых сессий и перезапусков).
 		stringField("profiles.qwen.model_alias", "", "Профиль Qwen", "Псевдоним модели",
 			"Псевдоним модели для новых сессий.", ApplyNewSession),
+		intField("profiles.qwen.client_timeout_sec", "s", "Профиль Qwen", "Таймаут запроса кодера",
+			"Таймаут генерирующего запроса кодера (QWEN_CODE_API_TIMEOUT_MS); "+
+				"<= gateway.hold_max_sec + max(servers[].first_byte_timeout_sec).", ApplyNewSession),
 
 		// Уведомления (раздел 4.4: со следующего тика).
 		listField("notify.telegram.chat_ids", "Уведомления", "Чаты Telegram",

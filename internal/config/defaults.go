@@ -58,7 +58,7 @@ func Defaults() *Config {
 			KillGraceSec:         10,
 		},
 		Gateway: Gateway{
-			HoldMaxSec:    60,
+			HoldMaxSec:    3600,
 			MaxBodyMB:     32,
 			RetryAfterSec: 30,
 			MaxInflight:   256,
@@ -109,7 +109,8 @@ func Defaults() *Config {
 		Servers: nil,
 		Profiles: Profiles{
 			Qwen: ProfileQwen{
-				ModelAlias: "qwen3.6-27b",
+				ModelAlias:     "qwen3.6-27b",
+				ClientTimeoutSec: 5400,
 			},
 		},
 		Notify: Notify{

@@ -207,6 +207,11 @@ type Profiles struct {
 // ProfileQwen — профиль агента qwen (единственный в этой редакции).
 type ProfileQwen struct {
 	ModelAlias string `yaml:"model_alias"`
+	// ClientTimeoutSec — таймаут генерирующего запроса кодера (сек).
+	// runpilot run выставляет QWEN_CODE_API_TIMEOUT_MS = ClientTimeoutSec×1000
+	// в env кодера (перекрывает встроенный/override-профиль и env оператора);
+	// значение приходит только из координатора (ответ POST /api/v1/run).
+	ClientTimeoutSec int `yaml:"client_timeout_sec"`
 }
 
 type Notify struct {
@@ -476,6 +481,8 @@ func (c *Config) Validate() error {
 		problems = append(problems, "turn.done_stable_sec должен быть меньше dispatch.start_confirm_sec")
 	}
 
+	maxFirstByte := 0
+	maxFirstByteName := ""
 	seen := map[string]bool{}
 	for i, s := range c.Servers {
 		if s.Name == "" {
@@ -502,10 +509,23 @@ func (c *Config) Validate() error {
 		} else if !isAbsoluteHTTPURL(s.Upstreams.OpenAI.URL) {
 			problems = append(problems, s.Name+": upstreams.openai.url должен быть абсолютным http/https")
 		}
-		// Раздел 4.5: gateway.hold_max_sec < first_byte_timeout_sec каждого сервера.
-		if s.FirstByteTimeoutSec > 0 && c.Gateway.HoldMaxSec >= s.FirstByteTimeoutSec {
-			problems = append(problems, s.Name+": gateway.hold_max_sec должен быть меньше first_byte_timeout_sec")
+		if s.FirstByteTimeoutSec > maxFirstByte {
+			maxFirstByte = s.FirstByteTimeoutSec
+			maxFirstByteName = s.Name
 		}
+	}
+
+	// В.7: инвариант — клиент обязан пережить удержание + первый байт:
+	// client_timeout_sec > gateway.hold_max_sec + max(servers[].first_byte_timeout_sec).
+	// Нарушение — отрицание (<=), включая равенство. Проверка после слияния
+	// с defaults, по максимуму first_byte всех серверов.
+	if len(c.Servers) > 0 &&
+		c.Profiles.Qwen.ClientTimeoutSec <= c.Gateway.HoldMaxSec+maxFirstByte {
+		problems = append(problems, fmt.Sprintf(
+			"profiles.qwen.client_timeout_sec(%d) должен быть > gateway.hold_max_sec(%d) + max(servers[].first_byte_timeout_sec) сервера %s(%d) = %d; минимум %d",
+			c.Profiles.Qwen.ClientTimeoutSec, c.Gateway.HoldMaxSec,
+			maxFirstByteName, maxFirstByte,
+			c.Gateway.HoldMaxSec+maxFirstByte, c.Gateway.HoldMaxSec+maxFirstByte+1))
 	}
 
 	if len(problems) > 0 {

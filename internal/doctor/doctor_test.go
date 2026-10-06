@@ -157,6 +157,69 @@ func writeSettings(t *testing.T, home, json string) {
 	}
 }
 
+// writeQwenPkg — фейковый установленный qwen (managed npm): active.json +
+// versions/<ver>/node_modules/@qwen-code/qwen-code/chunks/<chunk>. Возвращает
+// путь пакета.
+func writeQwenPkg(t *testing.T, home, version, chunkName, chunkBody string) {
+	t.Helper()
+	upd := filepath.Join(home, ".qwen", "updates", "npm", "npm")
+	if err := os.MkdirAll(upd, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(upd, "active.json"),
+		[]byte(`{"version":"`+version+`"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkg := filepath.Join(upd, "versions", version, "node_modules", "@qwen-code", "qwen-code", "chunks")
+	if err := os.MkdirAll(pkg, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg, chunkName), []byte(chunkBody), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// п.8: строка QWEN_CODE_API_TIMEOUT_MS в пакете qwen → PASS (версия + путь).
+func TestQwenTimeoutGuardPass(t *testing.T) {
+	home := t.TempDir()
+	writeQwenPkg(t, home, "1.2.3", "api-123.js",
+		`const t = Number(process.env.QWEN_CODE_API_TIMEOUT_MS || 120000);`)
+	withHome(t, home)
+	rs := runAll(t, config.Defaults(), "defaults")
+	for _, r := range rs {
+		if r.Check == "qwen_timeout_guard" {
+			if r.Level != PASS {
+				t.Fatalf("с строкой: %s", r)
+			}
+			if !strings.Contains(r.Detail, "1.2.3") || !strings.Contains(r.Detail, "qwen-code") {
+				t.Fatalf("в detail версия и путь: %q", r.Detail)
+			}
+			return
+		}
+	}
+	t.Fatal("нет строки qwen_timeout_guard")
+}
+
+// п.8: без строки QWEN_CODE_API_TIMEOUT_MS → FAIL (версия + путь пакета).
+func TestQwenTimeoutGuardFail(t *testing.T) {
+	home := t.TempDir()
+	writeQwenPkg(t, home, "0.9.0", "api-1.js", `const t = 120000; // без строки`)
+	withHome(t, home)
+	rs := runAll(t, config.Defaults(), "defaults")
+	for _, r := range rs {
+		if r.Check == "qwen_timeout_guard" {
+			if r.Level != FAIL {
+				t.Fatalf("без строки: %s", r)
+			}
+			if !strings.Contains(r.Detail, "0.9.0") || !strings.Contains(r.Detail, "qwen-code") {
+				t.Fatalf("в detail версия и путь: %q", r.Detail)
+			}
+			return
+		}
+	}
+	t.Fatal("нет строки qwen_timeout_guard")
+}
+
 func TestParseTmuxVersion(t *testing.T) {
 	cases := []struct {
 		in  string

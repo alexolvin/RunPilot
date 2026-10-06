@@ -109,22 +109,46 @@ func TestValidate45DoneLessThanStartConfirm(t *testing.T) {
 	}
 }
 
-// 4.5: gateway.hold_max_sec < server.first_byte_timeout_sec каждого сервера.
-func TestValidate45HoldMaxLessThanFirstByte(t *testing.T) {
-	cfg := Defaults()
-	cfg.Servers = []Server{{
-		Name: "s", Slots: 1, Accept: validAccept(),
-		HealthURL: "http://192.0.2.1:8004/health", MetricsURL: "http://192.0.2.1:8004/metrics",
-		MaxOutputTokens: 16384, FirstByteTimeoutSec: 30, // < hold_max (60)
-		Upstreams: Upstreams{OpenAI: UpstreamOpenAI{
-			URL: "http://192.0.2.1:8004", Model: "m", KeyEnv: "K"}},
-	}}
-	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "hold_max") {
-		t.Fatalf("hold_max >= first_byte_timeout должно отклоняться: %v", err)
+// В.7: инвариант client_timeout_sec > hold_max_sec + max(servers[].first_byte_timeout_sec).
+// Нарушение — отрицание (<=), включая равенство. first_byte сервера srv45 = 900.
+func TestValidateV7ClientTimeoutFloor(t *testing.T) {
+	const fb = 900 // srv45
+	srv := func() []Server {
+		return []Server{srv45("s", 1, validAccept(), "http://192.0.2.1:8004")}
 	}
-	// Корректное: first_byte (900) > hold_max (60).
-	cfg.Servers = []Server{srv45("s", 1, validAccept(), "http://192.0.2.1:8004")}
+
+	// дефолты (client_timeout 5400 / hold_max 3600) + first_byte=900: 5400 > 4500 → OK.
+	cfg := Defaults()
+	cfg.Servers = srv()
 	if err := cfg.Validate(); err != nil {
-		t.Fatalf("корректное first_byte: %v", err)
+		t.Fatalf("дефолты (5400/3600) + first_byte=900: %v", err)
+	}
+	// равенство (hold+max_fb) → нарушение.
+	cfg = Defaults()
+	cfg.Servers = srv()
+	cfg.Profiles.Qwen.ClientTimeoutSec = 3600 + fb
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "client_timeout_sec") {
+		t.Fatalf("равенство hold+max_fb должно отклоняться: %v", err)
+	}
+	// hold+max_fb − 1 → нарушение.
+	cfg = Defaults()
+	cfg.Servers = srv()
+	cfg.Profiles.Qwen.ClientTimeoutSec = 3600 + fb - 1
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("hold+max_fb−1 должно отклоняться")
+	}
+	// hold+max_fb + 1 → OK.
+	cfg = Defaults()
+	cfg.Servers = srv()
+	cfg.Profiles.Qwen.ClientTimeoutSec = 3600 + fb + 1
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("hold+max_fb+1: %v", err)
+	}
+	// стенд: hold_max=600, first_byte=900, client_timeout по умолчанию 5400 → OK.
+	cfg = Defaults()
+	cfg.Servers = srv()
+	cfg.Gateway.HoldMaxSec = 600
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("конфиг стенда (600/900/5400): %v", err)
 	}
 }

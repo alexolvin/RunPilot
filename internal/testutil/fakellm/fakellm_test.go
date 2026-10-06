@@ -5,9 +5,64 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"runpilot/internal/monitor"
 )
+
+// TestSetDelaysPerRequest — P.1 (раздел 15 ТЗ): задержки фиксируются на запрос
+// в момент приёма; смена настроек на уже идущие запросы не влияет. Запрос 1
+// (firstByte=500мс) уходит в полёт, затем настройки меняются на 0: запрос 2
+// идёт мгновенно, а запрос 1 всё равно ~500мс — каждый получил свои задержки.
+func TestSetDelaysPerRequest(t *testing.T) {
+	s := Start("fake-model")
+	defer s.Close()
+
+	body := `{"model":"fake-model","stream":true,"messages":[{"role":"user","content":"hi"}]}`
+	firstByte := func() (time.Duration, error) {
+		req, err := http.NewRequest(http.MethodPost, s.URL+"/v1/chat/completions", strings.NewReader(body))
+		if err != nil {
+			return 0, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		t0 := time.Now()
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return 0, err
+		}
+		defer resp.Body.Close()
+		buf := make([]byte, 1)
+		if _, err := resp.Body.Read(buf); err != nil {
+			return 0, err
+		}
+		return time.Since(t0), nil
+	}
+
+	// Запрос 1 при firstByte=500мс: 500 фиксится при его приёме.
+	s.SetDelays(500*time.Millisecond, 0, 1)
+	ch1, e1 := make(chan time.Duration, 1), make(chan error, 1)
+	go func() { d, err := firstByte(); ch1 <- d; e1 <- err }()
+	// Запрос 1 в полёте (спит ~500мс); смена настроек его не касается.
+	time.Sleep(60 * time.Millisecond)
+	s.SetDelays(0, 0, 1)
+	ch2, e2 := make(chan time.Duration, 1), make(chan error, 1)
+	go func() { d, err := firstByte(); ch2 <- d; e2 <- err }()
+
+	d1 := <-ch1
+	if err := <-e1; err != nil {
+		t.Fatalf("запрос 1: %v", err)
+	}
+	d2 := <-ch2
+	if err := <-e2; err != nil {
+		t.Fatalf("запрос 2: %v", err)
+	}
+	if d1 < 300*time.Millisecond {
+		t.Fatalf("запрос 1: firstByte=%v, хочу ~500мс (зафиксировано при приёме)", d1)
+	}
+	if d2 >= 300*time.Millisecond {
+		t.Fatalf("запрос 2: firstByte=%v, хочу <300мс (новые настройки 0)", d2)
+	}
+}
 
 // TestMetricsVLLMFormat — /metrics в формате vLLM: разбор монитором,
 // управляемые running/waiting/kv и рост счётчиков на запросах (Э6).
