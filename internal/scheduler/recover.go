@@ -85,6 +85,38 @@ func (s *Scheduler) RecoverFromCrash() (int, error) {
 	return lost, nil
 }
 
+// RecoverHeldOnStartup — п.7: восстановление записей очереди с
+// held_request=true после рестарта координатора. Соединение клиента в
+// удержании не пережило рестарт (процесс перезапущен), поэтому удержание
+// невозможно: запись остаётся в очереди как RESUME (held_request=false,
+// mode=resume), enqueued_at сохранён (QueueSetHeldRequest его не трогает).
+// Вызывается на КАЖДОМ старте (до Start), независимо от габ-а — чистый
+// рестарт тоже обрывает удерживающие соединения. Возвращает число
+// восстановленных записей.
+func (s *Scheduler) RecoverHeldOnStartup() (int, error) {
+	if s.st == nil {
+		return 0, nil
+	}
+	entries, err := s.st.QueueList()
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, e := range entries {
+		if !e.HeldRequest {
+			continue
+		}
+		if err := s.st.QueueSetHeldRequest(e.SID, false, model.QueueModeResume); err != nil {
+			return n, err
+		}
+		n++
+	}
+	if n > 0 {
+		s.notifyf("runpilot: восстановление: %d записей удержания → resume (enqueued_at сохранён)", n)
+	}
+	return n, nil
+}
+
 // turnFinishedOK — 6.5.3: последний запрос хода 2xx и завершился раньше
 // cutoff (last_alive_at − done_quiet_sec). Для kill -9 посреди хода запрос
 // не завершён → false → LOST.

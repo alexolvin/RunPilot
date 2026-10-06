@@ -253,15 +253,15 @@ func (n *Node) cycle(ctx context.Context, send func(proto.Msg) error) error {
 	if err := send(um); err != nil {
 		return err
 	}
-	// Внешние кодеры вне tmux/runpilot (8.2 ТЗ): полный список каждого цикла
-	// (координатор сверяет живое множество).
+	// Внешние кодеры вне tmux/runpilot (8.2 ТЗ): полный список каждого цикла,
+	// включая пустой (как UNMANAGED выше) — координатор сверяет живое
+	// множество и помечает исчезнувшие GONE. Пустой список не отбрасываем:
+	// иначе «труп» после перезапуска кодера оставался ACTIVE в БД вечно.
 	ext := ScanExternal(table, panePIDs, n.prof.Cmdline(), readOpenAIBaseURL)
-	if len(ext) > 0 {
-		m := proto.New(proto.KindExternal)
-		m.Externals = ext
-		if err := send(m); err != nil {
-			return err
-		}
+	em := proto.New(proto.KindExternal)
+	em.Externals = ext
+	if err := send(em); err != nil {
+		return err
 	}
 	return nil
 }

@@ -123,3 +123,29 @@ func TestVerifyKillTarget(t *testing.T) {
 		t.Fatalf("start_time changed: %q", r)
 	}
 }
+
+// TestCycleSendsEmptyExternal — 8.2: цикл шлёт external-список даже пустой,
+// чтобы координатор сверял живое множество и помечал исчезнувших GONE.
+// Раньше пустой список отбрасывался (if len(ext) > 0) → «труп» после
+// перезапуска кодера оставался ACTIVE в БД вечно.
+func TestCycleSendsEmptyExternal(t *testing.T) {
+	// Только init — ни одного внешнего кодера и ни одной панели.
+	psOut := "1\t0\t0\t999999\t/sbin/init\n"
+	ex := &fakeExec{respond: scanRespond(psOut, "", idleScreen)}
+	n := newTestNode(t, ex)
+	var extCount int
+	if err := n.cycle(t.Context(), func(m proto.Msg) error {
+		if m.Type == proto.KindExternal {
+			extCount++
+			if len(m.Externals) != 0 {
+				t.Fatalf("пустой список, а пришло %d: %+v", len(m.Externals), m.Externals)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if extCount != 1 {
+		t.Fatalf("external-сообщений: %d, хочу 1 (пустой список тоже шлём)", extCount)
+	}
+}

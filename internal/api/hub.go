@@ -406,6 +406,35 @@ type UnmanagedView struct {
 	Host string `json:"host"`
 }
 
+// AllPanes — все снимки панелей всех узлов (для пуша статусов, п.6c).
+func (h *Hub) AllPanes() []PaneInfo {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := make([]PaneInfo, 0, len(h.panes))
+	for _, p := range h.panes {
+		out = append(out, *p)
+	}
+	return out
+}
+
+// PushPane — fire-and-forget команда панели (через её узел) БЕЗ ожидания
+// reply (set_status/set_summary, п.6c: ответ не нужен). Ошибка — узел/панель
+// недоступны (вызывающий логгирует; узел переподключится и попросит заново).
+func (h *Hub) PushPane(paneID string, m proto.Msg) error {
+	h.mu.Lock()
+	info, ok := h.panes[paneID]
+	host := ""
+	if ok {
+		host = info.Host
+	}
+	node, okNode := h.nodes[host]
+	h.mu.Unlock()
+	if !ok || !okNode || node.Conn == nil {
+		return fmt.Errorf("hub: панель %s или узел недоступны", paneID)
+	}
+	return node.Conn.WriteJSON(m)
+}
+
 // PaneBySID — снимок панели сессии.
 func (h *Hub) PaneBySID(sid string) (*PaneInfo, bool) {
 	h.mu.Lock()

@@ -36,6 +36,7 @@ let S = {
   gateway: null, // {url, model_alias} — эндпоинт шлюза (W9 доп-3c)
   panes: {}, // sid → {state, input_empty, input_preview, host, tmux_session, socket} (W5: карточка + подключение снаружи)
   unmanaged: [], // 8.3 X1: «вне runpilot» — {pane_id, session, dir, cmd, host}
+  externals: [], // 8.2: «внешние кодеры» (live-список) — {host, pid, exe, flags, source, target, status}
   closed: [], // GONE-сессии (показываются по фильтру «Показать закрытые»)
   notifications: [],
   sseId: 0,
@@ -78,6 +79,8 @@ function normSession(s) {
     constraint_kind: s.ConstraintKind || '', constraint_server: s.ConstraintServer || '',
     auto: !!s.AutoEnqueue, attempts: s.Attempts || 0,
     created_at: s.CreatedAt || '', tmux_session: s.TmuxSession || '',
+    // Раздел постановки в очередь: буфер «команд для запуска» (заряд запуска).
+    launch_command: s.LaunchCommand || '',
     untested: !!s.untested,
   };
 }
@@ -182,6 +185,13 @@ export const actions = {
       }
     });
   },
+  // loadExternals — 8.2: live-список «внешних кодеров» (GET /externals).
+  // Вызывается по событию SSE EXTERNALS (event-driven), не по таймеру (R3).
+  loadExternals() {
+    return get('/api/v1/externals').then((r) => {
+      if (r.ok && r.data) set({ externals: r.data.externals || [] });
+    });
+  },
   // removeClosed — локально убрать GONE-запись после DELETE.
   removeClosed(sid) {
     set({ closed: S.closed.filter((x) => x.sid !== sid) });
@@ -262,6 +272,13 @@ export const actions = {
     const pl = ev.payload || {};
     const patch = {};
     if (sseId) patch.sseId = sseId;
+    if (ev.kind === 'EXTERNALS') {
+      // 8.2: live-список внешних кодеров изменился → ре-берём /externals
+      // (event-driven, не поллинг). set() сдвинет sseId (маркер R8).
+      actions.loadExternals();
+      set(patch);
+      return;
+    }
     if ((ev.kind === 'SESSION_STATE' || ev.kind === 'HOLD') && ev.sid &&
         !S.sessions.some((s) => s.sid === ev.sid) && !S.resyncing) {
       // Незнакомый sid: сессия создана, пока страница открыта (событие
@@ -305,6 +322,7 @@ let sseInstance = null;
 // doResync — полный срез /state (при RESYNC от сервера и по хуку __runpilotResync).
 function doResync() {
   actions.setResyncing(true);
+  actions.loadExternals(); // 8.2: live-список внешних кодеров тоже обновляем
   return get('/api/v1/state').then((r) => {
     if (r.ok && r.data) actions.setFull(r.data);
   });

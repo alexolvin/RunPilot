@@ -328,10 +328,13 @@ func (s *Scheduler) primaryReason(e model.QueueEntry, sess store.SessionRecord,
 	if !anyUp {
 		return model.ReasonNoUpServer, serverStates(views)
 	}
-	// Интерпретация (зафиксирована в CONTROL Э4): все слоты заняты
-	// LEASED (серверы UP) — ближайший код приложения А no_up_server
-	// («сервера, способного отдать слот, нет»); более специфичные
-	// коды (pin_mismatch, accept, cooldown, external) выше.
+	// Все слоты заняты LEASED (серверы UP): для held_request — held_ok
+	// («удержание, ждём слот» — нет более конкретной причины; конкретные
+	// cooldown/external/accept выше). Для прочих записей — no_up_server
+	// (интерпретация, зафиксирована в CONTROL Э4).
+	if e.HeldRequest {
+		return model.ReasonHeldOK, map[string]any{"free_servers": free}
+	}
 	return model.ReasonNoUpServer, serverStates(views)
 }
 

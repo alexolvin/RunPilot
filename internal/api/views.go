@@ -28,6 +28,9 @@ type SessionView struct {
 	store.SessionRecord
 	Actions  []model.Action `json:"actions"`
 	Untested bool           `json:"untested,omitempty"`
+	// п.6: время начала удержания (queue_entry.held_since); не nil, только
+	// если сессия удерживает запрос (held_request=true).
+	HeldSince *time.Time `json:"held_since,omitempty"`
 }
 
 // NodeView — узел + действия (плоско, как api.NodeInfo без Conn).

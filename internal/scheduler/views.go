@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"runpilot/internal/model"
@@ -23,6 +24,9 @@ type QueueRow struct {
 	Attempts int    `json:"attempts"`
 	Prompt   string `json:"prompt,omitempty"` // первые 80 символов ввода (раздел 7 ТЗ)
 	Actions  []model.Action `json:"actions"`  // v2 15.2
+	// п.6: удержание — веб показывает бейдж HELD и таймер (now − held_since).
+	Held      bool       `json:"held,omitempty"`
+	HeldSince *time.Time `json:"held_since,omitempty"`
 }
 
 // ServerSlotRow — слот сервера (занят/свободен/cool-down).
@@ -91,9 +95,70 @@ func (s *Scheduler) QueueView() []QueueRow {
 		} else if e.IneligibleReason != "" && !e.IneligibleSince.IsZero() {
 			row.Why = e.IneligibleReason
 		}
+		// п.6: удерживающая запись — бейдж HELD + время начала удержания.
+		if e.HeldRequest {
+			row.Held = true
+			if !e.HeldSince.IsZero() {
+				hs := e.HeldSince
+				row.HeldSince = &hs
+			}
+		}
 		out = append(out, row)
 	}
 	return out
+}
+
+// QueueHeldStatus — п.6: фрагмент строки статуса tmux «Q N/M held»
+// (N — удерживающих, M — всего в очереди). Пустая очередь → «» (фрагмент
+// не показывается). Это данные для @runpilot_status (узел выставляет его
+// tmux set-option; см. node/commands.go и cmd/runpilot/tmuxsetup.go).
+func QueueHeldStatus(held, total int) string {
+	if total <= 0 {
+		return ""
+	}
+	if held <= 0 {
+		return fmt.Sprintf("Q %d", total)
+	}
+	return fmt.Sprintf("Q %d/%d held", held, total)
+}
+
+// HeldStatus — п.6: «Q N/M held» по текущей очереди (для строки статуса
+// tmux).
+func (s *Scheduler) HeldStatus() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entries, err := s.st.QueueList()
+	if err != nil {
+		return ""
+	}
+	held, total := 0, 0
+	for _, e := range entries {
+		total++
+		if e.HeldRequest {
+			held++
+		}
+	}
+	return QueueHeldStatus(held, total)
+}
+
+// SummaryText — п.6(c): сводка для @runpilot_summary: состояния серверов
+// (имя=состояние, по имени) + длина очереди «Q:N». Меняется при смене
+// состояния серверов или длины очереди → пуш (координатор, StatusPusher).
+func (s *Scheduler) SummaryText() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	servers := s.src.List()
+	sort.Slice(servers, func(i, j int) bool { return servers[i].Name < servers[j].Name })
+	names := make([]string, 0, len(servers))
+	for _, sv := range servers {
+		names = append(names, sv.Name+"="+string(sv.State))
+	}
+	entries, _ := s.st.QueueList()
+	total := len(entries)
+	if len(names) == 0 {
+		return fmt.Sprintf("Q:%d", total)
+	}
+	return fmt.Sprintf("%s | Q:%d", strings.Join(names, " "), total)
 }
 
 // ServersView — серверы с состоянием и слотами (раздел 11 ТЗ).

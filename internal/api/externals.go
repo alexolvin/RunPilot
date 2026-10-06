@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -29,16 +30,17 @@ type externalView struct {
 	LastSeen  string `json:"last_seen"`
 }
 
-// handleExternals — GET /api/v1/externals: список внешних кодеров + правила.
+// handleExternals — GET /api/v1/externals: live-список внешних кодеров + правила.
+// Показываем только «живых» (процесс запущен): GONE/KILLED — мёртвые процессы,
+// из live-списка их скрываем (история удерживается retention-очисткой).
 func (s *Server) handleExternals(w http.ResponseWriter, r *http.Request) {
-	list, err := s.store.ExternalList()
+	live, err := s.liveExternals()
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, "STORE", err.Error())
 		return
 	}
-	list = dedupExternals(list)
-	views := make([]externalView, 0, len(list))
-	for _, p := range list {
+	views := make([]externalView, 0, len(live))
+	for _, p := range live {
 		views = append(views, externalView{
 			Host: p.Host, PID: p.PID, UID: p.UID, StartTime: p.StartTime,
 			Source: p.Source, Exe: p.Exe, Flags: p.Flags, Target: p.Target,
@@ -48,6 +50,45 @@ func (s *Server) handleExternals(w http.ResponseWriter, r *http.Request) {
 	}
 	rules, _ := s.store.IgnoreList()
 	writeJSON(w, map[string]any{"externals": views, "ignore_rules": rules})
+}
+
+// liveExternals — deduped live-список внешних кодеров (ACTIVE/IGNORED) для
+// веба/API; GONE/KILLED (мёртвые) исключены.
+func (s *Server) liveExternals() ([]model.ExternalProcess, error) {
+	list, err := s.store.ExternalList()
+	if err != nil {
+		return nil, err
+	}
+	list = dedupExternals(list)
+	live := make([]model.ExternalProcess, 0, len(list))
+	for _, p := range list {
+		if isLiveExternalStatus(p.Status) {
+			live = append(live, p)
+		}
+	}
+	return live, nil
+}
+
+// isLiveExternalStatus — «живой» внешний кодер для live-списка: процесс запущен
+// (ACTIVE) или запущен, но предупреждение отключено (IGNORED). GONE/KILLED —
+// процесс мёртв, не показываем.
+func isLiveExternalStatus(status string) bool {
+	return status == model.ExtActive || status == model.ExtIgnored
+}
+
+// extFingerprint — устойчивый отпечаток live-множества (host,pid,status) для
+// детекта изменения без поллинга. start_time не входит: он «дребезжит» на ±1 с
+// (floor etimes) и дал бы ложные изменения при каждом цикле.
+func extFingerprint(live []model.ExternalProcess) string {
+	if len(live) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(live))
+	for _, p := range live {
+		keys = append(keys, p.Host+"\x00"+strconv.Itoa(p.PID)+"\x00"+p.Status)
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, "\n")
 }
 
 // dedupExternals — одна строка на (host, pid). Корень дубля: start_time =
@@ -252,5 +293,20 @@ func (s *Server) applyExternals(host string, exts []proto.ExternalProc) {
 	}
 	if err := s.store.ExternalMarkGone(host, keep, now); err != nil {
 		s.log.Warn("api: external: gone: "+err.Error(), "host", host)
+	}
+	// 8.2: live-множество изменилось → событие EXTERNALS (веб ре-берёт
+	// /externals, event-driven). applyExternals теперь каждый цикл (даже
+	// пустой) — шлём событие только при реальном изменении отпечатка.
+	if live, err := s.liveExternals(); err == nil {
+		fp := extFingerprint(live)
+		s.extMu.Lock()
+		changed := fp != s.extFingerprint
+		if changed {
+			s.extFingerprint = fp
+		}
+		s.extMu.Unlock()
+		if changed {
+			_ = s.store.EventRecord(model.Event{TS: now, Kind: model.KindExternals})
+		}
 	}
 }

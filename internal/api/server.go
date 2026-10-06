@@ -60,11 +60,23 @@ type Server struct {
 	// подключения узлов; чтение — в обработчиках (обёртка thread-safe).
 	minContextFn func() int
 
+	// pusher — п.6(c): пуш set_status/set_summary координатор → узлы. Ставится
+	// из serve.go (после планировщика); nil — пуш выключен (тесты без пушера).
+	// Чтение в handleNodeWS (переподключение → ResendHost) — после Set*.
+	pusher *StatusPusher
+
 	// Активные SSE-подключения (cancel их контекста = разрыв для клиента;
 	// используется стендом для проверки RESYNC, v2 CONTROL 2).
 	sseMu      sync.Mutex
 	sseSeq     int64
 	sseCancels map[int64]context.CancelFunc
+
+	// extFingerprint — 8.2: отпечаток последнего live-множества внешних
+	// кодеров; меняется только при реальном изменении (host,pid,status) →
+	// событие EXTERNALS шлём не каждый цикл, а только при изменении.
+	// applyExternals вызывается с разных узлов-горутин → extMu обязателен.
+	extMu          sync.Mutex
+	extFingerprint string
 
 	// pendingNodeRemoval — узлы, ожидающие удаления after_turns (W6).
 	removalMu      sync.Mutex
@@ -217,6 +229,11 @@ func (s *Server) SetVersion(v string) { s.version = v }
 // SetScheduler — планировщик (Э4): хуки снимков/узлов + why/pause.
 func (s *Server) SetScheduler(sch *scheduler.Scheduler) { s.sched = sch }
 
+// SetStatusPusher — п.6(c): пуш строки статуса (set_status/set_summary)
+// координатор → узлы. Вызывается из serve.go после планировщика; при
+// переподключении узла handleNodeWS зовёт pusher.ResendHost.
+func (s *Server) SetStatusPusher(p *StatusPusher) { s.pusher = p }
+
 // SetMonitor — монитор (Э6): серверная часть doctor (/api/v1/doctor).
 func (s *Server) SetMonitor(mon *monitor.Monitor) { s.mon = mon }
 
@@ -334,6 +351,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/sessions/{t}/paste", s.handlePaste)
 	mux.HandleFunc("POST /api/v1/sessions/{t}/approve", s.handleApprove)
 	mux.HandleFunc("POST /api/v1/sessions/{t}/compress", s.handleCompress)
+	// Раздел постановки в очередь: буфер «команды для запуска» + остановка (Esc).
+	mux.HandleFunc("POST /api/v1/sessions/{t}/launch-command", s.handleLaunchCommand)
+	mux.HandleFunc("POST /api/v1/sessions/{t}/stop", s.handleStop)
 	// v2 (8.3 X1, 5.4): приём открытых tmux-панелей («вне runpilot») и удаление
 	// GONE-сессий.
 	mux.HandleFunc("POST /api/v1/unmanaged/{host}/{pane_id}/adopt", s.handleAdopt)
@@ -426,6 +446,10 @@ type RunRequest struct {
 // RunResponse — результат регистрации.
 type RunResponse struct {
 	SID string `json:"sid"`
+	// ClientTimeoutMS — таймаут генерирующего запроса кодера (мс), источник —
+	// только координатор (profiles.qwen.client_timeout_sec × 1000). runpilot run
+	// выставляет его в QWEN_CODE_API_TIMEOUT_MS кодера.
+	ClientTimeoutMS int `json:"client_timeout_ms"`
 }
 
 func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
@@ -497,7 +521,10 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 	s.recordSessionCreated(newSID, now) // SSE: вебо узнаёт о сессии без релоада
 	s.log.Info("api: runpilot run: сессия создана", "sid", newSID, "name", req.Name)
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(RunResponse{SID: newSID})
+	json.NewEncoder(w).Encode(RunResponse{
+		SID:             newSID,
+		ClientTimeoutMS: s.cfg.Profiles.Qwen.ClientTimeoutSec * 1000,
+	})
 }
 
 // handlePane — клиент сообщает панель после tmux new-session.
@@ -545,8 +572,26 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 	// v2 15.2: сущности (сессия, узел) несут доступные действия.
 	view := StateView{Mode: mode, Panes: st.Panes}
+	// п.6: held_since удерживающих запрос (held_request=true) из очереди.
+	var heldSince map[string]*time.Time
+	if qs, err := s.store.QueueList(); err == nil {
+		for i := range qs {
+			qe := qs[i]
+			if qe.HeldRequest && !qe.HeldSince.IsZero() {
+				hs := qe.HeldSince
+				if heldSince == nil {
+					heldSince = map[string]*time.Time{}
+				}
+				heldSince[qe.SID] = &hs
+			}
+		}
+	}
 	for _, rec := range st.Sessions {
-		view.Sessions = append(view.Sessions, sessionView(rec))
+		sv := sessionView(rec)
+		if hs, ok := heldSince[rec.SID]; ok {
+			sv.HeldSince = hs
+		}
+		view.Sessions = append(view.Sessions, sv)
 	}
 	for _, n := range st.Nodes {
 		nv := nodeView(n)
@@ -781,6 +826,12 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 		s.log.Warn("api: node: config (hello-ответ): "+err.Error(), "host", host)
 		return
 	}
+	// П.6(c): после переподключения (hello + первый полный список panes)
+	// переотправить строки статуса всех панелей узла + сводку. Только на
+	// ПЕРВОМ panes соединения: узел шлёт полный список и по hello, и далее
+	// по циклу скана — повторная ResendHost на каждый список нарушила бы
+	// «не отправлять неизменившийся текст».
+	firstPanes := true
 
 	for {
 		msgType, data, err := conn.ReadMessage()
@@ -801,6 +852,12 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 		switch m.Type {
 		case proto.KindPanes:
 			s.applyPanes(host, m.Panes)
+			if firstPanes {
+				firstPanes = false
+				if s.pusher != nil {
+					s.pusher.ResendHost(host)
+				}
+			}
 		case proto.KindPane:
 			if m.Pane != nil {
 				s.hub.SetPane(host, *m.Pane)

@@ -4,6 +4,7 @@ package api
 // source=cron, target=server:<name>, ignore_rule, GONE.
 
 import (
+	"database/sql"
 	"fmt"
 	"io"
 	"log/slog"
@@ -215,5 +216,99 @@ func TestExternalAPI(t *testing.T) {
 		map[string]any{"host": "node-01", "pid": 800, "start_time": 0})
 	if status != http.StatusBadGateway || out["code"] != "NODE_UNAVAILABLE" {
 		t.Fatalf("kill без узла: %d %v, хочу 502 NODE_UNAVAILABLE", status, out)
+	}
+}
+
+// TestExternalListLiveFilter — 8.2: live-список показывает только живых
+// (ACTIVE/IGNORED); GONE/KILLED (мёртвые процессы) скрыты.
+func TestExternalListLiveFilter(t *testing.T) {
+	st, srv, clk := extTestServer(t)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	// Правило игнора для otherexe → такие кандидаты IGNORED (но процесс жив).
+	if _, err := st.IgnoreAdd("node-01", "otherexe", "", clk.Now()); err != nil {
+		t.Fatal(err)
+	}
+	clk.Advance(10 * time.Second)
+	// 900=qwen (ACTIVE), 901=otherexe (IGNORED).
+	srv.ApplyNodeMsg("node-01", extMsg(
+		proto.ExternalProc{PID: 900, UID: 1, StartSec: 10, Exe: "qwen", Source: "cron",
+			OpenAIBaseURL: "http://127.0.0.1:9000/v1"},
+		proto.ExternalProc{PID: 901, UID: 1, StartSec: 10, Exe: "otherexe", Source: "cron"},
+	))
+	status, out := jobReq(t, ts, "", http.MethodGet, "/api/v1/externals", nil)
+	if status != http.StatusOK {
+		t.Fatalf("list: %d %v", status, out)
+	}
+	if exts := out["externals"].([]any); len(exts) != 2 {
+		t.Fatalf("живых: %d, хочу 2 (ACTIVE+IGNORED): %v", len(exts), exts)
+	}
+
+	// 900 умер (в списке остался только 901) → 900 GONE и скрыт из live-списка.
+	clk.Advance(time.Second)
+	srv.ApplyNodeMsg("node-01", extMsg(
+		proto.ExternalProc{PID: 901, UID: 1, StartSec: 11, Exe: "otherexe", Source: "cron"},
+	))
+	status, out = jobReq(t, ts, "", http.MethodGet, "/api/v1/externals", nil)
+	if status != http.StatusOK {
+		t.Fatalf("list2: %d %v", status, out)
+	}
+	exts := out["externals"].([]any)
+	if len(exts) != 1 {
+		t.Fatalf("после смерти 900: %d, хочу 1 (GONE скрыт): %v", len(exts), exts)
+	}
+	if e0, _ := exts[0].(map[string]any); e0["pid"] != float64(901) {
+		t.Fatalf("остался %v, хочу 901", e0["pid"])
+	}
+}
+
+// TestExternalChangeEvent — 8.2: событие EXTERNALS при изменении live-множества
+// (появился / исчез) и НЕ дублируется при неизменном списке (не спамим каждый
+// цикл). EventRecord асинхронен (QueueWrite) → DoWrite-барьер до проверки.
+func TestExternalChangeEvent(t *testing.T) {
+	st, srv, clk := extTestServer(t)
+	// writeCh FIFO + одиночный писатель: после DoWrite-барьера все ранее
+	// поставленные async-записи (включая EXTERNALS) уже в БД.
+	flush := func() { _ = st.DoWrite(func(tx *sql.Tx) error { return nil }) }
+	countKind := func(kind string) int {
+		evs, _ := st.EventList(0, 1000)
+		n := 0
+		for _, e := range evs {
+			if e.Kind == kind {
+				n++
+			}
+		}
+		return n
+	}
+
+	clk.Advance(10 * time.Second)
+	// Появился внешний кодер → 1 EXTERNALS.
+	srv.ApplyNodeMsg("node-01", extMsg(proto.ExternalProc{
+		PID: 900, UID: 1, StartSec: 10, Exe: "qwen", Source: "cron",
+		OpenAIBaseURL: "http://127.0.0.1:9000/v1",
+	}))
+	flush()
+	if n := countKind(model.KindExternals); n != 1 {
+		t.Fatalf("после появления: EXTERNALS=%d, хочу 1", n)
+	}
+
+	// Тот же кодер, множество неизменно (start_time стабилен) → без дубля.
+	clk.Advance(time.Second)
+	srv.ApplyNodeMsg("node-01", extMsg(proto.ExternalProc{
+		PID: 900, UID: 1, StartSec: 11, Exe: "qwen", Source: "cron",
+		OpenAIBaseURL: "http://127.0.0.1:9000/v1",
+	}))
+	flush()
+	if n := countKind(model.KindExternals); n != 1 {
+		t.Fatalf("без изменения: EXTERNALS=%d, хочу 1 (без дубля)", n)
+	}
+
+	// Коди­р исчез (пустой список) → ещё 1 EXTERNALS.
+	clk.Advance(time.Second)
+	srv.ApplyNodeMsg("node-01", extMsg())
+	flush()
+	if n := countKind(model.KindExternals); n != 2 {
+		t.Fatalf("после исчезновения: EXTERNALS=%d, хочу 2", n)
 	}
 }

@@ -14,6 +14,7 @@ async function loadBootstrap() {
   const [metaR, stateR] = await Promise.all([get('/api/v1/meta'), get('/api/v1/state')]);
   if (metaR.ok && metaR.data) actions.setMeta(metaR.data);
   if (stateR.ok && stateR.data) actions.setFull(stateR.data);
+  actions.loadExternals(); // 8.2: live-список внешних кодеров (потом — по SSE)
   actions.setLoaded(true);
 }
 

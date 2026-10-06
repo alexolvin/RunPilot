@@ -37,6 +37,15 @@ type httpService struct {
 	srv  *http.Server
 }
 
+// newHTTPServer — http.Server сервисов координатора (web/api/шлюз).
+// ReadTimeout = 0: шлюз удерживает генерирующий запрос молча до
+// gateway.hold_max_sec (без байта к клиенту) — клиент на это время не шлёт
+// байты; таймаут чтения оборвал бы удержание. WriteTimeout = 0: длинные
+// SSE-потоки (раздел 6 ТЗ).
+func newHTTPServer(h http.Handler) *http.Server {
+	return &http.Server{Handler: h, ReadTimeout: 0, WriteTimeout: 0}
+}
+
 // shutdownServices — штатная остановка (K1: SIGTERM): Shutdown всех
 // HTTP-серверов в пределах grace; активные SSE/запросы дочитываются,
 // новые подключения не принимаются. Возвращает true, если останов штатная.
@@ -197,6 +206,13 @@ func newServeCmd() *cobra.Command {
 			gw.SetRequestHook(sch.RequestTick)
 			gw.Servers().OnChange(sch.ServerState)
 			srv.SetScheduler(sch)
+			// П.6(c): пуш строки статуса (set_status/set_summary) координатор
+			// → узлы. Источник текста — планировщик (HeldStatus/SummaryText);
+			// триггер — планировщик зовёт OnStatus после тика и смены состояния
+			// сервера; переподключение узла → handleNodeWS: ResendHost.
+			statusPusher := api.NewStatusPusher(hub, sch, log)
+			srv.SetStatusPusher(statusPusher)
+			sch.SetOnStatus(statusPusher.PushAll)
 			srv.SetMonitor(mon)
 			srv.SetProfile(prof)
 			srv.SetServerReg(gw.Servers())
@@ -216,13 +232,22 @@ func newServeCmd() *cobra.Command {
 			} else if lost > 0 {
 				log.Warn("serve: восстановление: " + strconv.Itoa(lost) + " ходов LOST → RESUME")
 			}
+			// п.7: удерживающие записи (held_request=true) после рестарта —
+			// соединение клиента обрвано, удержание невозможно → resume
+			// (enqueued_at сохранён). На каждом старте, независимо от габ-а.
+			if held, err := sch.RecoverHeldOnStartup(); err != nil {
+				log.Warn("serve: восстановление удержания: " + err.Error())
+			} else if held > 0 {
+				log.Warn("serve: восстановление: " + strconv.Itoa(held) + " удержаний → resume")
+			}
 			srv.SetServerDrain(func(name string, on bool) error {
 				if on {
 					gw.Servers().SetState(name, model.ServerDraining)
 				} else {
 					gw.Servers().SetState(name, model.ServerUp)
 				}
-				return nil
+				// п.1: drain сервера переживает рестарт.
+				return st.SetOperatorState(name, store.OperatorStateServerDrain, on)
 			})
 			// Пауза (UP↔PAUSED): новый ход не выдаётся, идущие доделываются.
 			// Sticky: health-серии не сбрасывают PAUSED в UP (как DRAINING).
@@ -232,8 +257,18 @@ func newServeCmd() *cobra.Command {
 				} else {
 					gw.Servers().SetState(name, model.ServerUp)
 				}
-				return nil
+				// п.1: пауза сервера переживает рестарт.
+				return st.SetOperatorState(name, store.OperatorStateServerPaused, on)
 			})
+			// п.1: восстановить операторские состояния (пауза/drain сервера,
+			// drain узла, пауза планировщика) из БД. После LoadMode/Recover
+			// (активных аренд нет) и до Start.
+			if d, p, n := sch.RestoreOperatorStates(func(name string, stt model.ServerState) {
+				gw.Servers().SetState(name, stt)
+			}); len(d)+len(p)+len(n) > 0 {
+				log.Info("serve: восстановлены операторские состояния: server-drain "+strconv.Itoa(len(d))+
+					", server-pause "+strconv.Itoa(len(p))+", node-drain "+strconv.Itoa(len(n)))
+			}
 
 			var (
 				mu       sync.Mutex
@@ -251,9 +286,10 @@ func newServeCmd() *cobra.Command {
 				copy(out, services)
 				return out
 			}
-			// WriteTimeout = 0: длинные SSE-потоки шлюза (раздел 6 ТЗ).
+			// ReadTimeout/WriteTimeout = 0: шлюз удерживает запрос молча до
+			// hold_max_sec; длинные SSE-потоки (раздел 6 ТЗ).
 			newHTTP := func(name string, ln net.Listener, h http.Handler) httpService {
-				return httpService{name, ln, &http.Server{Handler: h, WriteTimeout: 0}}
+				return httpService{name, ln, newHTTPServer(h)}
 			}
 
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
