@@ -23,7 +23,7 @@
 
 | Метод | Путь | Тело | Ответ | Назначение |
 |---|---|---|---|---|
-| POST | `/run` | `RunRequest` | `201 {"sid"}` | Регистрация сессии (`runpilot run`) |
+| POST | `/run` | `RunRequest` | `201 RunResponse` | Регистрация сессии (`runpilot run`) |
 | PATCH | `/sessions/{sid}/pane` | `{tmux_session, window, pane_id, agent_version}` | `204` | Панель сессии |
 | GET | `/state` | — | `State` | Срез: сессии, панели, узлы |
 | GET | `/sessions?all=` | — | `[SessionRecord]` | Сессии (`runpilot ls`) |
@@ -59,11 +59,30 @@
 `profile` обязан быть `qwen` (иначе `400 BAD_AGENT`). Коллизии: `409 NAME_IN_USE`
 (живая или свежая GONE сессия), `400 BAD_PRIO` (неизвестный класс).
 
+### `RunResponse` (POST /run, 201)
+
+`{sid, client_timeout_ms}`.
+- `sid` — SID созданной сессии.
+- `client_timeout_ms` — таймаут генерирующего запроса кодера (мс); источник
+  **только координатор**: `profiles.qwen.client_timeout_sec × 1000`. В конфиге
+  клиента ключа нет. `runpilot run` выставляет его в `QWEN_CODE_API_TIMEOUT_MS`
+  кодера (перекрывает встроенный/override-профиль и окружение оператора).
+
 ### `QueueRow` (GET /queue)
 
-`{rank, mode, class, session, host, sid, why?, wait_sec, attempts, prompt?}`.
-`why` — причина последнего пропуска (пусто, если слот доступен). `prompt` —
-первые 80 символов ввода панели.
+`{rank, mode, class, session, host, sid, why?, wait_sec, attempts, prompt?,
+held?, held_since?}`.
+`why` — причина последнего пропуска (пусто, если слот доступен); для удерживающей
+записи, у которой все слоты заняты, `why=held_ok` (нет более конкретной причины).
+`prompt` — первые 80 символов ввода панели. `held` (п.6) — запись удерживает
+запрос; `held_since` — время начала удержания (RFC3339Nano, часы координатора):
+веб показывает бейдж HELD и таймер `now − held_since`.
+
+### `State` (GET /state) — сессии
+
+Каждая сессия (`sessions[]`) несёт `held_since?` (п.6) — время начала удержания
+запроса (то же поле `queue_entry.held_since`), присущее только сессии с
+`held_request=true`; у прочих опущено.
 
 ### `ServerRow` (GET /servers)
 

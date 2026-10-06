@@ -4,10 +4,10 @@
 // действия — через общий разбор команд /api/v1/command и /paste (R6: только по
 // запросу оператора).
 import { html } from '../html.js';
-import { useState } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import { useStore, actions } from '../store.js';
 import { navigate } from '../router.js';
-import { W6 } from '../constants.js';
+import { W6, LAUNCH } from '../constants.js';
 import { T } from '../i18n/ru.js';
 import { sessionStateLabel, classLabel, whyText, fmtTime } from '../labels.js';
 import { stateColorVar } from '../state-style.js';
@@ -73,6 +73,39 @@ export function SessionPage() {
   const [busy, setBusy] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
   const [connectCopied, setConnectCopied] = useState(false);
+  // Раздел постановки в очередь: остановка (Esc) + сверка реальной остановки
+  // по активности панели (не по факту отправки Esc).
+  const [stopState, setStopState] = useState(''); // '' | 'stopping' | 'done' | 'failed'
+  const stopDeadline = useRef(0);
+
+  // Сверка: панель ушла из BUSY (IDLE/PROMPT/UNKNOWN) → остановлено.
+  useEffect(() => {
+    if (stopState !== 'stopping') return;
+    const p = s.panes[sid];
+    const st = p ? p.state : '';
+    if (st && st !== 'BUSY') {
+      setStopState('done');
+      actions.addToast({ kind: 'success', text: T.session.stopDone });
+      return;
+    }
+    if (stopDeadline.current && Date.now() > stopDeadline.current) {
+      setStopState('failed');
+      actions.addToast({ kind: 'error', text: T.session.stopFailed });
+    }
+  }, [stopState, s.panes]);
+
+  // Дедлайн остановки (на случай, если SSE не принёс обновлений панели).
+  useEffect(() => {
+    if (stopState !== 'stopping') return;
+    const h = setInterval(() => {
+      if (stopDeadline.current && Date.now() > stopDeadline.current) {
+        setStopState('failed');
+        actions.addToast({ kind: 'error', text: T.session.stopFailed });
+      }
+    }, LAUNCH.stopPollMs);
+    return () => clearInterval(h);
+  }, [stopState]);
+
   if (!s.loaded) {
     return html`<div class="page"><div class="skeleton" style=${{ height: '320px' }}></div></div>`;
   }
@@ -120,6 +153,38 @@ export function SessionPage() {
       .catch(() => actions.addToast({ kind: 'error', text: 'network' }))
       .finally(() => { setBusy(false); setConfirmDelete(false); });
   };
+
+  // Раздел постановки в очереди: «Остановить» — отправить Esc, затем сверить
+  // реальную остановку по активности панели (useEffect выше).
+  const stopSession = async () => {
+    if (stopState === 'stopping') return;
+    const r = await post(`/api/v1/sessions/${encodeURIComponent(sid)}/stop`, {})
+      .catch(() => null);
+    if (!r || !r.ok) {
+      actions.addToast({ kind: 'error', text: (r && r.data && r.data.detail) || (r ? r.status : 'network') });
+      return;
+    }
+    stopDeadline.current = Date.now() + LAUNCH.stopDeadlineMs;
+    setStopState('stopping');
+    actions.addToast({ kind: 'info', text: T.session.stopSent });
+  };
+  // «Отозвать» (на карточке) — снять с очереди (отмена старта), команды сохраняются.
+  const withdrawQueue = async () => {
+    const r = await post(`/api/v1/sessions/${encodeURIComponent(sid)}/dequeue`, {})
+      .catch(() => null);
+    if (r && r.ok) {
+      actions.addToast({ kind: 'info', text: T.session.withdrawDone });
+      window.__runpilotResync();
+    } else {
+      actions.addToast({ kind: 'error', text: (r && r.data && r.data.detail) || (r ? r.status : 'network') });
+    }
+  };
+
+  const canStop = ['RUNNING', 'DISPATCHING'].includes(sess.state) && !isPrompt;
+  const stopLabel = stopState === 'stopping' ? T.session.stopping
+    : stopState === 'done' ? T.session.stopDone
+    : stopState === 'failed' ? T.session.stopFailed
+    : T.session.stop;
 
   return html`<div class="page session-card">
     <div class="sc-head">
@@ -179,6 +244,12 @@ export function SessionPage() {
           <div class="sc-actions">
             ${acts.map((a) => html`<${Button} variant=${a.v} label=${a.label}
               onClick=${() => runCommand(sid, a.line)} />`)}
+            ${canStop ? html`<${Button} variant="danger" label=${stopLabel}
+              loading=${stopState === 'stopping'}
+              disabled=${stopState === 'stopping' || stopState === 'done'}
+              onClick=${stopSession} />` : null}
+            ${sess.state === 'QUEUED' ? html`<${Button} variant="secondary"
+              label=${T.session.withdraw} onClick=${withdrawQueue} />` : null}
             ${sess.state !== 'GONE' ? html`<${Button} variant="danger"
               label=${T.session.a.close} onClick=${() => setConfirmClose(true)} />` : null}
             ${sess.state === 'GONE' ? html`<${Button} variant="danger"
@@ -189,7 +260,8 @@ export function SessionPage() {
     </div>
 
     <div class="sc-composer">
-      <${Composer} sid=${sid} disabled=${false} />
+      <${Composer} sid=${sid} disabled=${false} state=${sess.state}
+        initialValue=${sess.launch_command} />
     </div>
 
     ${confirmClose ? html`<${Dialog} title=${T.session.closeTitle}
