@@ -1,30 +1,40 @@
 #!/usr/bin/env bash
-# upgrade-node.sh — обновить runpilot-бинарник УЗЛА с координатора и перезапустить
-# node-службу. Запускается ОДНОЙ командой на машине узла (например vzu5-claw).
+# upgrade-node.sh — обновить runpilot-бинарник УЗЛА с координатора (3p14-aaa)
+# и перезапустить node-службу. Запускается ОДНОЙ командой на машине узла.
 #
 # Использование (на узле):
 #   upgrade-node.sh <EXPECTED_SHA256> [COORD_HOST]
 #
 #   <EXPECTED_SHA256>  SHA256 бинарника нужного коммита, проверенный оператором на
 #                      координаторе:  sha256sum /home/user/.local/bin/runpilot
-#                      (на 3p14-aaa). ОБЯЗАТЕЛЕН: бинарник устанавливается ТОЛЬКО
-#                      при совпадении SHA256 (иначе — FAIL, работающий бинарник не
-#                      трогается). Можно передать и в формате sha256sum («<hex>  путь»).
+#                      (на 3p14-aaa). ОБЯЗАТЕЛЕН: бинарник ставится ТОЛЬКО при
+#                      совпадении (иначе — FAIL, работающий узел не трогается).
+#                      Допускается формат sha256sum («<hex>  путь»).
 #   [COORD_HOST]       хост координатора (по умолчанию 3p14-aaa; tailscale).
 #
-# Переменные окружения (опционально, переопределяют пути):
-#   COORD_BIN   бинарник на координаторе (по умолчанию /home/user/.local/bin/runpilot)
-#   NODE_BIN    бинарник узла (по умолчанию $HOME/.local/bin/runpilot)
-#   NODE_SERVICE имя user-сервиса узла (по умолчанию runpilot-node)
-#   NODE_ENV    файл env узла для doctor (по умолчанию $HOME/.config/runpilot/env)
+# Переменные окружения (опционально, переопределяют пути/поведение):
+#   COORD_BIN      бинарник на координаторе (по умолчанию /home/user/.local/bin/runpilot)
+#   NODE_BIN       бинарник узла (по умолчанию $HOME/.local/bin/runpilot)
+#   NODE_SERVICE   имя user-сервиса узла (по умолчанию runpilot-node)
+#   NODE_ENV       файл env узла для doctor (по умолчанию $HOME/.config/runpilot/env)
+#   LOCAL_BIN      [test-hook] если задан — «скачанный» бинарник берётся cp из
+#                  этого локального пути вместо scp (для песочницы, без сети)
+#   RESTART_CMD    [test-hook] если задан — рестарт службы = `bash -c RESTART_CMD`
+#                  (вместо `systemctl --user restart`); для песочницы
+#   IS_ACTIVE_CMD  [test-hook] если задан — проверка активности = `bash -c IS_ACTIVE_CMD`
+#                  (вместо `systemctl --user is-active`)
 #
-# Шаги:
-#   1. scp бинарника с координатора (tailscale) во временный файл;
-#   2. сверка SHA256 с EXPECTED_SHA256 (не совпало → FAIL, бинарник НЕ трогается);
-#   3. бэкап текущего бинарника + замена;
-#   4. перезапуск node-службы;
-#   5. runpilot doctor — при FAIL: откат на бэкап + перезапуск;
-#   6. итог: PASS/FAIL, версия (vcs.revision), SHA256.
+# Безопасность:
+#   1. SHA256: бинарник не ставится при несовпадении (рабочий узел не трогается).
+#   2. ПРЕДПРОВЕРКА: doctor новым бинарником из временного пути ДО замены —
+#      FAIL => выход без изменений, печать проваленных проверок.
+#   3. Замена и откат — ТОЛЬКО атомарно: копия во временный файл в ТОМ ЖЕ каталоге
+#      целевого, затем `mv -f`. Запись поверх целевого (и тем более запущенного)
+#      файла НЕ делается (иначе ETXTBSY / «Text file busy»).
+#   4. После рестарта doctor FAIL => атомарный откат (mv -f), рестарт, doctor
+#      старым бинарником, печать обоих результатов.
+#
+# Итог: PASS/FAIL, версия (vcs.revision), SHA256.
 
 set -u
 
@@ -34,93 +44,151 @@ NODE_BIN="${NODE_BIN:-$HOME/.local/bin/runpilot}"
 NODE_SERVICE="${NODE_SERVICE:-runpilot-node}"
 NODE_ENV="${NODE_ENV:-$HOME/.config/runpilot/env}"
 EXPECTED_SHA="${1:-}"
+LOCAL_BIN="${LOCAL_BIN:-}"
+RESTART_CMD="${RESTART_CMD:-}"
+IS_ACTIVE_CMD="${IS_ACTIVE_CMD:-}"
 
+NODE_DIR="$(dirname "$NODE_BIN")"
 TMP_BIN=""
+STAGE=""
 BACKUP=""
 DOCTOR_OUT=""
-cleanup() { [ -n "$TMP_BIN" ] && rm -f "$TMP_BIN"; [ -n "$DOCTOR_OUT" ] && rm -f "$DOCTOR_OUT"; }
+# вызывается только через trap EXIT (SC2317 — ложное срабатывание)
+# shellcheck disable=SC2317
+cleanup() {
+  [ -n "$TMP_BIN" ] && rm -f "$TMP_BIN"
+  [ -n "$STAGE" ] && rm -f "$STAGE"
+  [ -n "$DOCTOR_OUT" ] && rm -f "$DOCTOR_OUT"
+}
 trap cleanup EXIT
-fail() { echo "FAIL: $*" >&2; exit 1; }
+fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 
-command -v scp >/dev/null 2>&1 || fail "scp не найден"
 command -v sha256sum >/dev/null 2>&1 || fail "sha256sum не найден"
 [ -n "$EXPECTED_SHA" ] || fail "укажите EXPECTED_SHA256 (1-й аргумент)"
-# нормализуем sha: берём первое поле (hex), нижний регистр.
+# нормализуем sha: первое поле (hex), нижний регистр
 EXPECTED_SHA="$(printf '%s\n' "$EXPECTED_SHA" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
 case "$EXPECTED_SHA" in
   *[!0-9a-f]*) fail "ожидался SHA256-hex, получен: $EXPECTED_SHA" ;;
 esac
 
-echo "==> 1/5 скачивание: ${COORD_HOST}:${COORD_BIN}"
-TMP_BIN="$(mktemp /tmp/runpilot.node.new.XXXXXX)"
-scp -q "${COORD_HOST}:${COORD_BIN}" "$TMP_BIN" || fail "scp с координатора не удался"
-
-echo "==> 2/5 сверка SHA256"
-ACTUAL_SHA="$(sha256sum "$TMP_BIN" | awk '{print $1}')"
-echo "    ожидаемо: $EXPECTED_SHA"
-echo "    фактично: $ACTUAL_SHA"
-if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
-  fail "SHA256 НЕ СОВПАДАЕТ — бинарник не установлен (узел не изменён)"
+# doctor берёт конфиг + секреты из env узла (RUNPILOT_NODE_TOKEN и т.п.)
+if [ -f "$NODE_ENV" ]; then
+  set -a
+  # shellcheck disable=SC1090 # динамический путь env-файла
+  . "$NODE_ENV"
+  set +a
 fi
 
-echo "==> 3/5 бэкап + замена: $NODE_BIN"
+# run_doctor <бинарник> <файл-выход> -> 0=PASS, 1=FAIL
+run_doctor() { "$1" doctor >"$2" 2>&1; }
+
+# restart_node — перезапуск службы (systemctl по умолчанию, RESTART_CMD — хук)
+restart_node() {
+  if [ -n "$RESTART_CMD" ]; then
+    # shellcheck disable=SC2086 # команда-хук, намеренно без кавычек
+    bash -c "$RESTART_CMD"
+  else
+    systemctl --user restart "$NODE_SERVICE"
+  fi
+}
+# is_active_node — 0, если служба active
+is_active_node() {
+  if [ -n "$IS_ACTIVE_CMD" ]; then
+    # shellcheck disable=SC2086
+    bash -c "$IS_ACTIVE_CMD"
+  else
+    systemctl --user is-active "$NODE_SERVICE" >/dev/null 2>&1
+  fi
+}
+
+echo "==> 1/6 получение бинарника"
+TMP_BIN="$(mktemp "${TMPDIR:-/tmp}/runpilot.node.new.XXXXXX")"
+if [ -n "$LOCAL_BIN" ]; then
+  cp -a "$LOCAL_BIN" "$TMP_BIN" || fail "не удалось скопировать LOCAL_BIN $LOCAL_BIN"
+else
+  command -v scp >/dev/null 2>&1 || fail "scp не найден"
+  scp -q "${COORD_HOST}:${COORD_BIN}" "$TMP_BIN" || fail "scp с ${COORD_HOST} не удался"
+fi
+
+echo "==> 2/6 сверка SHA256"
+ACTUAL_SHA="$(sha256sum "$TMP_BIN" | awk '{print $1}')"
+printf '    ожидаемо: %s\n' "$EXPECTED_SHA"
+printf '    фактично: %s\n' "$ACTUAL_SHA"
+[ "$ACTUAL_SHA" = "$EXPECTED_SHA" ] \
+  || fail "SHA256 НЕ СОВПАДАЕТ — бинарник не установлен (узел не изменён)"
+
+echo "==> 3/6 предпроверка: doctor новым бинарником (до замены)"
+DOCTOR_OUT="$(mktemp "${TMPDIR:-/tmp}/rp-doctor.new.XXXXXX")"
+if run_doctor "$TMP_BIN" "$DOCTOR_OUT"; then
+  echo "    PASS"
+else
+  printf -- '---- doctor (новый бинарник, до замены) ----\n' >&2
+  cat "$DOCTOR_OUT" >&2
+  fail "предпроверка FAIL — целевой бинарник НЕ изменён"
+fi
+
+echo "==> 4/6 бэкап + атомарная замена: $NODE_BIN"
 if [ -f "$NODE_BIN" ]; then
-  BACKUP="${NODE_BIN}.bak-$(date -u +%Y%m%dT%H%M%SZ)"
+  BACKUP="${NODE_DIR}/runpilot.bak-$(date -u +%Y%m%dT%H%M%SZ)"
   cp -a "$NODE_BIN" "$BACKUP" || fail "не удалось создать бэкап $BACKUP"
-  echo "    бэкап: $BACKUP"
+  printf '    бэкап: %s\n' "$BACKUP"
 else
   echo "    (прежнего бинарника нет — бэкап не нужен)"
 fi
-install -m 755 "$TMP_BIN" "$NODE_BIN" || {
-  [ -n "$BACKUP" ] && cp -a "$BACKUP" "$NODE_BIN"
-  fail "установка бинарника не удалась (откат выполнен)"
-}
-rm -f "$TMP_BIN"; TMP_BIN=""
+# Атомарная замена: копия во временный файл в ТОМ ЖЕ каталоге, затем mv -f.
+# Запись поверх целевого файла не делаем — иначе ETXTBSY, если бинарник запущен.
+STAGE="${NODE_DIR}/.runpilot.new.$$"
+cp -a "$TMP_BIN" "$STAGE" \
+  || { [ -n "$BACKUP" ] && cp -a "$BACKUP" "$NODE_BIN"; fail "подготовка новой копии не удалась (откат выполнен)"; }
+chmod 755 "$STAGE"
+mv -f "$STAGE" "$NODE_BIN" \
+  || { [ -n "$BACKUP" ] && cp -a "$BACKUP" "$NODE_BIN"; fail "атомарная замена (mv -f) не удалась (откат выполнен)"; }
+STAGE=""
 
-# версия: vcs.revision из штампа (если есть go), иначе runpilot version, иначе unknown
 VERSION="$(go version -m "$NODE_BIN" 2>/dev/null | awk -F'vcs.revision=' '/vcs.revision=/{print $2; exit}' || true)"
-[ -n "${VERSION:-}" ] || VERSION="$("$NODE_BIN" version 2>/dev/null | head -1 || true)"
+[ -n "${VERSION:-}" ] || VERSION="$("$NODE_BIN" version 2>/dev/null | head -n1 || true)"
 [ -n "${VERSION:-}" ] || VERSION="unknown"
-echo "    версия: $VERSION"
+printf '    версия: %s\n' "$VERSION"
 
-echo "==> 4/5 рестарт: $NODE_SERVICE"
-systemctl --user restart "$NODE_SERVICE" || fail "рестарт $NODE_SERVICE не удался"
+echo "==> 5/6 рестарт: $NODE_SERVICE"
+restart_node || fail "рестарт $NODE_SERVICE не удался"
 sleep 3
-systemctl --user is-active "$NODE_SERVICE" >/dev/null 2>&1 \
-  || fail "$NODE_SERVICE не active после рестарта"
-echo "    $NODE_SERVICE: active"
+is_active_node || fail "$NODE_SERVICE не active после рестарта"
+printf '    %s: active\n' "$NODE_SERVICE"
 
-echo "==> 5/5 runpilot doctor"
-# doctor берёт конфиг + секреты из env узла (RUNPILOT_NODE_TOKEN и т.п.)
-[ -f "$NODE_ENV" ] && { set -a; . "$NODE_ENV"; set +a; }
-DOCTOR_OUT="$(mktemp /tmp/rp-doctor.out.XXXXXX)"
-if "$NODE_BIN" doctor >"$DOCTOR_OUT" 2>&1; then
-  DOCTOR=PASS
-else
-  DOCTOR=FAIL
-  echo "---- doctor ----" >&2; cat "$DOCTOR_OUT" >&2
-fi
-
-if [ "$DOCTOR" = "PASS" ]; then
-  echo
-  echo "=================================================="
-  echo "ИТОГ: PASS"
-  echo "  версия   : $VERSION"
-  echo "  SHA256   : $ACTUAL_SHA"
-  echo "  бинарник : $NODE_BIN"
-  [ -n "$BACKUP" ] && echo "  бэкап    : $BACKUP"
-  echo "=================================================="
+echo "==> 6/6 doctor после рестарта"
+DOCTOR_POST="$(mktemp "${TMPDIR:-/tmp}/rp-doctor.post.XXXXXX")"
+if run_doctor "$NODE_BIN" "$DOCTOR_POST"; then
+  rm -f "$DOCTOR_POST"
+  printf '\n==================================================\n'
+  printf 'ИТОГ: PASS\n'
+  printf '  версия   : %s\n' "$VERSION"
+  printf '  SHA256   : %s\n' "$ACTUAL_SHA"
+  printf '  бинарник : %s\n' "$NODE_BIN"
+  [ -n "$BACKUP" ] && printf '  бэкап    : %s\n' "$BACKUP"
+  printf '==================================================\n'
   exit 0
-else
-  echo >&2
-  echo "doctor FAIL — откат на бэкап + перезапуск" >&2
-  if [ -n "$BACKUP" ]; then
-    cp -a "$BACKUP" "$NODE_BIN" && systemctl --user restart "$NODE_SERVICE" \
-      && echo "  откат выполнен: $BACKUP -> $NODE_BIN, $NODE_SERVICE перезапущен" >&2 \
-      || echo "  ОШИБКА отката — восстановите $NODE_BIN вручную из $BACKUP" >&2
-  else
-    echo "  бэкап отсутствует — восстановите $NODE_BIN вручную" >&2
-  fi
-  echo "ИТОГ: FAIL (doctor); SHA256=$ACTUAL_SHA; версия=$VERSION" >&2
-  exit 1
 fi
+
+# doctor FAIL после рестарта — атомарный откат + рестарт + doctor старым
+printf '\ndoctor FAIL после рестарта — атомарный откат + перезапуск\n' >&2
+cat "$DOCTOR_POST" >&2
+rm -f "$DOCTOR_POST"
+if [ -n "$BACKUP" ]; then
+  ROLLBACK_STAGE="${NODE_DIR}/.runpilot.rollback.$$"
+  if cp -a "$BACKUP" "$ROLLBACK_STAGE" && mv -f "$ROLLBACK_STAGE" "$NODE_BIN"; then
+    restart_node
+    sleep 3
+    DOCTOR_OLD="$(mktemp "${TMPDIR:-/tmp}/rp-doctor.old.XXXXXX")"
+    if run_doctor "$NODE_BIN" "$DOCTOR_OLD"; then OLD_DOCTOR=PASS; else OLD_DOCTOR=FAIL; fi
+    rm -f "$DOCTOR_OLD"
+    printf '  откат выполнен (mv -f): %s -> %s; %s перезапущен\n' "$BACKUP" "$NODE_BIN" "$NODE_SERVICE" >&2
+    printf '  doctor после отката (старый бинарник): %s\n' "$OLD_DOCTOR" >&2
+  else
+    printf '  ОШИБКА отката (mv -f) — восстановите %s вручную из %s\n' "$NODE_BIN" "$BACKUP" >&2
+  fi
+else
+  printf '  бэкап отсутствует — восстановите %s вручную\n' "$NODE_BIN" >&2
+fi
+printf 'ИТОГ: FAIL (doctor после рестарта); SHA256=%s; версия=%s\n' "$ACTUAL_SHA" "$VERSION" >&2
+exit 1
