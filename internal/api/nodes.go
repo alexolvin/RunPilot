@@ -129,6 +129,30 @@ func (s *Server) tokenExists(token string) bool {
 	return true
 }
 
+// nodeEnrollFileSetup — шелл создания config.yaml и secrets.env на узле с
+// режимом 0600 НЕЗАВИСИМО от umask: каждый файл — `chmod 600` после создания.
+// Без этого `cat >`/`echo >` наследуют umask (на umask 0022 дают 0664 → doctor
+// file_mode FAIL: «config.yaml=664»). Общий для install.sh (enrollInstall) и
+// теста TestNodeEnrollFileSetupUmask. cfgDir — каталог (в install.sh:
+// `$HOME/.config/runpilot`; в тесте — tmpdir).
+func nodeEnrollFileSetup(cfgDir, coordinator, nodeHost, token string) string {
+	cfg := cfgDir + "/config.yaml"
+	secrets := cfgDir + "/secrets.env"
+	return fmt.Sprintf(`cfg="%s"
+secrets="%s"
+cat > "$cfg" <<'YAML'
+client:
+  coordinator: %s
+  token_env: RUNPILOT_NODE_TOKEN
+node:
+  host: %s
+YAML
+chmod 600 "$cfg"
+echo "RUNPILOT_NODE_TOKEN=%s" > "$secrets"
+chmod 600 "$secrets"
+`, cfg, secrets, coordinator, nodeHost, token)
+}
+
 // enrollInstall — GET /enroll/<token>/install.sh.
 func (s *Server) enrollInstall(w http.ResponseWriter, r *http.Request, token string) {
 	if !s.tokenExists(token) {
@@ -171,20 +195,11 @@ if command -v sha256sum >/dev/null 2>&1; then
     fi
   fi
 fi
-cfg="$HOME/.config/runpilot/config.yaml"
-cat > "$cfg" <<EOF
-client:
-  coordinator: %s
-  token_env: RUNPILOT_NODE_TOKEN
-node:
-  host: %s
-EOF
+%s
 echo "runpilot: привязываю узел…"
 curl -fsSL -X POST "$COORD/enroll/$TOKEN/claim" \
   -H 'Content-Type: application/json' \
   -d "{\"host\":\"$(hostname)\"}"
-echo "RUNPILOT_NODE_TOKEN=$TOKEN" > "$HOME/.config/runpilot/secrets.env"
-chmod 600 "$HOME/.config/runpilot/secrets.env"
 # Проверки окружения (14.1: tmux не ниже базового ТЗ, наличие qwen).
 if ! command -v tmux >/dev/null 2>&1; then
   echo "runpilot: tmux не найден в PATH — установите tmux"
@@ -237,7 +252,8 @@ else
   STATUS="$(systemctl --user is-active runpilot-node 2>/dev/null || true)"
 fi
 echo "runpilot: узел запущен (runpilot-node: ${STATUS:-unknown}) — «Узел $(hostname) подключён» появится в панели."
-`, base, token, host, coord, host)
+`, base, token, host,
+		nodeEnrollFileSetup("$HOME/.config/runpilot", coord, host, token))
 	w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
 	_, _ = w.Write([]byte(script))
 }
