@@ -1,0 +1,14 @@
+{
+  "control": "W9-C6: эхо терминала <=150 мс p95 через tailnet",
+  "measured_at": "2026-09-29T03:20+03:00",
+  "path": "клиент (3p14-aaa, tailnet) -> tailscale serve 443 (SNI ts.net) -> aqm web 127.0.0.1:8790 -> координатор -> WS tailnet -> aqm-node (vzu5-big) -> PTY (tmux attach, TERM=screen-256color) -> PTY-панель qwen (vzu5-big) -> обратно",
+  "session": "XGMSZH28SC",
+  "node": "vzu5-big",
+  "n": 20,
+  "p95_ms": 59.13,
+  "avg_ms": 56.33,
+  "limit_ms": 150,
+  "result": "PASS",
+  "rtt_ms": [54.317206, 55.190083, 59.132623, 54.771625, 54.320146, 58.549884, 56.59706, 58.410544, 54.181347, 58.250935, 54.351257, 58.120505, 54.221016, 59.081043, 55.083744, 60.009949, 54.841435, 54.743485, 58.179096, 54.242476],
+  "note": "Измерено временным инструментом tools/w9echo (удаляется после прогона): логин https -> WS /web/ws/term/<sid> -> 20 round-trip уникальных строк (без \\n, чтобы не отправлять промпт живому qwen) с ожиданием эха в PTY-потоке; после каждого замера строка стирается backspace'ами. Баг, найденный при подготовке: у сервисного aqm-node нет TERM (systemd user) -> tmux attach завершался мгновенно («open terminal failed: terminal does not support clear») -> фикс internal/node/pty (явный TERM=screen-256color) + регрессия TestPtyOpenWithoutTermEnv."
+}

@@ -1,0 +1,230 @@
+{
+  "stage": "W6",
+  "commit": "a8ffdea1b7d6320df299e88f2e8130a29ee3e664",
+  "time": "2026-09-29T11:48:58Z",
+  "web_url": "http://127.0.0.1:45527",
+  "files": [
+    "journey-J6-1__1440x900.png",
+    "journey-J6-1__390x844.png",
+    "journey-J6-2__1440x900.png",
+    "journey-J6-2__390x844.png",
+    "journey-J6-3__1440x900.png",
+    "journey-J6-3__390x844.png",
+    "journey-J6-4__1440x900.png",
+    "journey-J6-4__390x844.png",
+    "journey-J7-1__1440x900.png",
+    "journey-J7-1__390x844.png",
+    "journey-J7-2__1440x900.png",
+    "journey-J7-2__390x844.png",
+    "journey-J7-3__1440x900.png",
+    "journey-J7-3__390x844.png",
+    "journey-J8-1__1440x900.png",
+    "journey-J8-1__390x844.png",
+    "journey-J8-2__1440x900.png",
+    "journey-J8-2__390x844.png",
+    "journey-J8-3__1440x900.png",
+    "journey-J8-3__390x844.png"
+  ],
+  "checks": {
+    "journey-J6-1__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J6-1__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 0)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J6-2__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J6-2__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 0)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J6-3__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J6-3__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J6-4__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J6-4__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J7-1__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J7-1__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 0)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J7-2__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J7-2__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J7-3__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J7-3__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J8-1__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J8-1__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J8-2__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J8-2__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J8-3__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J8-3__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "elapsed_ms": 21567,
+  "jobs": 20,
+  "max_concurrent_leases": 2,
+  "pass": true,
+  "samples_100ms": 215,
+  "samples_over_cap": 0,
+  "slots": 2
+}

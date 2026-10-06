@@ -1,0 +1,20 @@
+{
+  "control": 7,
+  "host": "vzu5-big",
+  "command": "aqm doctor",
+  "date": "2026-09-29",
+  "rc": 0,
+  "result": "PASS",
+  "output": [
+    "PASS config — загружен /home/user/.config/aqm/config.yaml",
+    "PASS allow_cidrs — 2 CIDR",
+    "PASS coordinator_bind — bind 127.0.0.1 входит в allow_cidrs",
+    "PASS secrets_env — все секреты — через переменные окружения",
+    "PASS tmux — tmux 3.4",
+    "PASS qwen_settings — selectedType=openai, ModelAlias в modelProviders отсутствует",
+    "PASS file_mode — 0600: /home/user/.config/aqm/config.yaml",
+    "PASS metrics — серверов в конфигурации нет",
+    "PASS require_direct — серверов с require_direct нет"
+  ],
+  "note": "серверы деплоя живут в БД (миграция W2), не в config.yaml. Первый прогон — FAIL file_mode (config.yaml=644); исправлено chmod 600, повторный прогон rc=0."
+}

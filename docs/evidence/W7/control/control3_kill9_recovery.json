@@ -1,0 +1,89 @@
+{
+  "all_correct": true,
+  "correct": 10,
+  "detail": [
+    {
+      "attempts": 1,
+      "iter": 0,
+      "log_says_lost_resume": true,
+      "pass": true,
+      "sid": "P4C99V54XS",
+      "state_after": "QUEUED"
+    },
+    {
+      "attempts": 1,
+      "iter": 1,
+      "log_says_lost_resume": true,
+      "pass": true,
+      "sid": "QFFRV96PZP",
+      "state_after": "QUEUED"
+    },
+    {
+      "attempts": 1,
+      "iter": 2,
+      "log_says_lost_resume": true,
+      "pass": true,
+      "sid": "P9DDF802PF",
+      "state_after": "QUEUED"
+    },
+    {
+      "attempts": 1,
+      "iter": 3,
+      "log_says_lost_resume": true,
+      "pass": true,
+      "sid": "NFND9X7EB0",
+      "state_after": "QUEUED"
+    },
+    {
+      "attempts": 1,
+      "iter": 4,
+      "log_says_lost_resume": true,
+      "pass": true,
+      "sid": "REZTDA8BRX",
+      "state_after": "QUEUED"
+    },
+    {
+      "attempts": 1,
+      "iter": 5,
+      "log_says_lost_resume": true,
+      "pass": true,
+      "sid": "R3JD3AFC0P",
+      "state_after": "QUEUED"
+    },
+    {
+      "attempts": 1,
+      "iter": 6,
+      "log_says_lost_resume": true,
+      "pass": true,
+      "sid": "Y43K3MS6MQ",
+      "state_after": "QUEUED"
+    },
+    {
+      "attempts": 1,
+      "iter": 7,
+      "log_says_lost_resume": true,
+      "pass": true,
+      "sid": "SKHTHKEGQ2",
+      "state_after": "QUEUED"
+    },
+    {
+      "attempts": 1,
+      "iter": 8,
+      "log_says_lost_resume": true,
+      "pass": true,
+      "sid": "WC179JEM98",
+      "state_after": "QUEUED"
+    },
+    {
+      "attempts": 1,
+      "iter": 9,
+      "log_says_lost_resume": true,
+      "pass": true,
+      "sid": "AD6SK59DTW",
+      "state_after": "QUEUED"
+    }
+  ],
+  "limit": 10,
+  "pass": true,
+  "runs": 10
+}

@@ -1,0 +1,52 @@
+{
+  "overhead": {
+    "n": 1000,
+    "p50_ms": 0.25829405058175325,
+    "p95_ms": 0.34079900942742825,
+    "p99_ms": 0.41684764437377436,
+    "direct_avg_ms": 0.29623696277849376,
+    "gw_avg_ms": 0.5556842491496354
+  },
+  "ttfb": {
+    "n": 100,
+    "p50_ms": 0.29862404335290194,
+    "p95_ms": 0.48285645898431523,
+    "p99_ms": 0.5896687973290687,
+    "direct_avg_ms": 30.46171409310773,
+    "gw_avg_ms": 30.78049450647086
+  },
+  "sse": {
+    "direct": 7,
+    "gateway": 7
+  },
+  "migration_live": {
+    "n": 10,
+    "ok": 10
+  },
+  "hold": {
+    "status": 503,
+    "retry_after": "7",
+    "held_s": 2.0023367404937744,
+    "body_exact": true,
+    "queue": {
+      "held_request": 0,
+      "mode": "resume"
+    }
+  },
+  "request_rows": {
+    "n": 1093,
+    "cols": [
+      "id",
+      "sid",
+      "turn_id",
+      "server",
+      "path",
+      "status",
+      "t_start",
+      "t_first_byte",
+      "t_end",
+      "held_ms",
+      "error"
+    ]
+  }
+}

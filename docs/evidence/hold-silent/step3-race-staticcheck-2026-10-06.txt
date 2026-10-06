@@ -1,0 +1,31 @@
+# Регрессия (Block 3) — go test -race + staticcheck
+
+Дата: 2026-10-06. Реальные выводы (пересобрано после Block 1: п.2/п.6/п.7/п.8 + п.6 held_since + Block 2 tick-таймер).
+
+## go test -race ./...
+ok  	runpilot/cmd/runpilot	(cached)
+ok  	runpilot/internal/api	(cached)
+ok  	runpilot/internal/backup	(cached)
+ok  	runpilot/internal/clock	(cached)
+ok  	runpilot/internal/command	(cached)
+ok  	runpilot/internal/config	(cached)
+ok  	runpilot/internal/detect	(cached)
+ok  	runpilot/internal/doctor	(cached)
+ok  	runpilot/internal/gateway	(cached)
+ok  	runpilot/internal/launchcmd	(cached)
+ok  	runpilot/internal/model	(cached)
+ok  	runpilot/internal/monitor	(cached)
+ok  	runpilot/internal/node	(cached)
+ok  	runpilot/internal/notify	(cached)
+ok  	runpilot/internal/proto	(cached)
+ok  	runpilot/internal/scheduler	(cached)
+ok  	runpilot/internal/sid	(cached)
+ok  	runpilot/internal/store	(cached)
+ok  	runpilot/internal/testutil/fakellm	(cached)
+ok  	runpilot/internal/texts	(cached)
+ok  	runpilot/internal/web	(cached)
+
+Итог: 21 ok / 0 FAIL
+
+## staticcheck ./... (make staticcheck)
+staticcheck EXIT=0 — находок нет

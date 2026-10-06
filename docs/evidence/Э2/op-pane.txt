@@ -1,0 +1,50 @@
+[user@3p14-aaa aqm]$ PATH=/tmp/aqm-e2/bin:$PATH AQM_TOKEN=test-token-123 /home/user/myhub/aqm/aqm run --config /tmp/aqm-e2/config.yaml --name e2proj1 --dir /tmp/aqm-e2/work/proj1 --detach
+sid NEQ6KS80DE  имя e2proj1  панель %1
+[user@3p14-aaa aqm]$ PATH=/tmp/aqm-e2/bin:$PATH AQM_TOKEN=test-token-123 /home/user/myhub/aqm/aqm run --config /tmp/aqm-e2/config.yaml --name e2proj2 --dir /tmp/aqm-e2/work/proj2 --detach
+sid X6F7PKJS16  имя e2proj2  панель %2
+[user@3p14-aaa aqm]$ PATH=/tmp/aqm-e2/bin:$PATH AQM_TOKEN=test-token-123 /home/user/myhub/aqm/aqm run --config /tmp/aqm-e2/config.yaml --name e2proj3 --dir /tmp/aqm-e2/work/proj3 --detach
+sid RA1AJEXAGE  имя e2proj3  панель %3
+[user@3p14-aaa aqm]$ PATH=/tmp/aqm-e2/bin:$PATH AQM_TOKEN=test-token-123 /home/user/myhub/aqm/aqm run --config /tmp/aqm-e2/config.yaml --name e2proj4 --dir /tmp/aqm-e2/work/proj4 --detach
+sid 868PMM0XTT  имя e2proj4  панель %4
+[user@3p14-aaa aqm]$ PATH=/tmp/aqm-e2/bin:$PATH AQM_TOKEN=test-token-123 /home/user/myhub/aqm/aqm run --config /tmp/aqm-e2/config.yaml --name e2proj5 --dir /tmp/aqm-e2/work/proj5 --detach
+sid K910QXCE8A  имя e2proj5  панель %5
+[user@3p14-aaa aqm]$ PATH=/tmp/aqm-e2/bin:$PATH AQM_TOKEN=test-token-123 /home/user/myhub/aqm/aqm run --config /tmp/aqm-e2/config.yaml --name e2proj6 --dir /tmp/aqm-e2/work/proj6 --detach
+sid 5NPM5NTYC0  имя e2proj6  панель %6
+[user@3p14-aaa aqm]$ PATH=/tmp/aqm-e2/bin:$PATH AQM_TOKEN=test-token-123 /home/user/myhub/aqm/aqm run --config /tmp/aqm-e2/config.yaml --name e2proj7 --dir /tmp/aqm-e2/work/proj7 --detach
+sid BDECEWDZS2  имя e2proj7  панель %7
+[user@3p14-aaa aqm]$ PATH=/tmp/aqm-e2/bin:$PATH AQM_TOKEN=test-token-123 /home/user/myhub/aqm/aqm run --config /tmp/aqm-e2/config.yaml --name e2proj8 --dir /tmp/aqm-e2/work/proj8 --detach
+sid BYJ8ADXHQ2  имя e2proj8  панель %8
+[user@3p14-aaa aqm]$ PATH=/tmp/aqm-e2/bin:$PATH AQM_TOKEN=test-token-123 /home/user/myhub/aqm/aqm run --config /tmp/aqm-e2/config.yaml --name e2proj9 --dir /tmp/aqm-e2/work/proj9 --detach
+sid PBT44YXR86  имя e2proj9  панель %9
+[user@3p14-aaa aqm]$ PATH=/tmp/aqm-e2/bin:$PATH AQM_TOKEN=test-token-123 /home/user/myhub/aqm/aqm run --config /tmp/aqm-e2/config.yaml --name e2proj10 --dir /tmp/aqm-e2/work/proj10 --detach
+sid 4E5D7DPTC3  имя e2proj10  панель %10
+[user@3p14-aaa aqm]$ PATH=/tmp/aqm-e2/bin:$PATH AQM_TOKEN=test-token-123 /home/user/myhub/aqm/aqm run --config /tmp/aqm-e2/config.yaml --name e2proj1 --dir /tmp/aqm-e2/work/proj1 --detach
+aqm: 409 NAME_IN_USE: имя занято сессией NEQ6KS80DE (IDLE)
+[user@3p14-aaa aqm]$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,241 @@
+{
+  "stage": "W7",
+  "commit": "a8ffdea1b7d6320df299e88f2e8130a29ee3e664",
+  "time": "2026-09-29T11:55:21Z",
+  "web_url": "http://127.0.0.1:36349",
+  "files": [
+    "w7-ext__queue__1440x900__light.png",
+    "w7-faults__servers__1440x900__light.png",
+    "w7-emerg__queue__1440x900__light.png",
+    "w7-safe__queue__1440x900__light.png",
+    "w7-offline__queue__1440x900__light.png",
+    "journey-W7-N__1440x900.png",
+    "journey-W7-U__1440x900.png",
+    "journey-J3__1440x900.png",
+    "journey-J3__390x844.png",
+    "journey-J4__1440x900.png",
+    "journey-J4__390x844.png",
+    "journey-J5__1440x900.png",
+    "journey-J5__390x844.png",
+    "journey-J9__1440x900.png",
+    "journey-J9__390x844.png",
+    "journey-J10__1440x900.png",
+    "journey-J10__390x844.png",
+    "journey-J11__1440x900.png",
+    "journey-J11__390x844.png",
+    "journey-J12__1440x900.png",
+    "journey-J12__390x844.png"
+  ],
+  "checks": {
+    "journey-J10__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J10__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J11__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J11__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J12__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J12__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J3__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J3__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J4__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J4__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J5__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J5__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J9__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J9__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-W7-N__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-W7-U__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "w7-emerg__queue__1440x900__light.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "w7-ext__queue__1440x900__light.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "w7-faults__servers__1440x900__light.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "w7-offline__queue__1440x900__light.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "w7-safe__queue__1440x900__light.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    }
+  }
+}

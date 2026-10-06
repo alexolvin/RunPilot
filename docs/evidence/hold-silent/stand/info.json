@@ -1,0 +1,18 @@
+{
+  "ready": "yes",
+  "fakellm_pid": 4066070,
+  "serve_pid": 4066071,
+  "node_pid": 4066072,
+  "gateway_url": "http://127.0.0.1:18787",
+  "api_url": "http://127.0.0.1:18788",
+  "web_url": "http://127.0.0.1:18790",
+  "fakellm_url": "http://127.0.0.1:18801",
+  "db": "/mdisk/myhub/RunPilot/docs/evidence/hold-silent/stand/data/runpilot.db",
+  "tmux_tmpdir": "/mdisk/myhub/RunPilot/docs/evidence/hold-silent/stand/tmux",
+  "tmux_socket": "hold-silent",
+  "profile": "env",
+  "hold_max_sec": 600,
+  "run_dir": "/mdisk/myhub/RunPilot/docs/evidence/hold-silent/stand/work/run-1791296871",
+  "token_env": "RUNPILOT_HOLD_TOKEN",
+  "token": "hold-silent-stand-token-0123456789"
+}

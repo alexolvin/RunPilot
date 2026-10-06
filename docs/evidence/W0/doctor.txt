@@ -1,0 +1,19 @@
+# aqm doctor на 3p14-aaa (W0)
+# Команда: aqm doctor --config testdata/config.example.yaml
+# Дата: 2026-09-26T01:12:16Z
+# hostname: 3p14-aaa
+# Бинарь: CGO_ENABLED=0 go build -o aqm ./cmd/aqm ; aqm --version: aqm version 0.0.0-dev
+# RC ниже — реальный код выхода aqm doctor.
+
+PASS config — загружен testdata/config.example.yaml
+PASS allow_cidrs — 4 CIDR
+PASS coordinator_bind — bind 192.168.10.10 входит в allow_cidrs
+PASS secrets_env — все секреты — через переменные окружения
+PASS tmux — tmux 3.2a
+PASS qwen_settings — selectedType=openai, ModelAlias в modelProviders отсутствует
+FAIL file_mode — не 0600: testdata/config.example.yaml=644
+WARN metrics — 3p14-aaa: http://192.168.10.21:8004/metrics недоступен (metrics_missing); srv2: http://192.168.10.22:8004/metrics недоступен (metrics_missing)
+WARN require_direct — 3p14-aaa: http://192.168.10.21:8004/v1/models: Get "http://192.168.10.21:8004/v1/models": context deadline exceeded (Client.Timeout exceeded while awaiting headers); srv2: http://192.168.10.22:8004/v1/models: Get "http://192.168.10.22:8004/v1/models": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+aqm: doctor: есть FAIL
+
+RC=1

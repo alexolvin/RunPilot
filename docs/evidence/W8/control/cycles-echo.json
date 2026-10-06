@@ -1,0 +1,11 @@
+{
+  "attach_procs_end": 0,
+  "cycles": 50,
+  "echo_n": 40,
+  "echo_p95_limit_ms": 50,
+  "echo_p95_ms": 0,
+  "list_clients_base": 0,
+  "window_after": "80x23",
+  "window_before": "80x23",
+  "window_stable": true
+}

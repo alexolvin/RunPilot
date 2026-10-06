@@ -1,0 +1,11 @@
+{
+  "db_consistent": true,
+  "entered_safe_mode": true,
+  "exit_elapsed_ms": 8,
+  "exit_within_probe_plus_margin": true,
+  "lease_count_during_safe_mode": 0,
+  "mode_after": "NORMAL",
+  "no_leases_in_safe_mode": true,
+  "pass": true,
+  "safe_probe_sec": 2
+}

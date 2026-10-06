@@ -1,0 +1,40 @@
+AIQueMan  коорд 127.0.0.1  очередь 1  ходы 0/2  пауза: нет                                                      11:31:11
+─ Серверы ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  SERVER PRIO STATE SLOTS SESSION TURN GPU VRAM KV GEN EXT
+  a 10 UP 0/1 — — — — — — 0
+  b 5 UP 0/1 — — — — — — 0
+
+─ Очередь ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  # CLASS SESSION HOST WHY WAIT TRY PROMPT
+▸ 1 low smoke1 3p14-aaa — 08:35 —
+
+─ События ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  08:31:05 3p14-aaa  NODE_STATE {"host":"3p14-aaa","state":"UP"}
+  08:30:49 3p14-aaa  NODE_STATE {"host":"3p14-aaa","state":"DOWN"}
+  08:28:49 3p14-aaa  NODE_STATE {"host":"3p14-aaa","state":"UP"}
+  08:28:41 3p14-aaa  NODE_STATE {"host":"3p14-aaa","state":"DOWN"}
+  08:26:41 3p14-aaa  NODE_STATE {"host":"3p14-aaa","state":"UP"}
+
+ e:enqueue d:dequeue w:why +/-:класс p:pin r:requeue h:hold c:cancel v:экран ?:справка
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

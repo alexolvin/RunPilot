@@ -1,0 +1,13 @@
+{
+  "detect_elapsed_ms": 802,
+  "exe": "qwen",
+  "limit_ms": 3000,
+  "pass": true,
+  "pid": 941089,
+  "scan_interval_sec": 1,
+  "scans": 2,
+  "source": "cron",
+  "status": "ACTIVE",
+  "target": "server:srv-01",
+  "within_2_scans": true
+}

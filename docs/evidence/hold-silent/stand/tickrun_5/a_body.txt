@@ -1,0 +1,1 @@
+{"id":"gen-1","object":"chat.completion","model":"fake-e6","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}

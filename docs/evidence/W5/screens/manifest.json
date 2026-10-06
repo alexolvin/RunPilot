@@ -1,0 +1,142 @@
+{
+  "stage": "W5",
+  "commit": "a8ffdea1b7d6320df299e88f2e8130a29ee3e664",
+  "time": "2026-09-29T11:48:23Z",
+  "web_url": "http://127.0.0.1:38689",
+  "files": [
+    "journey-J1-1__1440x900.png",
+    "journey-J1-1__390x844.png",
+    "journey-J1-2__1440x900.png",
+    "journey-J1-2__390x844.png",
+    "journey-J1-3__1440x900.png",
+    "journey-J1-3__390x844.png",
+    "journey-J1-4__1440x900.png",
+    "journey-J1-4__390x844.png",
+    "journey-J2-1__1440x900.png",
+    "journey-J2-1__390x844.png",
+    "journey-J2-2__1440x900.png",
+    "journey-J2-2__390x844.png"
+  ],
+  "checks": {
+    "journey-J1-1__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J1-1__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J1-2__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J1-2__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J1-3__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J1-3__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J1-4__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J1-4__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J2-1__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J2-1__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J2-2__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-J2-2__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    }
+  }
+}

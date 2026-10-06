@@ -1,0 +1,67 @@
+=== A pane (полный) ===
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │ >_ Qwen Code (v0.24.7)                                                   │
+  │                                                                          │
+  │ API Key | qwen3.6-27b (RunPilot) (/model to change)                      │
+  │ /mdisk/.../docs/evidence/hold-silent/stand/work/run-1791276002/A         │
+  └──────────────────────────────────────────────────────────────────────────┘
+  Tips: Use /compress when the conversation gets long to summarize history and
+   free up context.
+  ●︎ Auto mode enabled.
+       An LLM classifier evaluates each tool call — safe actions auto-approve,
+       risky ones are blocked. Exit: Shift+Tab or /approval-mode default.
+  ●︎ Update successful! The new version will be used on your next run.
+  ●︎ Read context files: ~/.qwen/output-language.md
+  > Reply with exactly the word: OK
+  ◆︎ c0
+────────────────────────────────────────────────────────────────────────────────
+>   Type your message or @path/to/file
+────────────────────────────────────────────────────────────────────────────────
+  ➜ A · git:(main) · qwen3.6-27b
+  Auto mode (shift + tab to cycle)
+
+=== B pane (полный) ===
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │ >_ Qwen Code (v0.24.7)                                                   │
+  │                                                                          │
+  │ API Key | qwen3.6-27b (RunPilot) (/model to change)                      │
+  │ /mdisk/.../docs/evidence/hold-silent/stand/work/run-1791276002/B         │
+  └──────────────────────────────────────────────────────────────────────────┘
+  Tips: Use /compress when the conversation gets long to summarize history and
+   free up context.
+  ●︎ Auto mode enabled.
+       An LLM classifier evaluates each tool call — safe actions auto-approve,
+       risky ones are blocked. Exit: Shift+Tab or /approval-mode default.
+  ●︎ Update successful! The new version will be used on your next run.
+  ●︎ Read context files: ~/.qwen/output-language.md
+  > Reply with exactly the word: OK
+  ◆︎ c0
+────────────────────────────────────────────────────────────────────────────────
+>   Type your message or @path/to/file
+────────────────────────────────────────────────────────────────────────────────
+  ➜ B · git:(main) · qwen3.6-27b
+  Auto mode (shift + tab to cycle)
+
+=== B: count_errors (API Error|retry|finish reason|Error:) ===
+0
+
+=== A: count_errors ===
+0
+
+=== B qwen pid=3230536 /proc environ (выдержки) ===
+QWEN_CODE_API_TIMEOUT_MS=5400000
+OPENAI_MODEL=qwen3.6-27b
+OPENAI_BASE_URL=http://127.0.0.1:18787/s/CW0S917MDB/v1
+RUNPILOT_SID=CW0S917MDB
+
+=== точные LEASE (БД, полные таймстемпы) ===
+AH3C5G8Y0A|RELEASED|2026-10-06T08:40:36.313108528Z|2026-10-06T08:46:37.965504707Z|TURN_DONE
+CW0S917MDB|RELEASED|2026-10-06T08:46:40.464769138Z|2026-10-06T08:46:41.965129103Z|TURN_DONE
+=== точные B requests (БД) ===
+sid|t_start|t_first_byte|held_ms|status|error
+CW0S917MDB|2026-10-06T08:40:38.287708368Z|2026-10-06T08:46:40.468734667Z|362177|200|
+CW0S917MDB|2026-10-06T08:46:40.57992452Z|2026-10-06T08:46:40.580969497Z|0|200|
+=== точные LEASE events ===
+2026-10-06T08:46:37.966479084Z|LEASE_RELEASE|AH3C5G8Y0A|{"reason":"TURN_DONE","server":"fakellm","slot":1}
+2026-10-06T08:46:40.465452766Z|LEASE_GRANT|CW0S917MDB|{"held":true,"origin":"IMPLICIT","server":"fakellm","slot":1}
+2026-10-06T08:46:41.966410469Z|LEASE_RELEASE|CW0S917MDB|{"reason":"TURN_DONE","server":"fakellm","slot":1}

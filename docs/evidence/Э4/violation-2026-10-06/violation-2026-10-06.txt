@@ -1,0 +1,40 @@
+# RAW: e2e Э4, before-бинарник (без фикса тика, без инварианта п.1)
+# double-lease: server a (1 слот), 2 одновременные аренды
+
+## Строки аренд обеих сессий (весь прогон)
+40MTFR2TNX id  3 srv=a slot=1 RELEASED   DISPATCH  16:07:03.655 -> 16:07:08.655 (TURN_DONE) req=3
+40MTFR2TNX id  9 srv=a slot=1 RELEASED   DISPATCH  16:07:33.655 -> 16:07:33.655 (TURN_DONE) req=0
+40MTFR2TNX id 11 srv=a slot=1 RELEASED   IMPLICIT  16:07:34.180 -> 16:07:34.254 (TURN_DONE) req=1
+40MTFR2TNX id 13 srv=a slot=1 RELEASED   IMPLICIT  16:07:34.682 -> 16:07:34.754 (TURN_DONE) req=1
+40MTFR2TNX id 21 srv=a slot=1 RELEASED   DISPATCH  16:08:03.655 -> 16:08:08.654 (TURN_DONE) req=3
+HMCCVG26WV id  4 srv=b slot=1 RELEASED   DISPATCH  16:07:03.655 -> 16:07:08.655 (TURN_DONE) req=3
+HMCCVG26WV id 10 srv=b slot=1 RELEASED   DISPATCH  16:07:33.655 -> 16:07:33.655 (TURN_DONE) req=0
+HMCCVG26WV id 12 srv=a slot=1 RELEASED   IMPLICIT  16:07:34.180 -> 16:07:34.254 (TURN_DONE) req=1
+HMCCVG26WV id 14 srv=b slot=1 RELEASED   IMPLICIT  16:07:34.682 -> 16:07:34.754 (TURN_DONE) req=1
+HMCCVG26WV id 22 srv=b slot=1 RELEASED   DISPATCH  16:08:03.655 -> 16:08:08.654 (TURN_DONE) req=3
+
+## Timeline всех событий s2+s3 (окно 33.5-34.8 с)
+16:07:33.655 LEASE_GRANT     sid=40MTFR2TNX srv=a  {"origin":"DISPATCH","server":"a","slot":1}
+16:07:33.655 LEASE_GRANT     sid=HMCCVG26WV srv=b  {"origin":"DISPATCH","server":"b","slot":1}
+16:07:33.655 LEASE_RELEASE   sid=40MTFR2TNX srv=a  {"reason":"TURN_DONE","server":"a","slot":1}
+16:07:33.655 LEASE_RELEASE   sid=HMCCVG26WV srv=b  {"reason":"TURN_DONE","server":"b","slot":1}
+16:07:33.655 SESSION_STATE   sid=40MTFR2TNX srv=-  {"from":"QUEUED","to":"DISPATCHING"}
+16:07:33.656 DISPATCH        sid=40MTFR2TNX srv=a  {"expect_hash":13817283379521382767,"mode":"submit","pane_id":"%1"}
+16:07:33.656 SESSION_STATE   sid=HMCCVG26WV srv=-  {"from":"QUEUED","to":"DISPATCHING"}
+16:07:33.656 DISPATCH        sid=HMCCVG26WV srv=b  {"expect_hash":3344260340944022388,"mode":"submit","pane_id":"%2"}
+16:07:33.677 TURN_END        sid=40MTFR2TNX srv=-  {"outcome":"OK","requests":0,"servers":"","turn_id":9}
+16:07:33.677 SESSION_STATE   sid=40MTFR2TNX srv=-  {"from":"RUNNING","to":"IDLE"}
+16:07:33.678 TURN_END        sid=HMCCVG26WV srv=-  {"outcome":"OK","requests":0,"servers":"","turn_id":10}
+16:07:33.678 SESSION_STATE   sid=HMCCVG26WV srv=-  {"from":"RUNNING","to":"IDLE"}
+16:07:34.254 LEASE_RELEASE   sid=40MTFR2TNX srv=a  {"reason":"TURN_DONE","server":"a","slot":1}
+16:07:34.254 LEASE_RELEASE   sid=HMCCVG26WV srv=a  {"reason":"TURN_DONE","server":"a","slot":1}
+16:07:34.256 TURN_END        sid=40MTFR2TNX srv=-  {"outcome":"OK","requests":0,"servers":"","turn_id":11}
+16:07:34.256 SESSION_STATE   sid=40MTFR2TNX srv=-  {"from":"RUNNING","to":"IDLE"}
+16:07:34.257 TURN_END        sid=HMCCVG26WV srv=-  {"outcome":"OK","requests":0,"servers":"","turn_id":12}
+16:07:34.257 SESSION_STATE   sid=HMCCVG26WV srv=-  {"from":"RUNNING","to":"IDLE"}
+16:07:34.754 LEASE_RELEASE   sid=40MTFR2TNX srv=a  {"reason":"TURN_DONE","server":"a","slot":1}
+16:07:34.754 LEASE_RELEASE   sid=HMCCVG26WV srv=b  {"reason":"TURN_DONE","server":"b","slot":1}
+16:07:34.756 TURN_END        sid=40MTFR2TNX srv=-  {"outcome":"OK","requests":0,"servers":"","turn_id":13}
+16:07:34.756 SESSION_STATE   sid=40MTFR2TNX srv=-  {"from":"RUNNING","to":"IDLE"}
+16:07:34.757 TURN_END        sid=HMCCVG26WV srv=-  {"outcome":"OK","requests":0,"servers":"","turn_id":14}
+16:07:34.757 SESSION_STATE   sid=HMCCVG26WV srv=-  {"from":"RUNNING","to":"IDLE"}

@@ -1,0 +1,32 @@
+{
+  "stage": "W8",
+  "commit": "a8ffdea1b7d6320df299e88f2e8130a29ee3e664",
+  "time": "2026-09-29T11:57:00Z",
+  "web_url": "http://127.0.0.1:45877",
+  "files": [
+    "journey-W8-T__1440x900.png",
+    "journey-W8-T__390x844.png"
+  ],
+  "checks": {
+    "journey-W8-T__1440x900.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "journey-W8-T__390x844.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    }
+  }
+}

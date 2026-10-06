@@ -1,0 +1,63 @@
+RunPilot — п.3: итоговый коммит (go test -race + staticcheck)
+commit : 4904a657bd9374ec39859170e8088d290577a8a2 (4904a65)
+branch : main
+дата   : 2026-10-06T17:59:41Z
+go     : go version go1.26.7 (Red Hat 1.26.7-1.el9_8) linux/amd64
+
+Коммиты (все 8 собираются: go build ./... OK на каждом, проверено worktree):
+  4904a65 Docs + web-финалиш: api.md, стили HELD/команды, i18n, экран сессии
+  f15f8b3 Хранение операторских состояний: тест восстановления при старте
+  836e57c Видимость удержания + set_status + дедуп внешних кодеров
+  a8b549c Silent-hold и client_timeout_sec: удержание молча до hold_max_sec
+  172ac53 Граница тика: тесты окончания COOLDOWN как события планировщика
+  4b4f7dc Закрытие хода (§8): turnDone + анти-фантом ко ВСЕМ ходам
+  41ebe46 Инвариант аренд + data-слой + ядро планировщика
+  61f2a19 Команда для запуска: заряд сессии (launchcmd) + воспроизведение узлом при dispatch
+
+########## go test -race ./... ##########
+?   	runpilot	[no test files]
+ok  	runpilot/cmd/runpilot	(cached)
+?   	runpilot/cmd/runpilot-fakellm	[no test files]
+?   	runpilot/cmd/runpilot-mockcoder	[no test files]
+?   	runpilot/cmd/runpilot-stand	[no test files]
+ok  	runpilot/internal/api	(cached)
+ok  	runpilot/internal/backup	(cached)
+?   	runpilot/internal/client	[no test files]
+ok  	runpilot/internal/clock	(cached)
+ok  	runpilot/internal/command	(cached)
+ok  	runpilot/internal/config	(cached)
+ok  	runpilot/internal/detect	(cached)
+ok  	runpilot/internal/doctor	(cached)
+ok  	runpilot/internal/gateway	(cached)
+ok  	runpilot/internal/launchcmd	(cached)
+ok  	runpilot/internal/model	(cached)
+ok  	runpilot/internal/monitor	(cached)
+ok  	runpilot/internal/node	(cached)
+?   	runpilot/internal/node/pty	[no test files]
+ok  	runpilot/internal/notify	(cached)
+ok  	runpilot/internal/proto	(cached)
+ok  	runpilot/internal/scheduler	(cached)
+ok  	runpilot/internal/sid	(cached)
+ok  	runpilot/internal/store	(cached)
+ok  	runpilot/internal/testutil/fakellm	(cached)
+ok  	runpilot/internal/texts	(cached)
+?   	runpilot/internal/tmux	[no test files]
+ok  	runpilot/internal/web	(cached)
+?   	runpilot/profiles	[no test files]
+?   	runpilot/scripts/check-literals	[no test files]
+?   	runpilot/scripts/protocheck	[no test files]
+?   	runpilot/tools/genicons	[no test files]
+?   	runpilot/tools/linthosts	[no test files]
+?   	runpilot/tools/lintlits	[no test files]
+?   	runpilot/tools/lintweb	[no test files]
+?   	runpilot/tools/screenshots	[no test files]
+?   	runpilot/tools/vendorweb	[no test files]
+?   	runpilot/tools/visualcheck	[no test files]
+
+race exit: 0 (все пакеты ok, FAIL отсутствует)
+
+########## staticcheck ./... (CGO_ENABLED=0, @latest) ##########
+(находок нет — чисто)
+staticcheck exit: 0
+
+ИТОГ: go test -race ./... = PASS; staticcheck ./... = PASS

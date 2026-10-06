@@ -1,0 +1,43 @@
+=== B pane (полный, без пустых) ===
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │ >_ Qwen Code (v0.24.7)                                                   │
+  │                                                                          │
+  │ API Key | qwen3.6-27b (RunPilot) (/model to change)                      │
+  │ /mdisk/.../docs/evidence/hold-silent/stand/work/run-1791277046/B         │
+  └──────────────────────────────────────────────────────────────────────────┘
+  Tips: Try /insight to generate personalized insights from your chat history.
+  ●︎ Auto mode enabled.
+       An LLM classifier evaluates each tool call — safe actions auto-approve,
+       risky ones are blocked. Exit: Shift+Tab or /approval-mode default.
+  ●︎ Update successful! The new version will be used on your next run.
+  ●︎ Read context files: ~/.qwen/output-language.md
+  > Reply with exactly the word: OK
+  ◆︎ c0
+────────────────────────────────────────────────────────────────────────────────
+>   Type your message or @path/to/file
+────────────────────────────────────────────────────────────────────────────────
+  ➜ B · git:(main) · qwen3.6-27b
+  Auto mode (shift + tab to cycle)
+
+=== B count_errors ===
+0
+
+=== A count_errors ===
+0
+
+=== B qwen pid=3273139 environ ===
+QWEN_CODE_API_TIMEOUT_MS=5400000
+OPENAI_MODEL=qwen3.6-27b
+OPENAI_BASE_URL=http://127.0.0.1:18787/s/YK68XCQYC0/v1
+RUNPILOT_SID=YK68XCQYC0
+
+=== LEASE (точные) ===
+ECXMJQDPTX|RELEASED|2026-10-06T08:57:47.528958205Z|2026-10-06T09:03:49.549862391Z|TURN_DONE
+YK68XCQYC0|RELEASED|2026-10-06T09:03:52.049813819Z|2026-10-06T09:03:53.549912531Z|TURN_DONE
+=== B requests (точные) ===
+YK68XCQYC0|2026-10-06T08:57:49.544470043Z|2026-10-06T09:03:52.053695849Z|362506|200
+YK68XCQYC0|2026-10-06T09:03:52.211054765Z|2026-10-06T09:03:52.211982503Z|0|200
+=== LEASE events (точные ts) ===
+2026-10-06T09:03:49.549862391Z|LEASE_RELEASE|ECXMJQDPTX|{"reason":"TURN_DONE","server":"fakellm","slot":1}
+2026-10-06T09:03:52.049813819Z|LEASE_GRANT|YK68XCQYC0|{"held":true,"origin":"IMPLICIT","server":"fakellm","slot":1}
+2026-10-06T09:03:53.549912531Z|LEASE_RELEASE|YK68XCQYC0|{"reason":"TURN_DONE","server":"fakellm","slot":1}

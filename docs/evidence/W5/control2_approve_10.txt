@@ -1,0 +1,17 @@
+appr 1: prompt=True approve=OK file=True OK
+appr 2: prompt=True approve=OK file=True OK
+BATCH 1-2: 2/2 OK
+appr 3: prompt=True approve=OK file=True OK
+appr 4: prompt=True approve=OK file=True OK
+BATCH 3-4: 2/2 OK
+appr 5: prompt=True approve=OK file=True OK
+appr 6: prompt=True approve=OK file=True OK
+BATCH 5-6: 2/2 OK
+appr 7: prompt=True approve=OK file=True OK
+appr 8: prompt=True approve=OK file=True OK
+BATCH 7-8: 2/2 OK
+appr 9: prompt=True approve=OK file=True OK
+appr10: prompt=True approve=OK file=True OK
+BATCH 9-10: 2/2 OK
+
+RESULT: 10/10 approvals took pane out of PROMPT (allow) — CONTROL2 PASS

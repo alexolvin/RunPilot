@@ -1,0 +1,15 @@
+--- p0 2026-09-25T16:27:33+03:00
+SERVER  PRIO  STATE  SLOTS  SESSIONS  GPU   VRAM   KV  GEN  EXT
+fa      100   UP     0/2    —         100%  45/48  0%  0    0
+dead    10    UP     0/1    —         —     —      —   —    —
+
+--- p1 2026-09-25T16:27:41+03:00
+SERVER  PRIO  STATE  SLOTS  SESSIONS  GPU   VRAM   KV   GEN  EXT
+fa      100   UP     0/2    —         100%  45/48  42%  0    3
+dead    10    DOWN   0/1    —         —     —      —    —    —
+
+--- p2 2026-09-25T16:27:49+03:00
+SERVER  PRIO  STATE  SLOTS  SESSIONS  GPU   VRAM   KV  GEN  EXT
+fa      100   UP     0/2    —         100%  45/48  0%  0    0
+dead    10    DOWN   0/1    —         —     —      —   —    —
+

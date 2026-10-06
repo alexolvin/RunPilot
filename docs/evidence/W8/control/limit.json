@@ -1,0 +1,6 @@
+{
+  "opened_ok": 2,
+  "over_code": "TERMINAL_LIMIT",
+  "over_status": 503,
+  "terminals_per_node_max": 2
+}

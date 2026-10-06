@@ -1,0 +1,80 @@
+{
+  "ns": 6,
+  "nturns": 3,
+  "posts": 3,
+  "duration_sec": 100.2,
+  "turns_total": 18,
+  "turns_ok": 18,
+  "turns_err": [],
+  "requests_total": 54,
+  "requests_by_status": {
+    "200": 54
+  },
+  "requests_by_server": {
+    "a": 27,
+    "b": 27
+  },
+  "expected_requests": 54,
+  "lease_samples": 889,
+  "lease_max_seen": 1,
+  "lease_violations": [],
+  "lease_violation_count": 0,
+  "release_max_gap_sec": 4.99,
+  "release_budget_sec": 8,
+  "release_over_budget": [],
+  "dispatch_p95_ms": 100,
+  "dispatch_samples_n": 18,
+  "dispatch_budget_p95_ms": 1500,
+  "fake_a": {
+    "raw": "# TYPE vllm:num_requests_running gauge\nvllm:num_requests_running{engine=\"0\",model_name=\"srv-a\"} 0\n# TYPE vllm:num_requests_waiting gauge\nvllm:num_requests_waiting{engine=\"0\",model_name=\"srv-a\"} 0\n# TY"
+  },
+  "fake_b": {
+    "raw": "# TYPE vllm:num_requests_running gauge\nvllm:num_requests_running{engine=\"0\",model_name=\"srv-b\"} 0\n# TYPE vllm:num_requests_waiting gauge\nvllm:num_requests_waiting{engine=\"0\",model_name=\"srv-b\"} 0\n# TY"
+  },
+  "skip_reasons_seen": {
+    "PWN2EE090Y": [
+      "no_up_server",
+      "operator_typing",
+      "stale_snapshot"
+    ],
+    "YG0WNFECKX": [
+      "no_up_server",
+      "operator_typing",
+      "stale_snapshot"
+    ],
+    "RBFPT1G7W3": [
+      "cooldown",
+      "no_up_server",
+      "operator_typing",
+      "stale_snapshot"
+    ],
+    "P45SVMW86K": [
+      "cooldown",
+      "no_up_server",
+      "operator_typing",
+      "stale_snapshot"
+    ],
+    "C2XNP15FZJ": [
+      "no_up_server",
+      "operator_typing",
+      "stale_snapshot"
+    ],
+    "YJ0F5QE341": [
+      "no_up_server",
+      "operator_typing",
+      "stale_snapshot"
+    ]
+  },
+  "skip_violations": [],
+  "skip_violation_count": 0,
+  "checks": {
+    "18 ходов OK": true,
+    "0 ошибок ходов": true,
+    "все запросы доставлены (54)": true,
+    "аренд ≤1/сервер (0 нарушений)": true,
+    "снятие аренды ≤8с": true,
+    "dispatch p95 ≤1500мс": true,
+    "каждое SKIP имеет ineligible_reason": true
+  },
+  "PASS": true
+}

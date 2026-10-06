@@ -1,0 +1,13 @@
+{
+  "after_version": "e2e-v2",
+  "before_version": "e2e-v1",
+  "elapsed_ms": 305,
+  "limit_ms": 120000,
+  "pass": true,
+  "sessions_after": [
+    "S7VS78SJSZ"
+  ],
+  "sessions_before": [
+    "S7VS78SJSZ"
+  ]
+}

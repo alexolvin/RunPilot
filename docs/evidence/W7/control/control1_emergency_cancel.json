@@ -1,0 +1,11 @@
+{
+  "all_flows_cancelled_within_limit": true,
+  "cancel_elapsed_ms": 1,
+  "hold_detail": null,
+  "limit_ms": 2000,
+  "mode": "EMERGENCY",
+  "pass": true,
+  "sessions_before": 2,
+  "sessions_hold_emergency": true,
+  "streams_before": 2
+}

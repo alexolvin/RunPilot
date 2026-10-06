@@ -1,0 +1,10 @@
+PASS config — загружен /home/user/.config/runpilot/config.yaml
+PASS allow_cidrs — 2 CIDR
+PASS coordinator_bind — bind 100.124.155.106 входит в allow_cidrs
+PASS secrets_env — все секреты — через переменные окружения
+PASS tmux — tmux 3.2a
+PASS qwen_settings — selectedType=openai, modelProviders: 2 эндов без коллизии (шлюз по умолчанию, переключение в /model)
+PASS qwen_timeout_guard — qwen 0.25.0: QWEN_CODE_API_TIMEOUT_MS присутствует (/home/user/.qwen/updates/npm/f8b0b7826ba50adc/versions/0.25.0/node_modules/@qwen-code/qwen-code)
+PASS file_mode — 0600: /home/user/.config/runpilot/config.yaml, /home/user/.local/share/runpilot/runpilot.db
+PASS metrics — серверов в конфигурации нет
+PASS require_direct — серверов с require_direct нет

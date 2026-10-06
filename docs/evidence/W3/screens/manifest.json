@@ -1,0 +1,120 @@
+{
+  "stage": "W3",
+  "commit": "a8ffdea1b7d6320df299e88f2e8130a29ee3e664",
+  "time": "2026-09-29T11:45:30Z",
+  "web_url": "http://127.0.0.1:39293",
+  "files": [
+    "empty__login__1440x900__light.png",
+    "empty__queue__1440x900__light.png",
+    "empty__login__1440x900__dark.png",
+    "empty__queue__1440x900__dark.png",
+    "empty__login__1024x768__light.png",
+    "empty__queue__1024x768__light.png",
+    "empty__login__390x844__light.png",
+    "empty__queue__390x844__light.png",
+    "empty__login__390x844__dark.png",
+    "empty__queue__390x844__dark.png"
+  ],
+  "checks": {
+    "empty__login__1024x768__light.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1024\u003c=1024",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 3)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "empty__login__1440x900__dark.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 3)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "empty__login__1440x900__light.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 3)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "empty__login__390x844__dark.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 3)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "empty__login__390x844__light.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 3)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "empty__queue__1024x768__light.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1024\u003c=1024",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "empty__queue__1440x900__dark.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "empty__queue__1440x900__light.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 1440\u003c=1440",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 2)",
+      "touch": "n/a",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "empty__queue__390x844__dark.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    },
+    "empty__queue__390x844__light.png": {
+      "console": "ok",
+      "network": "ok",
+      "scroll": "ok 390\u003c=390",
+      "text": "ok",
+      "axe": "ok (0 serious/critical из 1)",
+      "touch": "ok",
+      "fonts": "ok",
+      "golden": "created"
+    }
+  }
+}

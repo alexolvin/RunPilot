@@ -1,0 +1,23 @@
+01 ascii           35B OK               вставлено
+02 cyrillic        82B OK               вставлено
+03 emoji           68B OK               вставлено
+04 mixed-uni       51B OK               вставлено
+05 numbers         32B OK               вставлено
+06 punct           31B OK               вставлено
+07 special         46B OK               вставлено
+08 longword        68B OK               вставлено
+09 ml-2            81B OK               вставлено
+10 ml-3            43B OK               вставлено
+11 ml-5            44B OK               вставлено
+12 code            33B OK               вставлено
+13 1KB           1024B OK               вставлено
+14 8KB-cy       16000B OK               вставлено
+15 8KB-ascii     8000B OK               вставлено
+16 16KB         16000B OK               вставлено
+17 32KB-cy      64000B OK               вставлено
+18 64KB-max     65536B OK               вставлено
+19 cjk-emoji       49B OK               вставлено
+20 mixed-long      65B OK               вставлено
+
+RESULT: PASTED=20/20  PASTE_SUBMITTED=0  other=0
+CONTROL1 PASS

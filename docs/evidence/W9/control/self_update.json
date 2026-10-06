@@ -1,0 +1,51 @@
+{
+  "control": 5,
+  "requirement": "≥1 самообновление узла без потери сессий (раздел 20 W9, механизм 14.2)",
+  "date": "2026-09-29",
+  "result": "PASS",
+  "trigger": {
+    "api": "POST /api/v1/nodes/vzu5-big/update (Bearer AQM_TOKEN)",
+    "response": {"host": "vzu5-big", "result": "update-requested"},
+    "time_utc": "2026-09-29T01:08:18Z"
+  },
+  "cycle": {
+    "download": "координатор (B3) → /api/v1/dist/aqm, Bearer AQM_NODE_TOKEN (200; операторский токен — 401)",
+    "sha256": "сошёлся (контроль узла)",
+    "selftest": "aqm.new selftest — 0",
+    "swap": "aqm → aqm.prev, aqm.new → aqm",
+    "exit_code": 75,
+    "systemd": "Restart=on-failure: 'Scheduled restart job, restart counter is at 1'",
+    "exit75_time_utc": "2026-09-29T01:08:24Z",
+    "restart_time_utc": "2026-09-29T01:08:29Z",
+    "cycle_sec": 11
+  },
+  "binary": {
+    "before": "~/.local/bin/aqm 27671392 B (B2, mtime Sep 29 02:58)",
+    "after": "~/.local/bin/aqm 27671536 B (B3, mtime Sep 29 03:08)",
+    "prev": "~/.local/bin/aqm.prev 27671392 B (B2, сохранён)"
+  },
+  "service": {
+    "NRestarts": 1,
+    "ActiveState": "active",
+    "journal": "Failed with result 'exit-code' (75) → restart counter 1 → Started → 'node: старт'"
+  },
+  "sessions": {
+    "before": ["8Q0DJM0NQ7 w9-test IDLE", "D47TWDXBND w9-test2 GONE", "J8AK6JTVF9 w9-test3 GONE", "XGMSZH28SC w9-echo GONE"],
+    "after": "дифф пуст — все 4 SID сохранились, состояния без изменений",
+    "tmux_alive": ["w9-echo", "w9-test3"]
+  },
+  "node_after": {
+    "health": "vzu5-big health@ 2026-09-29T01:09:17Z (свежий после рестарта)",
+    "coordinator_sees": "vzu5-big подключился, version 0.0.0-dev"
+  },
+  "defects_fixed_for_this_control": [
+    "TZ 14.2 exit-75 отсутствовал в проде: узел переподключался старым кодом — ErrUpdated + os.Exit(exitSelfUpdated) + регрессия TestWSClientSelfUpdateExits",
+    "ответ UPDATED терялся: awaitReplyFlush ждал сток канала, а не завершение WriteJSON писателем (ранний conn.Close обрывал кадр; репро 200/200 потерь) — барьер записи flushReq",
+    "URL дистрибутива строился из gateway_url (шлюз :8787), а /api/v1/dist/aqm живёт на API (:8788) → узел получал 404 и self-update молча падал (координатор возвращал update-requested при UPDATE_FAILED) — requestBaseNoPath = bind:api_port, регрессия в TestTE_N4"
+  ],
+  "enrollment": {
+    "api": "POST /api/v1/nodes/enroll → token f9cfd02d… (обезличено в репо), POST /enroll/<token>/claim {host: vzu5-big}",
+    "node_config": "client.token_env: AQM_NODE_TOKEN (~/.config/aqm/env, 600)",
+    "dist_auth": "node token → 200; операторский токен → 401"
+  }
+}

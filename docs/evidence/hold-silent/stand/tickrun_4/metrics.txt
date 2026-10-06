@@ -1,0 +1,22 @@
+RUN=4  START=2026-10-06T14:41:58.767Z  B_ENTER=2026-10-06T14:42:00.988Z  A_DONE=2026-10-06T14:42:58.777Z  B_DONE=2026-10-06T14:43:01.795Z
+A_LEASE_ACTIVE=yes  A_LEASE_AT=2026-10-06T14:41:58.773331398Z
+--- A http ---
+http=200 t_total=60.002034
+--- B requests (this run: t_start>=2026-10-06T14:41:58.767Z) ---
+id,sid,status,held_ms,t_start,t_end,error
+14,3GV3DEP46A,200,60082,2026-10-06T14:42:01.013746107Z,2026-10-06T14:43:01.100508031Z,""
+15,3GV3DEP46A,200,0,2026-10-06T14:43:01.250303076Z,2026-10-06T14:43:01.252806059Z,""
+16,3GV3DEP46A,200,0,2026-10-06T14:43:01.28659601Z,2026-10-06T14:43:01.287397628Z,""
+--- LEASE events (latest A release + latest B grant) ---
+ts,kind,sid
+2026-10-06T14:42:59.093954552Z,LEASE_RELEASE,WM35ND67S3
+ts,kind,sid
+2026-10-06T14:43:01.095905975Z,LEASE_GRANT,3GV3DEP46A
+--- B @runpilot_status samples ---
+[1] @runpilot_status ''
+[2] @runpilot_status "Q 1/1 held"
+[3] @runpilot_status "Q 1/1 held"
+[4] @runpilot_status "Q 1/1 held"
+[5] @runpilot_status "Q 1/1 held"
+--- queue_entry B (сейчас) ---
+Error: no such column: reason

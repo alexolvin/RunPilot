@@ -1,0 +1,10 @@
+{
+  "binary_after": "w7e2e-v1",
+  "binary_before": "w7e2e-v2",
+  "binary_restored": true,
+  "db_last_alive_at_after": "2000-01-01T00:00:00Z",
+  "db_restored": true,
+  "expected_binary": "w7e2e-v1",
+  "expected_db_year": 2000,
+  "pass": true
+}

@@ -1,0 +1,20 @@
+{
+  "control": 7,
+  "host": "3p14-aaa",
+  "command": "aqm doctor",
+  "date": "2026-09-29",
+  "rc": 0,
+  "result": "PASS",
+  "output": [
+    "PASS config — загружен /home/user/.config/aqm/config.yaml",
+    "PASS allow_cidrs — 2 CIDR",
+    "PASS coordinator_bind — bind 100.124.155.106 входит в allow_cidrs",
+    "PASS secrets_env — все секреты — через переменные окружения",
+    "PASS tmux — tmux 3.2a",
+    "PASS qwen_settings — selectedType=openai, ModelAlias в modelProviders отсутствует",
+    "PASS file_mode — 0600: /home/user/.config/aqm/config.yaml, /home/user/.local/share/aqm/aqm.db",
+    "PASS metrics — серверов в конфигурации нет",
+    "PASS require_direct — серверов с require_direct нет"
+  ],
+  "note": "серверы локального деплоя живут в БД (миграция W2), не в config.yaml"
+}

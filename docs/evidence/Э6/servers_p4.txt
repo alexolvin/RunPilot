@@ -1,0 +1,3 @@
+SERVER  PRIO  STATE  SLOTS  SESSIONS  GPU  VRAM   KV  GEN  EXT
+fa      100   UP     0/2    —         99%  45/48  0%  0    0
+dead    10    DOWN   0/1    —         —    —      —   —    —

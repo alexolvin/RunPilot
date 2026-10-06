@@ -1,0 +1,56 @@
+{
+  "_comment": "Живой стэнд W1 CONTROL 6. aqm serve (embedded_node:true, node.tmux_sockets=[aqmtest], scan_interval_sec:1, API 127.0.0.1:18188) на хосте координатора 3p14-aaa; отдельной службы aqm-node НЕТ. aqm run --name test --detach зарегистрировал сессию R6MT44763K; на сокете aqmtest жива управляемая qwen-панель (@aqm_sid). Вывод: GET /api/v1/state (Authorization: Bearer). Узел хоста, его панель и сессия хоста видны — встроенный узел отчитывается через общий с WS-узлом путь (hub.Register + NodeSeen + ApplyNodeMsg, транспорт memConn). Панель %0 — управляемая qwen-панель хоста (sid = R6MT44763K); сессия зарегистрирована aqm run.",
+  "mode": "NORMAL",
+  "sessions": [
+    {
+      "SID": "R6MT44763K",
+      "Name": "test",
+      "Host": "3p14-aaa",
+      "HostIP": "127.0.0.1",
+      "TmuxSession": "test",
+      "Window": 0,
+      "PaneID": "%18",
+      "Profile": "qwen",
+      "State": "IDLE",
+      "Class": 2,
+      "ConstraintKind": "none",
+      "AutoEnqueue": false,
+      "Attempts": 0,
+      "actions": [
+        { "id": "enqueue", "enabled": true },
+        { "id": "dequeue", "enabled": false, "reason": "сессия не в очереди" },
+        { "id": "cancel", "enabled": false, "reason": "нет идущего хода" },
+        { "id": "hold", "enabled": true },
+        { "id": "release", "enabled": false, "reason": "сессия не удержана" },
+        { "id": "close", "enabled": true }
+      ]
+    }
+  ],
+  "panes": [
+    {
+      "Pane": {
+        "pane_id": "%0",
+        "sid": "R6MT44763K",
+        "state": "IDLE",
+        "hash": 1011053595100602746,
+        "stable_since": "2026-09-26T03:55:54.235060814Z",
+        "input_empty": true
+      },
+      "Host": "3p14-aaa",
+      "ReceivedAt": "2026-09-26T03:55:54.236971419Z"
+    }
+  ],
+  "nodes": [
+    {
+      "Host": "3p14-aaa",
+      "HostIP": "127.0.0.1",
+      "AQMVersion": "0.0.0-dev",
+      "TmuxVersion": "tmux 3.2a",
+      "OS": "linux",
+      "Sockets": ["aqmtest"],
+      "actions": [
+        { "id": "drain", "enabled": true }
+      ]
+    }
+  ]
+}

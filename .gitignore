@@ -31,7 +31,10 @@ kubeconfig
 *.kubeconfig
 
 # --- agent / local AI tooling (never publish) ---
-.agent/
+# .agent: tooling (tasks/, design/) — не публикуется; docs/ (HANDOFF + стандарт) — в git
+.agent/**
+!.agent/docs/
+!.agent/docs/*.md
 .agents/
 .qwen/
 .claude/
@@ -87,4 +90,15 @@ temp/
 
 # --- local-only, не публикуется ---
 manual.md
-docs/evidence/
+
+# --- docs/evidence: артефакты (.md/.json/.txt) в git, рантайм стендов — нет ---
+docs/evidence/**
+!docs/evidence/**/
+docs/evidence/**/data
+docs/evidence/**/logs
+docs/evidence/**/tmux
+docs/evidence/**/work
+docs/evidence/**/home
+!docs/evidence/**/*.md
+!docs/evidence/**/*.json
+!docs/evidence/**/*.txt

@@ -1,0 +1,137 @@
+# Э5 CLI --json evidence (live stand, coordinator 27788)
+
+## aqm ls --json
+[
+  {
+    "SID": "KN9YJPWBWP",
+    "Name": "smoke1",
+    "Host": "3p14-aaa",
+    "HostIP": "",
+    "TmuxSession": "smoke1",
+    "Window": 0,
+    "PaneID": "%0",
+    "Profile": "qwen",
+    "AgentVersion": "mock",
+    "State": "HOLD",
+    "StateChangedAt": "2026-09-25T08:22:35.433521599Z",
+    "HoldReason": "EMPTY_INPUT",
+    "Class": 3,
+    "ConstraintKind": "none",
+    "ConstraintServer": "",
+    "AutoEnqueue": true,
+    "LastServer": "",
+    "LastTurnEnd": "0001-01-01T00:00:00Z",
+    "LastMigratedFrom": "",
+    "Attempts": 0,
+    "CreatedAt": "2026-09-25T08:17:26.063350438Z"
+  }
+]
+
+## aqm q --json
+[
+  {
+    "rank": 1,
+    "mode": "submit",
+    "class": "low",
+    "session": "smoke1",
+    "host": "3p14-aaa",
+    "sid": "KN9YJPWBWP",
+    "wait_sec": 433,
+    "attempts": 0
+  }
+]
+
+## aqm servers --json
+[
+  {
+    "name": "a",
+    "priority": 10,
+    "state": "UP",
+    "slots": 1,
+    "used": 0,
+    "slots_info": [
+      {
+        "slot": 1,
+        "state": "free"
+      }
+    ]
+  },
+  {
+    "name": "b",
+    "priority": 5,
+    "state": "UP",
+    "slots": 1,
+    "used": 0,
+    "slots_info": [
+      {
+        "slot": 1,
+        "state": "free"
+      }
+    ]
+  }
+]
+
+## aqm why smoke1 --json
+{
+  "sid": "KN9YJPWBWP",
+  "state": "HOLD",
+  "candidates": [
+    "a",
+    "b"
+  ]
+}
+
+## aqm stats --json
+{
+  "by_server": [],
+  "by_session": []
+}
+
+## aqm events --json --limit 5
+[
+  {
+    "kind": "NODE_STATE",
+    "server": "3p14-aaa",
+    "ts": "2026-09-25T08:24:37.436989271Z",
+    "payload": {
+      "host": "3p14-aaa",
+      "state": "UP"
+    }
+  },
+  {
+    "kind": "NODE_STATE",
+    "server": "3p14-aaa",
+    "ts": "2026-09-25T08:26:37.437264408Z",
+    "payload": {
+      "host": "3p14-aaa",
+      "state": "DOWN"
+    }
+  },
+  {
+    "kind": "NODE_STATE",
+    "server": "3p14-aaa",
+    "ts": "2026-09-25T08:26:41.442602568Z",
+    "payload": {
+      "host": "3p14-aaa",
+      "state": "UP"
+    }
+  },
+  {
+    "kind": "NODE_STATE",
+    "server": "3p14-aaa",
+    "ts": "2026-09-25T08:28:41.443316662Z",
+    "payload": {
+      "host": "3p14-aaa",
+      "state": "DOWN"
+    }
+  },
+  {
+    "kind": "NODE_STATE",
+    "server": "3p14-aaa",
+    "ts": "2026-09-25T08:28:49.452468295Z",
+    "payload": {
+      "host": "3p14-aaa",
+      "state": "UP"
+    }
+  }
+]

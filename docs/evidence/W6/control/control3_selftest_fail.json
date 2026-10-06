@@ -1,0 +1,6 @@
+{
+  "bin_version": "e2e-v1",
+  "node_version": "e2e-v1",
+  "pass": true,
+  "want": "e2e-v1"
+}

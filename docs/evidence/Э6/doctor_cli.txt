@@ -1,0 +1,9 @@
+PASS config — загружен /tmp/aqm-e6/config.yaml
+PASS allow_cidrs — 1 CIDR
+PASS coordinator_bind — bind 127.0.0.1 входит в allow_cidrs
+PASS secrets_env — все секреты — через переменные окружения
+PASS tmux — tmux 3.2a
+PASS qwen_settings — selectedType=openai, ModelAlias в modelProviders отсутствует
+PASS file_mode — 0600: /tmp/aqm-e6/config.yaml, /tmp/aqm-e6/aqm.db
+WARN metrics — dead: http://127.0.0.1:8899/metrics недоступен (metrics_missing)
+PASS require_direct — 1 серверов: один vLLM на апстриме
