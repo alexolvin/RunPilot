@@ -1,7 +1,7 @@
 # HANDOFF
 Обновлено: 2026-10-06 (доработка v1 → v2 после провала на vzu5-claw)
 
-## Доработка после провала v1 на vzu5-claw: 4 пункта (2026-10-06) — ТЕКУЩЕ
+## Доработка после провала v1 на vzu5-claw: 4 пункта (2026-10-06) — ВЫПОЛНЕНО
 
 > Оператор запустил `upgrade-node.sh` (v1) на vzu5-claw: обновление прошло,
 > doctor FAIL на file_mode (config.yaml=664), откат упал на `cp: Text file busy`
@@ -19,10 +19,13 @@
   — оба файла получают `chmod 600` после создания. Тест
   `TestNodeEnrollFileSetupUmask` (umask 0002 в дочернем bash → оба файла 0600;
   без chmod было бы 0664) — PASS. `go test -race ./internal/api/` + staticcheck OK.
-- **п.3 — .gitignore: docs/evidence/ + .agent/docs/ в git — ⏳ (в работе).**
-  Каталоги рантайма стендов (data/, logs/, tmux/, work/, home/) остаются
-  проигнорированными; артефакты .md/.json/.txt + HANDOFF — в коммит.
-- **п.4 — HANDOFF обновлять после каждого пункта — в процессе.**
+- **п.3 — .gitignore: docs/evidence/ + .agent/docs/ в git — ✅ DONE**
+  (коммит `8acfde7`). Каталоги рантайма стендов (data/, logs/, tmux/, work/,
+  home/) остаются проигнорированными; артефакты .md/.json/.txt (155 файлов,
+  ~0.5MB) + HANDOFF + GITHUB_PUBLICATION_STANDARD.md — в git. `git add -n`:
+  157 файлов (45 .json, 46 .md, 66 .txt), 0 runtime-файлов.
+- **п.4 — HANDOFF обновлять после каждого пункта — ✅ DONE.** Обновлялось после
+  п.1 (`a4a534b`), п.2 (`e796851`), п.3 (`8acfde7`).
 
 ## Повторный выкат 3p14-aaa: 6 пунктов (2026-10-06) — ВЫПОЛНЕНО
 
