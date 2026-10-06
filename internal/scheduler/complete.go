@@ -19,14 +19,16 @@ func (s *Scheduler) tickComplete(now time.Time) {
 			continue
 		}
 		switch sess.State {
-		case model.SessionRunning:
+		case model.SessionRunning, model.SessionDetached:
+			// RUNNING и DETACHED (§8 ТЗ). DISPATCHING ход НЕ завершает —
+			// только путями подтверждения старта (см. tickConfirm).
 			s.checkTurn(sess, now)
 		}
 	}
 }
 
-// checkTurn — одна RUNNING-сессия: завершение хода либо снятие аренды
-// посреди хода.
+// checkTurn — завершение хода (RUNNING и DETACHED) либо снятие аренды
+// посреди хода (только RUNNING). Правило завершения — раздел 8 ТЗ.
 func (s *Scheduler) checkTurn(sess store.SessionRecord, now time.Time) {
 	pr := s.paneRec[sess.SID]
 	inflight := s.inflight[sess.SID]
@@ -44,63 +46,94 @@ func (s *Scheduler) checkTurn(sess store.SessionRecord, now time.Time) {
 		return
 	}
 
-	// --- Снятие аренды посреди хода (раздел 8, таблица) ---
+	// --- Снятие аренды посреди хода (только RUNNING; раздел 8, таблица) ---
+	if sess.State == model.SessionRunning {
+		// Панель BUSY, запросов нет tool_hold_max_sec → TOOL_TIMEOUT.
+		if pr != nil && pr.state == model.PaneBusy && inflight == 0 {
+			since := time.Time{}
+			if haveEnd && lastEnd.After(since) {
+				since = lastEnd
+			}
+			if pr.stateSince.After(since) {
+				since = pr.stateSince
+			}
+			if !since.IsZero() && now.Sub(since) >= s.toolHoldMax() {
+				s.releaseLeaseLocked(sess.SID, model.ReleaseToolTimeout, now)
+				s.sessionEvent(sess, model.EvLeaseRevoked, "")
+				return
+			}
+		}
 
-	// Панель BUSY, запросов нет tool_hold_max_sec → TOOL_TIMEOUT.
-	if pr != nil && pr.state == model.PaneBusy && inflight == 0 {
-		since := time.Time{}
-		if haveEnd && lastEnd.After(since) {
-			since = lastEnd
+		// Панель PROMPT approval_hold_max_sec → APPROVAL_TIMEOUT
+		// (уведомление — сразу при входе в PROMPT, в PaneUpdate).
+		if pr != nil && pr.state == model.PanePrompt {
+			if now.Sub(pr.stateSince) >= s.approvalHoldMax() {
+				s.releaseLeaseLocked(sess.SID, model.ReleaseApprovalTimeout, now)
+				s.sessionEvent(sess, model.EvLeaseRevoked, "")
+				return
+			}
 		}
-		if pr.stateSince.After(since) {
-			since = pr.stateSince
-		}
-		if !since.IsZero() && now.Sub(since) >= s.toolHoldMax() {
-			s.releaseLeaseLocked(sess.SID, model.ReleaseToolTimeout, now)
-			s.sessionEvent(sess, model.EvLeaseRevoked, "")
-			return
+
+		// Панель UNKNOWN unknown_max_sec, inflight = 0 → PANE_UNKNOWN.
+		// Ход НЕ закрывается: строка turn остаётся открытой.
+		if pr != nil && pr.state == model.PaneUnknown && inflight == 0 {
+			if now.Sub(pr.stateSince) >= s.unknownMax() {
+				s.releaseLeaseLocked(sess.SID, model.ReleasePaneUnknown, now)
+				s.sessionEvent(sess, model.EvErrorFatal, model.HoldPaneUnknown)
+				return
+			}
 		}
 	}
 
-	// Панель PROMPT approval_hold_max_sec → APPROVAL_TIMEOUT
-	// (уведомление — сразу при входе в PROMPT, в PaneUpdate).
-	if pr != nil && pr.state == model.PanePrompt {
-		if now.Sub(pr.stateSince) >= s.approvalHoldMax() {
-			s.releaseLeaseLocked(sess.SID, model.ReleaseApprovalTimeout, now)
-			s.sessionEvent(sess, model.EvLeaseRevoked, "")
-			return
-		}
-	}
-
-	// Панель UNKNOWN unknown_max_sec, inflight = 0 → PANE_UNKNOWN.
-	// Ход НЕ закрывается: строка turn остаётся открытой.
-	if pr != nil && pr.state == model.PaneUnknown && inflight == 0 {
-		if now.Sub(pr.stateSince) >= s.unknownMax() {
-			s.releaseLeaseLocked(sess.SID, model.ReleasePaneUnknown, now)
-			s.sessionEvent(sess, model.EvErrorFatal, model.HoldPaneUnknown)
-			return
-		}
-	}
-
-	// --- Завершение хода (все условия одновременно) ---
-	// inflight = 0 и с last_request_end ≥ done_quiet_sec; панель именно
-	// IDLE и с stable ≥ done_stable_sec.
-	if pr == nil || pr.state != model.PaneIdle {
-		return
-	}
-	if inflight != 0 {
-		return
-	}
-	reqCount := s.turnRequests(turn.StartedAt, sess.SID)
-	if reqCount > 0 {
-		if !haveEnd || now.Sub(lastEnd) < s.doneQuiet() {
-			return
-		}
-	}
-	if pr.paneID == "" || now.Sub(pr.hashSince) < s.doneStable() {
+	// --- Завершение хода (RUNNING и DETACHED; раздел 8 ТЗ) ---
+	// Все условия одновременно:
+	//  1. панель IDLE;
+	//  2. панель стабильна с момента СТАРТА хода (stable_since ≥ started_at,
+	//     а не «стабильна до хода» — это гасит фантомное закрытие после долгого
+	//     ожидания в очереди) и ≥ done_stable_sec;
+	//  3. тишина: last_request_end только из запросов текущего хода; ход без
+	//     запросов — тишина от turn.started_at (≥ done_quiet_sec).
+	if !s.turnDone(sess, pr, inflight, lastEnd, haveEnd, turn, now) {
 		return
 	}
 	s.closeTurn(sess, turn, now)
+}
+
+// turnDone — условие завершения хода (раздел 8 ТЗ). Возвращает false, пока
+// ход не завершён. Панель — IDLE. Общее условие (ко ВСЕМ ходам):
+//   - анти-фантом: панель стабильна именно ПОСЛЕ старта хода
+//     (stable_since ≥ turn.started_at — иначе это «стабильность до хода»,
+//     т.е. фантом после долгого ожидания в очереди / кодер не отработал) и
+//     стабильность ≥ done_stable_sec.
+// Плюс тишина (зависит от запросов хода):
+//   - ход С запросами: тишина от last_request_end (запроса текущего хода) ≥
+//     done_quiet_sec;
+//   - ход БЕЗ запросов: тишина от turn.started_at ≥ done_quiet_sec.
+func (s *Scheduler) turnDone(sess store.SessionRecord, pr *paneRec, inflight int,
+	lastEnd time.Time, haveEnd bool, turn *model.Turn, now time.Time) bool {
+	if pr == nil || pr.state != model.PaneIdle {
+		return false
+	}
+	if inflight != 0 || pr.paneID == "" {
+		return false
+	}
+	// Анти-фантом (ко всем ходам): хеш панели должен измениться ПОСЛЕ старта
+	// хода (stable_since ≥ turn.started_at), а не быть стабильным до него.
+	if pr.hashSince.Before(turn.StartedAt) {
+		return false
+	}
+	if now.Sub(pr.hashSince) < s.doneStable() {
+		return false
+	}
+	if s.turnRequests(turn.StartedAt, sess.SID) > 0 {
+		// Ход с запросами: тишина от last_request_end (запроса хода).
+		if !haveEnd || now.Sub(lastEnd) < s.doneQuiet() {
+			return false
+		}
+		return true
+	}
+	// Ход без запросов: тишина от started_at.
+	return now.Sub(turn.StartedAt) >= s.doneQuiet()
 }
 
 // closeTurn — завершение хода (раздел 8 ТЗ): исход по последнему
@@ -148,7 +181,7 @@ func (s *Scheduler) closeTurn(sess store.SessionRecord, turn *model.Turn, now ti
 	_ = s.st.SetSessionLastMigratedFromEmpty(sess.SID)
 
 	// S11: предварительная постановка RUNNING — enqueued_at переписывается
-	// на время конца хода.
+	// на время конца хода (общий QueueUpsert: перезапись).
 	if e, err := s.st.QueueGet(sess.SID); err == nil {
 		if !e.EnqueuedAt.IsZero() && !e.EnqueuedAt.Before(turn.StartedAt) {
 			e.EnqueuedAt = now
@@ -165,7 +198,13 @@ func (s *Scheduler) closeTurn(sess store.SessionRecord, turn *model.Turn, now ti
 	switch result {
 	case model.ResultOK:
 		_ = s.st.SetSessionAttempts(sess.SID, 0)
-		s.sessionEvent(sess, model.EvTurnDone, "")
+		// RUNNING → IDLE (turn_done); DETACHED → IDLE (idle_no_error): из
+		// DETACHED нет перехода по EvTurnDone (автомат, раздел 4 ТЗ).
+		if sess.State == model.SessionDetached {
+			s.sessionEvent(sess, model.EvIdleNoError, "")
+		} else {
+			s.sessionEvent(sess, model.EvTurnDone, "")
+		}
 	case model.ResultErrorTransient:
 		s.requeueOrHold(sess, now)
 	case model.ResultErrorClient:
@@ -207,7 +246,7 @@ func (s *Scheduler) releaseLeaseLocked(sid, reason string, now time.Time) {
 	if err == nil {
 		_ = s.st.LeaseRelease(sid, reason, now)
 		s.slotFree(lease.Server, lease.Slot, now)
-		s.event(model.KindLeaseRelease, sid, lease.Server, map[string]any{
+		s.eventAt(now, model.KindLeaseRelease, sid, lease.Server, map[string]any{
 			"reason": reason, "server": lease.Server, "slot": lease.Slot,
 		})
 		s.wake()
@@ -215,11 +254,26 @@ func (s *Scheduler) releaseLeaseLocked(sid, reason string, now time.Time) {
 }
 
 // setCooldown — слот → COOLDOWN на scheduler.cooldown_sec (раздел 8 ТЗ).
+//
+// Граница тика (фикс): окончание COOLDOWN — событие планировщика. При
+// освобождении (at) ставится таймер internal/clock на at+cooldown_sec; его
+// срабатывание запускает Tick, как любое другое событие. Тогда тик
+// (tickCooldown→slotFree, tickGrant→выдача) происходит ровно в
+// at+cooldown_sec, а не на следующем периодическом тике (раньше задержка
+// выдачи равнялась cooldown + до tick_ms). Периодический тик — сеть
+// безопасности (идемпотентен: LeaseCreateIfAbsent + запись уже снята).
+// Один now на тик сохраняется (выдача берёт now этого тика).
 func (s *Scheduler) setCooldown(server string, slot int, at time.Time) {
 	if s.cooldown[server] == nil {
 		s.cooldown[server] = map[int]time.Time{}
 	}
 	s.cooldown[server][slot] = at.Add(s.cooldownDur())
+	s.clk.AfterFunc(s.cooldownDur(), func() {
+		if s.closed.Load() {
+			return
+		}
+		s.Tick()
+	})
 }
 
 // tickCooldown — истёкшие COOLDOWN-слоты (для LRU-пометки).

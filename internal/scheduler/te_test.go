@@ -35,7 +35,10 @@ func TestTE_S6(t *testing.T) {
 	// Запрос асинхронный: дождаться коммита (иначе ход сочтён OK).
 	waitLastGenerative(t, h, "s1", 400)
 	h.sch.RequestTick("s1", false) // запрос завершился → last_request_end
-	h.idlePane("s1", "host")
+	// Кодер отработал запрос: панель изменилась ПОСЛЕ старта хода (hash 1→2).
+	// Условие закрытия: stable_since ≥ turn.started_at (ко всем ходам).
+	h.advance(time.Second)
+	h.setPane("s1", "host", model.PaneIdle, 2, false)
 	quiet := time.Duration(h.cfg.Turn.DoneQuietSec) * time.Second
 	stable := time.Duration(h.cfg.Turn.DoneStableSec) * time.Second
 	h.advance(quiet + stable + time.Second)
