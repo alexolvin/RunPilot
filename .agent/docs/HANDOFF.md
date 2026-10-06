@@ -1,5 +1,42 @@
 # HANDOFF
-Обновлено: 2026-10-07 (W11: upgrade-node.sh / doctor coder-процесс / кодер вне очереди / строки оператору / выкат 5dd21db)
+Обновлено: 2026-10-07 (W11 п.3 редизайн: единое правило «кодер вне очереди» + повторный выкат 2bca630)
+
+## W11 (п.3, редизайн) — единое правило «кодер вне очереди» + повторный выкат (2026-10-07) — ВЫПОЛНЕНО
+
+> Директива: «W11 принят, кроме п.3». Два механизма одного правила — дефект по
+> правилу 2 ТЗ (doctor — по отсутствию OPENAI_BASE_URL, веб — по сканеру
+> isUnder/isRunpilot). Порядок: 1 (единое правило) → 2 (ворота + выкат из HEAD +
+> строка обновления узла с новым SHA256).
+
+- **п.1 — единое правило «кодер вне очереди» (doctor + веб) — ✅ DONE** (коммит
+  `2bca630`). Кодер УПРАВЛЯЕМ **тогда и только тогда**, когда (а) потомок
+  панели живой сессии (sessionSID≠"") И (б) OPENAI_BASE_URL =
+  gateway_url/s/<sid>/v1. Реализация — **одна** функция
+  `node.CoderOutOfQueue(sessionSID, openAIBaseURL, gatewayURL)` (+
+  `GatewayCoderURL`), её вызывают и doctor (`coder_out_of_queue`), и
+  `node.ScanExternal`. Убрана проверка по отсутствию OPENAI_BASE_URL (doctor) и
+  isUnder/isRunpilot (веб). Узел хранит gateway_url: init из config + из
+  KindConfig (координатор пушит реальное значение — удалённый узел с минимальным
+  конфигом иначе видел дефолт 127.0.0.1 и ложно сажал кодеров панелей).
+  Тесты: 4 случая правила (нет URL / vLLM / чужой sid / живой кодер) +
+  интеграционные ScanExternal; doctor OOQ: manual/managed/foreign/vLLM.
+  **Следствие (зафиксировано, не регрессия):** `runpilot exec` (cron, foreground,
+  не tmux-панель) теперь «вне очереди» — не потомок панели с sid.
+- **п.2 — ворота + повторный выкат координатора из HEAD `2bca630` — ✅ DONE.**
+  Ворота: `go test -race ./…` (все пакеты ok / 0 FAIL) + `make staticcheck` (0) +
+  `make lint` (0). Бинарник из чистого HEAD (`vcs.modified=false`,
+  **SHA `2d4e09e9a4674a25dc0734a984dd2baffa47501e06da52695e4c6a2002a3954d`**) →
+  атомарная установка (бэкап `runpilot.bak-20261007T…Z` [5dd21db / `823a2432…`]
+  + `mv -f`) → `systemctl --user restart runpilot` (MainPID 946261 → **1054261**)
+  → `/proc/<pid>/exe` vcs=`2bca630` → doctor **PASS** (WARN
+  `coder_out_of_queue` = те же 3 ручных qwen — работа правила) → состояние 0
+  сессий, NORMAL, 2 узла (vzu5-claw реконнектнулся). Самодостаточная строка
+  обновления узла (deploy/README + этот HANDOFF) — новый SHA `2d4e09e9…`:
+  ```
+  scp 3p14-aaa:/mdisk/myhub/RunPilot/deploy/upgrade-node.sh /tmp/upgrade-node.sh \
+    && bash /tmp/upgrade-node.sh 2d4e09e9a4674a25dc0734a984dd2baffa47501e06da52695e4c6a2002a3954d 3p14-aaa
+  ```
+  Артефакт: `docs/evidence/coordinator-redeploy-2026-10-07/deploy.md`.
 
 ## W11 — 6 пунктов (2026-10-07) — ВЫПОЛНЕНО
 
