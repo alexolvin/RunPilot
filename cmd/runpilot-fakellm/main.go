@@ -44,8 +44,8 @@ func main() {
 	// уже идущие запросы не влияет (SetDelays читается в serveCompletion).
 	mux.HandleFunc("/_set-delays", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		firstMS, _ := strconv.ParseInt(q.Get("firstByteMs"), 10, 64)
-		chunkMS, _ := strconv.ParseInt(q.Get("chunkPauseMs"), 10, 64)
+		firstMS, _ := strconv.ParseInt(q.Get("firstByteMs"), base10, intBitSize)
+		chunkMS, _ := strconv.ParseInt(q.Get("chunkPauseMs"), base10, intBitSize)
 		chunks, _ := strconv.Atoi(q.Get("chunks"))
 		f.SetDelays(time.Duration(firstMS)*time.Millisecond, time.Duration(chunkMS)*time.Millisecond, chunks)
 		fmt.Fprintf(w, "ok firstByteMs=%d chunkPauseMs=%d chunks=%d\n", firstMS, chunkMS, chunks)

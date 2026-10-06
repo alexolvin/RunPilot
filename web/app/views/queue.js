@@ -8,7 +8,7 @@ import { get, post } from '../api.js';
 import { T } from '../i18n/ru.js';
 import { stateColorVar } from '../state-style.js';
 import { classLabel, whyText, fmtDur } from '../labels.js';
-import { UI, LAUNCH } from '../constants.js';
+import { UI, LAUNCH, FMT } from '../constants.js';
 import { ServerCard } from '../components/server-card.js';
 import { SessionRow } from '../components/session-row.js';
 import { EmptyState } from '../components/empty-state.js';
@@ -249,12 +249,12 @@ export function QueuePage() {
 function HeldTimer({ since }) {
   const [, force] = useState(0);
   useEffect(() => {
-    const h = setInterval(() => force((x) => x + 1), 1000);
+    const h = setInterval(() => force((x) => x + 1), FMT.msPerSec);
     return () => clearInterval(h);
   }, []);
   const start = new Date(since).getTime();
   const sec = start && !Number.isNaN(start)
-    ? Math.max(0, Math.floor((Date.now() - start) / 1000))
+    ? Math.max(0, Math.floor((Date.now() - start) / FMT.msPerSec))
     : null;
   return html`<span class="qrow-held" title=${T.queue.heldWait}>${fmtDur(sec)}</span>`;
 }

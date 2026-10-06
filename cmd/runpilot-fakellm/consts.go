@@ -6,4 +6,8 @@ const (
 	defaultPort = 8801
 	// floatBitSize — разрядность strconv.ParseFloat.
 	floatBitSize = 64
+	// base10 — основание системы счисления strconv.ParseInt (десятичное).
+	base10 = 10
+	// intBitSize — разрядность strconv.ParseInt (int64).
+	intBitSize = 64
 )
