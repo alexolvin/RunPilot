@@ -15,6 +15,7 @@ var qwenCmdlineRe = regexp.MustCompile(`(^|/)qwen(\s|$)`)
 func coderTimeoutEnvCtx() *Context {
 	cfg := &config.Config{}
 	cfg.Node.TmuxSockets = []string{"default"}
+	cfg.Coordinator.GatewayURL = "http://127.0.0.1:8787"
 	return &Context{Cfg: cfg, CfgPath: "/tmp/cfg.yaml", Cmdline: qwenCmdlineRe}
 }
 

@@ -360,6 +360,13 @@ func (n *Node) config(ctx context.Context, m proto.Msg) (*Reply, error) {
 	if len(m.ProjectRoots) > 0 {
 		n.SetProjectRoots(m.ProjectRoots)
 	}
+	// gateway_url координатора: единое правило «кодер вне очереди»
+	// (ScanExternal). Координатор пушит реальное значение — удалённый узел с
+	// минимальным конфигом иначе бы видел дефолт 127.0.0.1 и ложно сажал бы
+	// кодеров панелей (условие (б) правила).
+	if m.GatewayURL != "" {
+		n.SetGatewayURL(m.GatewayURL)
+	}
 	// W9 доп-3c: hello-ответ координатора (model_alias) — привести
 	// ~/.qwen/settings.json в порядок, чтобы окружение сессии шлюза
 	// (OPENAI_BASE_URL/OPENAI_MODEL) не перебивалось конфигом qwen.

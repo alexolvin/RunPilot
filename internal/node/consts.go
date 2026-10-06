@@ -30,8 +30,6 @@ const (
 	sourceSshd     = "sshd"
 	sourceTmux     = "tmux"
 	sourceOther    = "other"
-	// runpilotExe — базовое имя бинарника runpilot (исключение runpilot exec из внешних).
-	runpilotExe = "runpilot"
 
 	// proc — окружение процесса (8.2: OPENAI_BASE_URL из /proc environ).
 	procDir          = "/proc"

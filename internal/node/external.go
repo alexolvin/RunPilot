@@ -11,21 +11,42 @@ import (
 	"runpilot/internal/proto"
 )
 
+// GatewayCoderURL — URL шлюза кодера сессии: <gateway_url>/s/<sid>/v1.
+func GatewayCoderURL(gatewayURL, sid string) string {
+	return strings.TrimRight(gatewayURL, "/") + "/s/" + sid + "/v1"
+}
+
+// CoderOutOfQueue — единое правило «кодер вне очереди» (правило 2 ТЗ), общее
+// для doctor (coder_out_of_queue) и веба (ScanExternal). Процесс кодера
+// (cmdline_regex) УПРАВЛЯЕМ тогда и только тогда, когда выполнены оба условия:
+//   (а) он процесс кодера живой сессии — потомок панели с sid этой сессии
+//       (sessionSID != "");
+//   (б) его OPENAI_BASE_URL = gatewayURL/s/<sessionSID>/v1.
+// Всё остальное — вне очереди (true). Включает ручной запуск qwen (нет панели,
+// нет/чужой URL) и qwen под vLLM напрямую.
+func CoderOutOfQueue(sessionSID, openAIBaseURL, gatewayURL string) bool {
+	if sessionSID == "" {
+		return true
+	}
+	return openAIBaseURL != GatewayCoderURL(gatewayURL, sessionSID)
+}
+
 // ScanExternal — внешние кодеры (8.2 ТЗ): процессы, совпадающие с
-// cmdline_regex, вне любой tmux-панели (внутри tmux — UNMANAGED, текущее
-// поведение) и вне runpilot exec. environ(pid) — OPENAI_BASE_URL из /proc environ;
-// по нему координатор выводит target. source — цепочка родителей до PID 1.
-func ScanExternal(t *procTable, panePIDs map[int]bool, cmdlineRe *regexp.Regexp, environ func(pid int) string, cwd func(pid int) string) []proto.ExternalProc {
+// cmdline_regex, вне очереди по единому правилу CoderOutOfQueue.
+// panePIDToSID — панель → sid (managed: sid, unmanaged: ""); по потомству
+// панели определяем, сессия ли это и какой sid. gatewayURL — gateway_url
+// координатора (для условия (б) правила). environ(pid) — OPENAI_BASE_URL из
+// /proc environ; по нему координатор выводит target. source — цепочка
+// родителей до PID 1.
+func ScanExternal(t *procTable, panePIDToSID map[int]string, cmdlineRe *regexp.Regexp, gatewayURL string, environ func(pid int) string, cwd func(pid int) string) []proto.ExternalProc {
 	var out []proto.ExternalProc
 	for pid, args := range t.args {
 		if !cmdlineRe.MatchString(args) {
 			continue
 		}
-		if t.isUnder(pid, panePIDs) {
-			continue
-		}
-		if t.isRunpilot(pid) {
-			continue
+		sessionSID := t.sessionSIDOf(pid, panePIDToSID)
+		if !CoderOutOfQueue(sessionSID, environ(pid), gatewayURL) {
+			continue // кодер живой сессии с верным URL шлюза — управляемый
 		}
 		exe, flags := exeAndFlags(args)
 		out = append(out, proto.ExternalProc{
@@ -80,32 +101,21 @@ func (t *procTable) sourceOf(pid int) string {
 	return sourceOther
 }
 
-// isUnder — pid (или один из его родителей) входит в roots.
-func (t *procTable) isUnder(pid int, roots map[int]bool) bool {
+// sessionSIDOf — sid сессии, панелью (потомком pane_pid) которой является pid;
+// "" если pid не под панелью из map (вне сессии: ручной запуск, cron, vLLM).
+// Идём вверх по цепочке родителей до первой панели из map (панели — прямые
+// потомки tmux, вложенных панелей нет) — возвращаем её sid.
+func (t *procTable) sessionSIDOf(pid int, panePIDToSID map[int]string) string {
 	seen := map[int]bool{}
 	cur := pid
 	for cur != 0 && !seen[cur] {
 		seen[cur] = true
-		if roots[cur] {
-			return true
+		if sid, ok := panePIDToSID[cur]; ok {
+			return sid
 		}
 		cur = t.ppid[cur]
 	}
-	return false
-}
-
-// isRunpilot — pid или его родитель — процесс runpilot (исключение runpilot exec).
-func (t *procTable) isRunpilot(pid int) bool {
-	seen := map[int]bool{}
-	cur := pid
-	for cur != 0 && !seen[cur] {
-		seen[cur] = true
-		if procName(t.args[cur]) == runpilotExe {
-			return true
-		}
-		cur = t.ppid[cur]
-	}
-	return false
+	return ""
 }
 
 // procName — базовое имя команды (fields[0] по basename).

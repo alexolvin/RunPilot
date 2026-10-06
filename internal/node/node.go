@@ -48,6 +48,13 @@ type Node struct {
 	roots   []string
 	rootsMu sync.Mutex
 
+	// gatewayURL — gateway_url координатора: единое правило «кодер вне
+	// очереди» (ScanExternal). Инициализируется из config (встроенный узел —
+	// точно; удалённый узел с минимальным конфигом — по умолчанию), обновляется
+	// из KindConfig (координатор пушит реальное значение). Чтение/запись под gwMu.
+	gatewayURL string
+	gwMu       sync.Mutex
+
 	// nodeToken — Bearer-токен узла для загрузки дистрибутива (14.2).
 	nodeToken string
 	// binPathOverride — путь бинарника узла (подмена в тестах self-update).
@@ -86,7 +93,8 @@ func New(cfg *config.Config, prof *profiles.Qwen, ex Execer, clk clock.Clock, lo
 		log:      log,
 		agentVer: versionFromCmd(ctxBackground(), prof.VersionCmd),
 		roots:    cfg.Node.ProjectRootsDefault,
-		sentExit: map[string]bool{},
+		gatewayURL: cfg.Coordinator.GatewayURL,
+		sentExit:   map[string]bool{},
 		unmanaged: map[string]PaneInfo{},
 		healthIv: time.Duration(cfg.Node.HealthIntervalSec) * time.Second,
 		diskPath: defaultDiskPath(),
@@ -107,6 +115,25 @@ func New(cfg *config.Config, prof *profiles.Qwen, ex Execer, clk clock.Clock, lo
 
 // ctxBackground — фон для разовых вызовов вне цикла (version_cmd).
 func ctxBackground() context.Context { return context.Background() }
+
+// gatewayURLValue — текущий gateway_url (для ScanExternal); чтение под gwMu.
+func (n *Node) gatewayURLValue() string {
+	n.gwMu.Lock()
+	defer n.gwMu.Unlock()
+	return n.gatewayURL
+}
+
+// SetGatewayURL — принять gateway_url из KindConfig (координатор пушит
+// реальное значение; удалённый узел с минимальным конфигом иначе бы видел
+// дефолт 127.0.0.1).
+func (n *Node) SetGatewayURL(u string) {
+	if u == "" {
+		return
+	}
+	n.gwMu.Lock()
+	defer n.gwMu.Unlock()
+	n.gatewayURL = u
+}
 
 // profileApprovalOptions — варианты подтверждения профиля → Profile узла.
 func profileApprovalOptions(prof *profiles.Qwen) []ApprovalOption {
@@ -187,13 +214,15 @@ func (n *Node) cycle(ctx context.Context, send func(proto.Msg) error) error {
 		return err
 	}
 	now := n.clk.Now()
-	panePIDs := map[int]bool{}
+	// панель → sid (managed: sid, unmanaged: "") для единого правила «кодер
+	// вне очереди»: по потомству панели определяем, сессия ли процесс и какой sid.
+	panePIDToSID := map[int]string{}
 	seen := map[string]bool{}
 	for _, p := range panes {
 		if p.Dead {
 			continue
 		}
-		panePIDs[p.PanePID] = true
+		panePIDToSID[p.PanePID] = p.SID
 		if !p.Managed() {
 			continue
 		}
@@ -253,11 +282,12 @@ func (n *Node) cycle(ctx context.Context, send func(proto.Msg) error) error {
 	if err := send(um); err != nil {
 		return err
 	}
-	// Внешние кодеры вне tmux/runpilot (8.2 ТЗ): полный список каждого цикла,
-	// включая пустой (как UNMANAGED выше) — координатор сверяет живое
-	// множество и помечает исчезнувшие GONE. Пустой список не отбрасываем:
-	// иначе «труп» после перезапуска кодера оставался ACTIVE в БД вечно.
-	ext := ScanExternal(table, panePIDs, n.prof.Cmdline(), readOpenAIBaseURL, readProcCwd)
+	// Внешние кодеры вне очереди (8.2 ТЗ, единое правило CoderOutOfQueue):
+	// полный список каждого цикла, включая пустой (как UNMANAGED выше) —
+	// координатор сверяет живое множество и помечает исчезнувшие GONE.
+	// Пустой список не отбрасываем: иначе «труп» после перезапуска кодера
+	// оставался ACTIVE в БД вечно.
+	ext := ScanExternal(table, panePIDToSID, n.prof.Cmdline(), n.gatewayURLValue(), readOpenAIBaseURL, readProcCwd)
 	em := proto.New(proto.KindExternal)
 	em.Externals = ext
 	if err := send(em); err != nil {
