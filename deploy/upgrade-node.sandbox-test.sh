@@ -54,6 +54,20 @@ func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "doctor":
+			// Метка для песочницы (APPEND): путь к исполняемому файлу + режим.
+			// Записывается и в предпроверке (шаг 3, exe=.../runpilot.node.new.*),
+			// и после рестарта (шаг 6, exe=целевой). Позволяет проверить, что
+			// предпроверка выполнила файл в каталоге целевого бинарника, 0755.
+			if pf := os.Getenv("PRECHECK_INFO_FILE"); pf != "" {
+				if exe, err := os.Readlink("/proc/self/exe"); err == nil {
+					if fi, err2 := os.Stat(exe); err2 == nil {
+						if fh, err3 := os.OpenFile(pf, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err3 == nil {
+							fmt.Fprintf(fh, "exe=%s\nmode=%o\n", exe, fi.Mode().Perm())
+							fh.Close()
+						}
+					}
+				}
+			}
 			if os.Getenv("FAIL_DOCTOR") != "" {
 				fmt.Fprintln(os.Stderr, "FAIL new doctor (FAIL_DOCTOR)")
 				os.Exit(1)
@@ -80,6 +94,7 @@ GO
 NODEDIR="$SB/nodedir"; mkdir -p "$NODEDIR"
 NODE_BIN="$NODEDIR/runpilot"
 POST_FAIL_FILE="$SB/post-fail.flag"
+PRECHECK_INFO="$SB/precheck-info.txt"
 NOENV="$SB/no-such-env"
 
 PASS=0; FAIL=0
@@ -153,6 +168,35 @@ D_AFTER="$(sha "$NODE_BIN")"
 [ "$rc" -eq 1 ] && ok "скрипт: exit 1 (предпроверка FAIL)" || bad "скрипт exit=$rc (ожидался 1)"
 [ "$D_AFTER" = "$D_BEFORE" ] && ok "целевой не изменён (sha до==после=$D_AFTER)" || bad "целевой ИЗМЕНИЛСЯ (до=$D_BEFORE после=$D_AFTER)"
 printf '%s\n' "$out_d" | grep -q 'предпроверка FAIL' && ok "печать «предпроверка FAIL» присутствует" || bad "нет печати «предпроверка FAIL»"
+
+echo "== E. PASS-проход (шаги 1-6) под umask 077: temp в каталоге целевого (0755), без остатков =="
+# umask 077 закрывает +x у mktemp-файла — без chmod 0755 после SHA шаг 3 упал бы
+# на «Permission denied». Проверяем полный PASS-путь + локацию/режим файла
+# предпроверки + отсутствие временных файлов после прохода.
+umask 077
+rm -f "$PRECHECK_INFO" "$POST_FAIL_FILE"
+cp -a "$SB/oldbin" "$NODE_BIN"
+out_e="$(run_upgrade "$NEW_SHA" "$SB/newbin" PRECHECK_INFO_FILE="$PRECHECK_INFO")"
+rc=$?
+umask 022
+E_AFTER="$(sha "$NODE_BIN")"
+[ "$rc" -eq 0 ] && ok "E: umask 077 -> ИТОГ PASS (exit 0)" || bad "E: скрипт exit=$rc (ожидался 0): $(tail -n3 "$out_e" | tr '\n' ' ')"
+[ "$E_AFTER" = "$NEW_SHA" ] && ok "E: целевой заменён (umask 077 не сломал +x)" || bad "E: целевой НЕ заменён (sha=$E_AFTER)"
+grep -q "^exe=${NODEDIR}/runpilot.node.new\." "$PRECHECK_INFO" 2>/dev/null \
+  && ok "E: предпроверка выполнила файл в каталоге целевого бинарника" \
+  || bad "E: предпроверка НЕ в каталоге целевого (маркер: $(tr '\n' ' ' <"$PRECHECK_INFO" 2>/dev/null))"
+grep -q "^mode=755$" "$PRECHECK_INFO" 2>/dev/null \
+  && ok "E: исполняемый при предпроверке файл 0755" || bad "E: исполняемый при предпроверке файл не 0755"
+if ls "$NODEDIR"/runpilot.node.new.* >/dev/null 2>&1; then
+  bad "E: в каталоге целевого остались runpilot.node.new.*"
+else
+  ok "E: временных runpilot.node.new.* в каталоге целевого нет"
+fi
+if ls "$SB"/rp-doctor.* >/dev/null 2>&1; then
+  bad "E: в TMPDIR остались rp-doctor.*"
+else
+  ok "E: временных rp-doctor.* в TMPDIR нет"
+fi
 
 echo
 printf 'ИТОГ sandbox: PASS=%d FAIL=%d\n' "$PASS" "$FAIL"

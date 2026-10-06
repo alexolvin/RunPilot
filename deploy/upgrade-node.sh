@@ -26,12 +26,13 @@
 #
 # Безопасность:
 #   1. SHA256: бинарник не ставится при несовпадении (рабочий узел не трогается).
-#   2. ПРЕДПРОВЕРКА: doctor новым бинарником из временного пути ДО замены —
-#      FAIL => выход без изменений, печать проваленных проверок.
-#   3. Замена и откат — ТОЛЬКО атомарно: копия во временный файл в ТОМ ЖЕ каталоге
-#      целевого, затем `mv -f`. Запись поверх целевого (и тем более запущенного)
-#      файла НЕ делается (иначе ETXTBSY / «Text file busy»).
-#   4. После рестарта doctor FAIL => атомарный откат (mv -f), рестарт, doctor
+#   2. Временный файл бинарника — в каталоге ЦЕЛЕВОГО (mktemp -p), НЕ в /tmp:
+#      сразу после сверки SHA256 получает 0755, ПРЕДПРОВЕРКА запускает именно
+#      его, и при PASS он же ставится на место через `mv -f` (атомарный rename
+#      в пределах одного ФС). Запись поверх целевого (и тем более запущенного)
+#      файла НЕ делается (иначе ETXTBSY / «Text file busy»). Trap EXIT удаляет
+#      временные файлы.
+#   3. После рестарта doctor FAIL => атомарный откат (mv -f), рестарт, doctor
 #      старым бинарником, печать обоих результатов.
 #
 # Итог: PASS/FAIL, версия (vcs.revision), SHA256.
@@ -50,15 +51,19 @@ IS_ACTIVE_CMD="${IS_ACTIVE_CMD:-}"
 
 NODE_DIR="$(dirname "$NODE_BIN")"
 TMP_BIN=""
-STAGE=""
 BACKUP=""
 DOCTOR_OUT=""
+DOCTOR_POST=""
+DOCTOR_OLD=""
+ROLLBACK_STAGE=""
 # вызывается только через trap EXIT (SC2317 — ложное срабатывание)
 # shellcheck disable=SC2317
 cleanup() {
   [ -n "$TMP_BIN" ] && rm -f "$TMP_BIN"
-  [ -n "$STAGE" ] && rm -f "$STAGE"
   [ -n "$DOCTOR_OUT" ] && rm -f "$DOCTOR_OUT"
+  [ -n "$DOCTOR_POST" ] && rm -f "$DOCTOR_POST"
+  [ -n "$DOCTOR_OLD" ] && rm -f "$DOCTOR_OLD"
+  [ -n "$ROLLBACK_STAGE" ] && rm -f "$ROLLBACK_STAGE"
 }
 trap cleanup EXIT
 fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
@@ -102,7 +107,13 @@ is_active_node() {
 }
 
 echo "==> 1/6 получение бинарника"
-TMP_BIN="$(mktemp "${TMPDIR:-/tmp}/runpilot.node.new.XXXXXX")"
+# Временный файл — в каталоге ЦЕЛЕВОГО бинарника (НЕ в /tmp / $TMPDIR):
+# (а) mv -f на место — атомарный rename в пределах одного файловой системы;
+# (б) предпроверка запускает именно этот файл, поэтому он должен лежать рядом
+#     с целевым и стать исполняемым сразу после сверки SHA256.
+mkdir -p "$NODE_DIR" || fail "каталог целевого бинарника $NODE_DIR не создан"
+TMP_BIN="$(mktemp -p "$NODE_DIR" runpilot.node.new.XXXXXX)" \
+  || fail "не удалось создать временный файл в каталоге $NODE_DIR"
 if [ -n "$LOCAL_BIN" ]; then
   cp -a "$LOCAL_BIN" "$TMP_BIN" || fail "не удалось скопировать LOCAL_BIN $LOCAL_BIN"
 else
@@ -116,6 +127,10 @@ printf '    ожидаемо: %s\n' "$EXPECTED_SHA"
 printf '    фактично: %s\n' "$ACTUAL_SHA"
 [ "$ACTUAL_SHA" = "$EXPECTED_SHA" ] \
   || fail "SHA256 НЕ СОВПАДАЕТ — бинарник не установлен (узел не изменён)"
+# Сразу после сверки SHA256 делаем файл исполняемым: umask (например 077) или
+# сохранённые права источника могут не давать +x, а предпроверка ниже запускает
+# этот файл напрямую — без 0755 шаг 3 падает на «Permission denied».
+chmod 0755 "$TMP_BIN" || fail "chmod 0755 $TMP_BIN не удался"
 
 echo "==> 3/6 предпроверка: doctor новым бинарником (до замены)"
 DOCTOR_OUT="$(mktemp "${TMPDIR:-/tmp}/rp-doctor.new.XXXXXX")"
@@ -135,15 +150,13 @@ if [ -f "$NODE_BIN" ]; then
 else
   echo "    (прежнего бинарника нет — бэкап не нужен)"
 fi
-# Атомарная замена: копия во временный файл в ТОМ ЖЕ каталоге, затем mv -f.
-# Запись поверх целевого файла не делаем — иначе ETXTBSY, если бинарник запущен.
-STAGE="${NODE_DIR}/.runpilot.new.$$"
-cp -a "$TMP_BIN" "$STAGE" \
-  || { [ -n "$BACKUP" ] && cp -a "$BACKUP" "$NODE_BIN"; fail "подготовка новой копии не удалась (откат выполнен)"; }
-chmod 755 "$STAGE"
-mv -f "$STAGE" "$NODE_BIN" \
-  || { [ -n "$BACKUP" ] && cp -a "$BACKUP" "$NODE_BIN"; fail "атомарная замена (mv -f) не удалась (откат выполнен)"; }
-STAGE=""
+# Атомарная замена: TMP_BIN уже лежит в каталоге целевого бинарника и имеет 0755
+# (chmod после сверки SHA256) — ставим ИМЕННО ЕГО на место атомарным rename
+# (mv -f). Запись поверх целевого не делаем — иначе ETXTBSY, если бинарник
+# запущен. mv атомарен: при неудаче целевой бинарник не изменён, откат не нужен.
+mv -f "$TMP_BIN" "$NODE_BIN" \
+  || fail "атомарная замена (mv -f) не удалась (целевой бинарник не изменён)"
+TMP_BIN=""
 
 VERSION="$(go version -m "$NODE_BIN" 2>/dev/null | awk -F'vcs.revision=' '/vcs.revision=/{print $2; exit}' || true)"
 [ -n "${VERSION:-}" ] || VERSION="$("$NODE_BIN" version 2>/dev/null | head -n1 || true)"
@@ -159,7 +172,6 @@ printf '    %s: active\n' "$NODE_SERVICE"
 echo "==> 6/6 doctor после рестарта"
 DOCTOR_POST="$(mktemp "${TMPDIR:-/tmp}/rp-doctor.post.XXXXXX")"
 if run_doctor "$NODE_BIN" "$DOCTOR_POST"; then
-  rm -f "$DOCTOR_POST"
   printf '\n==================================================\n'
   printf 'ИТОГ: PASS\n'
   printf '  версия   : %s\n' "$VERSION"
@@ -173,7 +185,6 @@ fi
 # doctor FAIL после рестарта — атомарный откат + рестарт + doctor старым
 printf '\ndoctor FAIL после рестарта — атомарный откат + перезапуск\n' >&2
 cat "$DOCTOR_POST" >&2
-rm -f "$DOCTOR_POST"
 if [ -n "$BACKUP" ]; then
   ROLLBACK_STAGE="${NODE_DIR}/.runpilot.rollback.$$"
   if cp -a "$BACKUP" "$ROLLBACK_STAGE" && mv -f "$ROLLBACK_STAGE" "$NODE_BIN"; then
@@ -181,7 +192,6 @@ if [ -n "$BACKUP" ]; then
     sleep 3
     DOCTOR_OLD="$(mktemp "${TMPDIR:-/tmp}/rp-doctor.old.XXXXXX")"
     if run_doctor "$NODE_BIN" "$DOCTOR_OLD"; then OLD_DOCTOR=PASS; else OLD_DOCTOR=FAIL; fi
-    rm -f "$DOCTOR_OLD"
     printf '  откат выполнен (mv -f): %s -> %s; %s перезапущен\n' "$BACKUP" "$NODE_BIN" "$NODE_SERVICE" >&2
     printf '  doctor после отката (старый бинарник): %s\n' "$OLD_DOCTOR" >&2
   else
