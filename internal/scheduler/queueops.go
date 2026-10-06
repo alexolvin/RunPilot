@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"runpilot/internal/model"
@@ -31,12 +32,15 @@ func (s *Scheduler) enqueueLocked(target string, e model.QueueEntry, front bool)
 		return fmt.Errorf("enqueue: сессия %s GONE", target)
 	}
 
-	// Панель: IDLE или BUSY; при IDLE — ввод не пуст.
+	// Панель: IDLE или BUSY; при IDLE — ввод не пуст ИЛИ задана «команда для
+	// запуска» (заряд воспроизведётся узлом при dispatch, ввод заранее не нужен).
 	if pr := s.paneRec[sess.SID]; pr != nil && pr.paneID != "" {
 		switch pr.state {
 		case model.PaneIdle:
 			if snap, ok := s.panes.PaneBySID(sess.SID); ok && snap.InputEmpty {
-				return fmt.Errorf("enqueue: %s: ввод пуст", target)
+				if strings.TrimSpace(sess.LaunchCommand) == "" {
+					return fmt.Errorf("enqueue: %s: ввод пуст", target)
+				}
 			}
 		case model.PaneBusy:
 			// допустимо (предварительная постановка RUNNING-сессии)

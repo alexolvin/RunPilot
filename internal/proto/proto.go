@@ -158,11 +158,12 @@ type Msg struct {
 	Rows int `json:"rows,omitempty"`
 
 	// dispatch
-	SID        string `json:"sid,omitempty"`
-	PaneID     string `json:"pane_id,omitempty"`
-	Mode       string `json:"mode,omitempty"`
-	ExpectHash uint64 `json:"expect_hash,omitempty"`
-	ResumeText string `json:"resume_text,omitempty"`
+	SID           string `json:"sid,omitempty"`
+	PaneID        string `json:"pane_id,omitempty"`
+	Mode          string `json:"mode,omitempty"`
+	ExpectHash    uint64 `json:"expect_hash,omitempty"`
+	ResumeText    string `json:"resume_text,omitempty"`
+	LaunchCommand string `json:"launch_command,omitempty"`
 
 	// send_keys
 	Keys []string `json:"keys,omitempty"`

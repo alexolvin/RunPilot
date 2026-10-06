@@ -171,11 +171,20 @@ func (c *CommandRunner) dispatch(ctx context.Context, socket string, m proto.Msg
 	}
 	switch m.Mode {
 	case "submit":
-		if strings.TrimSpace(input) == "" {
-			return &Reply{CmdID: m.CmdID, Result: ResEmptyInput}, nil
-		}
-		if err := c.sendLiteral(ctx, socket, m.PaneID, c.profile.SubmitKeys[0]); err != nil {
-			return nil, err
+		if m.LaunchCommand != "" {
+			// «Команда для запуска» (раздел постановки в очередь): заряд
+			// (текст + клавиши) воспроизводится узлом атомарно, ввод в
+			// панели не требуется заранее.
+			if err := c.replayLaunch(ctx, socket, m.PaneID, m.LaunchCommand); err != nil {
+				return nil, err
+			}
+		} else {
+			if strings.TrimSpace(input) == "" {
+				return &Reply{CmdID: m.CmdID, Result: ResEmptyInput}, nil
+			}
+			if err := c.sendLiteral(ctx, socket, m.PaneID, c.profile.SubmitKeys[0]); err != nil {
+				return nil, err
+			}
 		}
 	case "resume":
 		// Непустой ввод оператора имеет приоритет: отправляется только Enter.

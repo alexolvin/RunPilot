@@ -37,12 +37,15 @@ type SessionRecord struct {
 	LastMigratedFrom string
 	Attempts         int
 	CreatedAt        time.Time
+	// LaunchCommand — буфер «команд для запуска»: заряд (текст + токены
+	// клавиш), воспроизводимый узлом при dispatch. Пусто = старое поведение.
+	LaunchCommand string
 }
 
 const sessionCols = `sid, name, host, host_ip, tmux_session, window, pane_id,
 profile, agent_version, kind, state, state_changed_at, hold_reason, class,
 constraint_kind, constraint_server, auto_enqueue, last_server,
-last_turn_end, last_migrated_from, attempts, created_at`
+last_turn_end, last_migrated_from, attempts, created_at, launch_command`
 
 func scanSession(row interface{ Scan(...any) error }) (SessionRecord, error) {
 	var r SessionRecord
@@ -52,7 +55,7 @@ func scanSession(row interface{ Scan(...any) error }) (SessionRecord, error) {
 	err := row.Scan(&r.SID, &r.Name, &r.Host, &r.HostIP, &r.TmuxSession, &r.Window,
 		&r.PaneID, &r.Profile, &r.AgentVersion, &kind, &state, &changed, &hold,
 		&class, &ckind, &r.ConstraintServer, &auto, &r.LastServer,
-		&turnEnd, &r.LastMigratedFrom, &r.Attempts, &created)
+		&turnEnd, &r.LastMigratedFrom, &r.Attempts, &created, &r.LaunchCommand)
 	if err == nil {
 		r.Class = model.QueueClass(class)
 	}
@@ -84,14 +87,27 @@ func (s *Store) CreateSession(r SessionRecord) error {
 			sid, name, host, host_ip, tmux_session, window, pane_id, profile,
 			agent_version, kind, state, state_changed_at, hold_reason, class,
 			constraint_kind, constraint_server, auto_enqueue, last_server,
-			last_turn_end, last_migrated_from, attempts, created_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			last_turn_end, last_migrated_from, attempts, created_at,
+			launch_command
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			r.SID, r.Name, r.Host, r.HostIP, r.TmuxSession, r.Window, r.PaneID,
 			r.Profile, r.AgentVersion, r.Kind, r.State, ts(r.StateChangedAt),
 			r.HoldReason, int(r.Class), r.ConstraintKind, r.ConstraintServer,
 			boolInt(r.AutoEnqueue), r.LastServer, ts(r.LastTurnEnd),
-			r.LastMigratedFrom, r.Attempts, ts(r.CreatedAt))
+			r.LastMigratedFrom, r.Attempts, ts(r.CreatedAt), r.LaunchCommand)
 		return err
+	})
+}
+
+// SetSessionLaunchCommand — буфер «команд для запуска» (раздел постановки в
+// очередь). Пустая строка = сброс (старое поведение dispatch).
+func (s *Store) SetSessionLaunchCommand(sid, cmd string) error {
+	return s.DoWrite(func(tx *sql.Tx) error {
+		res, err := tx.Exec(`UPDATE session SET launch_command = ? WHERE sid = ?`, cmd, sid)
+		if err != nil {
+			return err
+		}
+		return requireRows(res)
 	})
 }
 

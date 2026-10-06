@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"runpilot/internal/command"
+	"runpilot/internal/launchcmd"
 	"runpilot/internal/model"
 	"runpilot/internal/proto"
 )
@@ -88,6 +89,50 @@ func (s *Server) CmdPaste(ctx context.Context, sid, text string, enqueue bool) (
 	default:
 		return command.Outcome{Code: reply.Result, Text: "неизвестный результат вставки"}, nil
 	}
+}
+
+// CmdLaunchCommand — буфер «команды для запуска» (раздел постановки в очередь):
+// сохраняет заряд сессии (авторитетно гарантируя завершающий Enter) и, при
+// enqueue, ставит сессию в очередь. Заряд воспроизводится узлом только при
+// dispatch. Пустая команда → просто Enter.
+func (s *Server) CmdLaunchCommand(ctx context.Context, sid, launch string, enqueue bool) (command.Outcome, error) {
+	if !utf8.ValidString(launch) {
+		return command.Outcome{Code: "LAUNCH_INVALID", Text: "команда не UTF-8"}, nil
+	}
+	if len(launch) > s.cfg.Web.PasteMaxKB*kbInBytes {
+		return command.Outcome{
+			Code:  "LAUNCH_TOO_LONG",
+			Text:  fmt.Sprintf("команда %d байт > web.paste_max_kb (%d КБ)", len(launch), s.cfg.Web.PasteMaxKB),
+			Details: map[string]any{"bytes": len(launch), "limit_bytes": s.cfg.Web.PasteMaxKB * kbInBytes},
+		}, nil
+	}
+	if _, err := s.store.GetSession(sid); err != nil {
+		return command.Outcome{Code: "NOT_FOUND", Text: "нет такой сессии"}, nil
+	}
+	// Авторитетно: завершающий Enter (пусто → просто [Enter]).
+	launch = launchcmd.EnsureTrailingEnter(launch)
+	if err := s.store.SetSessionLaunchCommand(sid, launch); err != nil {
+		return command.Outcome{Code: "STORE", Text: err.Error()}, nil
+	}
+	s.auditLaunchCommand(ctx, sid, launch)
+	if enqueue {
+		if e := s.sched.Enqueue(sid, model.QueueEntry{SID: sid}, false); e != nil {
+			return command.Outcome{Code: "ENQUEUE", Text: e.Error()}, nil
+		}
+	}
+	return command.Outcome{Code: "OK", Text: "команда для запуска сохранена"}, nil
+}
+
+// auditLaunchCommand — журнал: LAUNCH_COMMAND (sid, bytes, operator; текст уже
+// в БД, в журнал не дублируем — R5).
+func (s *Server) auditLaunchCommand(ctx context.Context, sid, launch string) {
+	payload, _ := json.Marshal(map[string]any{
+		"bytes":    len(launch),
+		"operator": operatorFrom(ctx),
+	})
+	_ = s.store.EventRecord(model.Event{
+		TS: s.clk.Now(), Kind: "launch_command", SID: sid, Payload: payload,
+	})
 }
 
 // CmdApprove — ответ на запрос подтверждения (13.3): hub.Dispatch(KindApprove) →
