@@ -40,6 +40,20 @@ func testServer(t *testing.T) (*httptest.Server, *store.Store, *Hub) {
 	return ts, st, hub
 }
 
+// task 4: client.coordinator (конфиг узла в install.sh / шаблоне) формируется из
+// coordinator.bind + api_port (requestBaseNoPath). ТЗ: bind=100.64.0.10 →
+// http://100.64.0.10:<api_port>.
+func TestRequestBaseNoPathBindAPIPort(t *testing.T) {
+	_, st, hub := testServer(t)
+	cfg := config.Defaults()
+	cfg.Coordinator.Bind = "100.64.0.10"
+	cfg.Coordinator.APIPort = 8788
+	srv := NewServer(cfg, st, hub, clock.NewReal(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if got := srv.requestBaseNoPath(); got != "http://100.64.0.10:8788" {
+		t.Errorf("requestBaseNoPath()=%q, хочу http://100.64.0.10:8788 (bind:api_port)", got)
+	}
+}
+
 // doJSON — POST/PATCH JSON; возвращает статус и code/detail/sid из тела.
 func doJSON(t *testing.T, method, url string, body any) (int, map[string]string) {
 	t.Helper()

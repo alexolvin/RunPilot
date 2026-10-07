@@ -71,6 +71,10 @@ const (
 	KindUpdateStatus Kind = "update_status"
 	KindExternal     Kind = "external_process"
 	KindUnmanaged    Kind = "unmanaged_panes"
+	// EXEC-корень мёртв без finish (kill -9/падение): узел хоста сообщил, что
+	// PID корня исчез или время старта не совпало (SID + PID). Координатор
+	// снимает аренду + ведёт сессию в GONE (T17: слот свободен ≤ 3 с).
+	KindExecRootDead Kind = "exec_root_dead"
 
 	// Координатор → узел.
 	KindDispatch    Kind = "dispatch"
@@ -108,6 +112,7 @@ var AllKinds = map[Kind]bool{
 	KindHello: true, KindPanes: true, KindPane: true, KindPaneGone: true, KindGPU: true,
 	KindReply: true, KindAgentExit: true, KindNodeHealth: true, KindDirs: true,
 	KindUpdateStatus: true, KindExternal: true, KindUnmanaged: true,
+	KindExecRootDead: true,
 	KindDispatch: true, KindSendKeys: true, KindCapture: true, KindScreen: true,
 	KindPaste: true, KindApprove: true, KindCompress: true,
 	KindSetStatus: true, KindSetSummary: true, KindDrain: true,

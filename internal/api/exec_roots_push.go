@@ -33,16 +33,18 @@ type ExecRootsSource interface {
 	LiveExecRoots() ([]store.ExecRootRecord, error)
 }
 
-// ExecRootsPusher — шлёт узлам полный набор живых EXEC-корней, только при
-// изменении (кэш last). PushAll — событие изменения / тик; ResendHost —
-// переподключение узла.
+// ExecRootsPusher — шлёт узлу живые EXEC-корни ЕГО хоста, только при изменении
+// (кэш lastByHost). Корень пушится только узлу, на котором запущен exec (host
+// из записи сессии) — не broadcast: узел сверяет /proc/<pid> локально, и только
+// он вправе сообщить о смерти корня (PID исчез/время старта не совпало).
+// PushAll — событие изменения / тик; ResendHost — переподключение узла.
 type ExecRootsPusher struct {
 	hub *Hub
 	src ExecRootsSource
 	log *slog.Logger
 
-	mu   sync.Mutex
-	last string // канон. отпечаток последнего отправленного набора
+	mu         sync.Mutex
+	lastByHost map[string]string // канон. отпечаток на хост
 }
 
 // NewExecRootsPusher создаёт пушер. log nil → slog.Default().
@@ -50,20 +52,23 @@ func NewExecRootsPusher(hub *Hub, src ExecRootsSource, log *slog.Logger) *ExecRo
 	if log == nil {
 		log = slog.Default()
 	}
-	return &ExecRootsPusher{hub: hub, src: src, log: log}
+	return &ExecRootsPusher{hub: hub, src: src, log: log, lastByHost: map[string]string{}}
 }
 
-// rootsNow — полный набор живых корней (отсортирован по PID).
-func (p *ExecRootsPusher) rootsNow() ([]proto.ExecRoot, error) {
+// rootsByHost — живые корни, сгруппированные по хосту узла (внутри хоста
+// отсортировано по PID). Хост — из записи сессии (имя узла, где запущен exec).
+func (p *ExecRootsPusher) rootsByHost() (map[string][]proto.ExecRoot, error) {
 	recs, err := p.src.LiveExecRoots()
 	if err != nil {
 		return nil, err
 	}
-	out := make([]proto.ExecRoot, 0, len(recs))
+	out := map[string][]proto.ExecRoot{}
 	for _, r := range recs {
-		out = append(out, proto.ExecRoot{PID: r.PID, Starttime: r.Starttime, SID: r.SID})
+		out[r.Host] = append(out[r.Host], proto.ExecRoot{PID: r.PID, Starttime: r.Starttime, SID: r.SID})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].PID < out[j].PID })
+	for _, roots := range out {
+		sort.Slice(roots, func(i, j int) bool { return roots[i].PID < roots[j].PID })
+	}
 	return out, nil
 }
 
@@ -81,34 +86,51 @@ func execRootsCanon(roots []proto.ExecRoot) string {
 	return b.String()
 }
 
-// PushAll — пересчитать набор и разослать всем узлам, только при изменении.
+// PushAll — для каждого хоста: набор изменился (или корни хоста исчезли) →
+// пуш только этому узлу. Хост без корней получает пустой набор (сброс).
 func (p *ExecRootsPusher) PushAll() {
-	roots, err := p.rootsNow()
+	byHost, err := p.rootsByHost()
 	if err != nil {
 		p.log.Warn("api: execroots: load: " + err.Error())
 		return
 	}
-	c := execRootsCanon(roots)
 	p.mu.Lock()
-	changed := p.last != c
-	p.last = c
-	p.mu.Unlock()
-	if !changed {
-		return
+	changed := map[string][]proto.ExecRoot{}
+	for host, roots := range byHost {
+		c := execRootsCanon(roots)
+		if p.lastByHost[host] == c {
+			continue
+		}
+		p.lastByHost[host] = c
+		changed[host] = roots
 	}
-	for _, n := range p.hub.Nodes() {
-		p.send(n.Host, roots)
+	// Хост, где корни исчезли (финиш/смерть) — сбросим его map узлу.
+	for host := range p.lastByHost {
+		if _, ok := byHost[host]; !ok {
+			delete(p.lastByHost, host)
+			changed[host] = nil
+		}
+	}
+	p.mu.Unlock()
+	for host, roots := range changed {
+		p.send(host, roots)
 	}
 }
 
-// ResendHost — переподключение узла: отправить ему текущий набор (кэш глобальный
-// и не сбрасывается — узел просто получает актуальный).
+// ResendHost — переподключение узла: отправить ему текущий набор его хоста.
 func (p *ExecRootsPusher) ResendHost(host string) {
-	roots, err := p.rootsNow()
+	byHost, err := p.rootsByHost()
 	if err != nil {
 		p.log.Warn("api: execroots: resend: " + err.Error())
 		return
 	}
+	roots, ok := byHost[host]
+	if !ok {
+		roots = nil
+	}
+	p.mu.Lock()
+	p.lastByHost[host] = execRootsCanon(roots)
+	p.mu.Unlock()
 	p.send(host, roots)
 }
 

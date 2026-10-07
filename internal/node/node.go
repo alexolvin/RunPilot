@@ -163,6 +163,27 @@ func (n *Node) execRootsValue() map[int]ExecRoot {
 	return out
 }
 
+// reportDeadExecRoots — проверка живости EXEC-корней узла (PID + время старта):
+// если PID исчез (ProcStartTime=0) или время старта не совпало (PID
+// переиспользован другим процессом на этом хосте) — корень мёртв. Шлёт
+// KindExecRootDead координатору (T17: слот свободен ≤ 3 с при scan=2с).
+// Каждый цикл, пока корень в map; координатор идемпотентен (сверяет state).
+func (n *Node) reportDeadExecRoots(send func(proto.Msg) error) {
+	for pid, root := range n.execRootsValue() {
+		if root.Starttime <= 0 {
+			continue // нештатный корень без времени старта — не проверяем
+		}
+		if procStartTimeFn(pid) != root.Starttime {
+			m := proto.New(proto.KindExecRootDead)
+			m.SID = root.SID
+			m.PID = pid
+			if err := send(m); err != nil {
+				return // не отправлено — повторим в следующем цикле
+			}
+		}
+	}
+}
+
 // applyExecRoots — KindExecRoots: принять EXEC-корни (PID → {время старта,
 // sid}). Fire-and-forget: ответ отбрасывается координатором (пустой CmdID).
 func (n *Node) applyExecRoots(m proto.Msg) (*Reply, error) {
@@ -332,6 +353,9 @@ func (n *Node) cycle(ctx context.Context, send func(proto.Msg) error) error {
 	if err := send(em); err != nil {
 		return err
 	}
+	// EXEC-корни: проверка живости (PID + starttime). Мёртвый корень без finish
+	// (kill -9/падение) → KindExecRootDead: координатор снимает аренду (T17).
+	n.reportDeadExecRoots(send)
 	return nil
 }
 

@@ -192,8 +192,10 @@ var httpGet = func(url string, token string) (int, error) {
 }
 
 // checkClientCoordinator — client.coordinator (адрес координатора, который
-// использует client: runpilot run/exec) отвечает. GET с операторским токеном:
-// любой HTTP-ответ (2xx-4xx) = сервер жив; dial-ошибка/таймаут = FAIL с адресом.
+// использует client: runpilot run/exec) отвечает и принимает токен. GET
+// /api/v1/meta с операторским токеном: PASS только 2xx; 401/403 — FAIL
+// «токен отклонён» (координатор жив, но токен плохой/не тот); прочие коды и
+// ошибка соединения — FAIL с адресом и кодом.
 func checkClientCoordinator(ctx *Context) Result {
 	const name = "client_coordinator"
 	if ctx.Cfg == nil {
@@ -207,10 +209,15 @@ func checkClientCoordinator(ctx *Context) Result {
 	if err != nil {
 		return result(name, FAIL, "не отвечает "+addr+": "+err.Error())
 	}
-	if status >= httpOKMin && status < httpServerError {
+	switch {
+	case status >= http2xxLow && status < http2xxHigh:
 		return result(name, PASS, "отвечает "+addr)
+	case status == httpUnauthorized || status == httpForbidden:
+		return result(name, FAIL,
+			"токен отклонён "+addr+" (HTTP "+strconv.Itoa(status)+")")
+	default:
+		return result(name, FAIL, fmt.Sprintf("HTTP %d: %s", status, addr))
 	}
-	return result(name, WARN, fmt.Sprintf("статус %d: %s", status, addr))
 }
 
 func checkBind(ctx *Context) Result {

@@ -71,12 +71,15 @@ func (j *jobAPI) do(ctx context.Context, method, path string, body, out any) err
 	return nil
 }
 
-// create — POST /api/v1/jobs. pid — PID процесса runpilot exec (авторитетная
-// копия в записи EXEC-сессии, «доступен узлу»); starttime — время старта
-// процесса (/proc/self/stat поле 22). Пара (pid, starttime) — EXEC-корень для
-// правила «кодер вне очереди» (попадает в exec_pid + exec_starttime).
-func (j *jobAPI) create(ctx context.Context, name, prio, pin, prefer string, pid int, starttime int64) (string, error) {
-	body := map[string]any{"name": name, "prio": prio, "pin": pin, "prefer": prefer, "pid": pid, "start_time": starttime}
+// create — POST /api/v1/jobs. host — имя узла этой машины (os.Hostname), на
+// котором запущен exec: в записи EXEC-сессии хранится именно он (не
+// «operator»), чтобы корень пушить только этому узлу + принимать его отчёты
+// о смерти корня. pid — PID процесса runpilot exec (авторитетная копия в
+// записи EXEC-сессии, «доступен узлу»); starttime — время старта процесса
+// (/proc/self/stat поле 22). Пара (pid, starttime) — EXEC-корень для правила
+// «кодер вне очереди» (попадает в exec_pid + exec_starttime).
+func (j *jobAPI) create(ctx context.Context, name, prio, pin, prefer, host string, pid int, starttime int64) (string, error) {
+	body := map[string]any{"name": name, "prio": prio, "pin": pin, "prefer": prefer, "host": host, "pid": pid, "start_time": starttime}
 	var out struct {
 		SID string `json:"sid"`
 	}

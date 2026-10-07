@@ -44,6 +44,10 @@ func newExecCmd() *cobra.Command {
 			if o.pin != "" && o.prefer != "" {
 				return fmt.Errorf("--pin и --prefer взаимоисключающие")
 			}
+			// Позиционные аргументы после «--» — аргументы кодера (промпт).
+			// qwen: позиционный промпт = one-shot («Defaults to one-shot»);
+			// stdin в buildQwenCmd = /dev/null, поэтому промпт только в аргументах.
+			o.args = args
 			code, err := runExec(o)
 			if code != 0 {
 				// Кода выхода не 0 — печатаем причину в stderr и выходим кодом.
@@ -83,8 +87,11 @@ func runExec(o execOpts) (int, error) {
 	// 1) Регистрация (п.2). os.Getpid() — PID процесса runpilot exec, а
 	// ProcStartTime(os.Getpid()) — время его старта (/proc/self/stat, поле 22):
 	// пара (PID, starttime) — EXEC-корень (exec_pid + exec_starttime), доступен
-	// узлу; сверка времени старта защищает от переиспользования PID.
-	sid, err := api.create(ctx, o.name, o.prio, o.pin, o.prefer, os.Getpid(), node.ProcStartTime(os.Getpid()))
+	// узлу; сверка времени старта защищает от переиспользования PID. host —
+	// имя узла этой машины (os.Hostname, то же, что узел шлёт в hello): корень
+	// пушится только этому узлу, и только он сообщает о смерти корня.
+	host := node.Hostname()
+	sid, err := api.create(ctx, o.name, o.prio, o.pin, o.prefer, host, os.Getpid(), node.ProcStartTime(os.Getpid()))
 	if err != nil {
 		return jobExitCode(err), err
 	}

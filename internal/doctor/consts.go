@@ -16,11 +16,14 @@ const (
 	// statusRedirectLow/High — диапазон HTTP-кодов редиректов [300, 400).
 	statusRedirectLow  = 300
 	statusRedirectHigh = 400
-	// client_coordinator: таймаут HTTP-проверки (сек) + диапазон статусов
-	// (2xx–4xx = сервер жив; 5xx = сервер бьёт).
+	// client_coordinator: таймаут HTTP-проверки (сек) + пороги статуса.
+	// 2xx = PASS (координатор отвечает и принимает токен); 401/403 = FAIL
+	// «токен отклонён»; прочие коды и ошибка соединения = FAIL с адресом+кодом.
 	clientCoordinatorTimeoutSec = 5
-	httpOKMin                   = 200
-	httpServerError             = 500
+	http2xxLow                  = 200
+	http2xxHigh                 = 300
+	httpUnauthorized            = 401
+	httpForbidden               = 403
 	// Позиции полей формата checkCoderTimeoutEnv:
 	// "#{pane_dead}\t#{pane_pid}\t#{session_name}\t#{@runpilot_sid}".
 	paneFieldDead    = 0

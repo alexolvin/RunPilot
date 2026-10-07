@@ -71,6 +71,10 @@ type jobCreateRequest struct {
 	Prio   string `json:"prio"`
 	Pin    string `json:"pin"`
 	Prefer string `json:"prefer"`
+	// Host — имя узла этой машины (client присылает os.Hostname): в записи
+	// EXEC-сессии хранится именно он (не «operator»), чтобы корень пушить
+	// только этому узлу + принимать его отчёты о смерти корня.
+	Host string `json:"host"`
 	// PID — PID процесса runpilot exec (client присылает os.Getpid());
 	// хранится в записи EXEC-сессии (exec_pid), доступен узлу.
 	PID int `json:"pid"`
@@ -123,6 +127,12 @@ func (s *Server) handleJobCreate(w http.ResponseWriter, r *http.Request) {
 
 	now := s.clk.Now()
 	host, _ := r.Context().Value(jobHostKey).(string)
+	// EXEC: client присылает имя узла этой машины (os.Hostname) — корень
+	// пушится только ему + только он сообщает о смерти корня. Пустой host —
+	// дефолт от токена (тесты/стенд).
+	if req.Host != "" {
+		host = req.Host
+	}
 	rec := store.SessionRecord{
 		SID: newSID, Name: name, Host: host, HostIP: remoteIP(r),
 		Profile: "qwen", Kind: model.KindJob,

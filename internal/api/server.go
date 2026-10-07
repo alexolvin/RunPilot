@@ -908,7 +908,8 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 		case proto.KindPtyExit:
 			// 13.4: tmux attach завершился (сессия убита) — закрыть браузер.
 			s.closePty(m.Chan)
-		case proto.KindAgentExit, proto.KindNodeHealth, proto.KindUpdateStatus:
+		case proto.KindAgentExit, proto.KindNodeHealth, proto.KindUpdateStatus,
+			proto.KindExecRootDead:
 			s.onNodeInbound(host, m)
 		default:
 			s.log.Warn("api: node: неизвестное сообщение", "type", m.Type, "host", host)
@@ -918,7 +919,8 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 
 // onNodeInbound — проактивные сообщения узла proto 2: agent_exit (агент в
 // панели завершился → планировщику тик по sid), node_health (диск/qwen),
-// update_status (результат self-update).
+// update_status (результат self-update), exec_root_dead (корень exec мёртв
+// без finish → снять аренду + GONE).
 func (s *Server) onNodeInbound(host string, m proto.Msg) {
 	switch m.Type {
 	case proto.KindAgentExit:
@@ -933,7 +935,36 @@ func (s *Server) onNodeInbound(host string, m proto.Msg) {
 	case proto.KindUpdateStatus:
 		s.log.Info("api: node: self-update", "host", host, "result", m.Result,
 			"version", m.Version)
+	case proto.KindExecRootDead:
+		s.onExecRootDead(m.SID, m.PID)
 	}
+}
+
+// onExecRootDead — узел хоста сообщил: EXEC-корень мёртв (PID исчез или время
+// старта не совпало) без штатного finish (kill -9/падение). Сессия GONE,
+// аренда освобождена (T17: слот свободен ≤ 3 с). Идемпотентно: штатный finish —
+// тот же путь; повторный отчёт по уже GONE-сессии игнорируется.
+func (s *Server) onExecRootDead(sid string, pid int) {
+	if sid == "" {
+		return
+	}
+	sess, err := s.store.GetSession(sid)
+	if errors.Is(err, store.ErrNotFound) || sess.State == model.SessionGone {
+		return // уже завершена (штатный finish / повторный отчёт)
+	}
+	now := s.clk.Now()
+	s.log.Warn("api: execroot: корень мёртв без finish → GONE",
+		"sid", sid, "pid", pid, "state", sess.State)
+	_ = s.store.LeaseRelease(sid, model.ReleaseCrash, now)
+	_ = s.store.QueueDelete(sid)
+	_ = s.store.JobDelete(sid)
+	_ = s.store.EventRecord(model.Event{TS: now, Kind: model.KindJobState, SID: sid,
+		Payload: mustJSON(map[string]any{
+			"outcome": "LOST", "reason": "exec_root_dead", "pid": pid,
+		})})
+	_ = s.store.SetSessionState(sid, model.SessionGone, "", now)
+	// Корень больше не живой (GONE): снять из пуша (узел хоста сбросит map).
+	s.ExecRootsPush()
 }
 
 // applyNodeHealth — node_health узла (N9/N10, 14.4): проблемы (нет tmux/qwen,
@@ -1050,7 +1081,8 @@ func (s *Server) ApplyNodeMsg(host string, m proto.Msg) {
 	case proto.KindPtyExit:
 		// 13.4: tmux attach завершился (сессия убита) — закрыть браузер.
 		s.closePty(m.Chan)
-	case proto.KindAgentExit, proto.KindNodeHealth, proto.KindUpdateStatus:
+	case proto.KindAgentExit, proto.KindNodeHealth, proto.KindUpdateStatus,
+		proto.KindExecRootDead:
 		s.onNodeInbound(host, m)
 	default:
 		s.log.Warn("api: node: неизвестное сообщение", "type", m.Type, "host", host)

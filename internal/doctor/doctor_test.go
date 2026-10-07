@@ -19,30 +19,57 @@ func runAll(t *testing.T, cfg *config.Config, path string) []Result {
 	return Run(&Context{Cfg: cfg, CfgPath: path}, DefaultChecks())
 }
 
-// client_coordinator: отвечает (2xx) -> PASS; не отвечает (dial) -> FAIL с адресом.
+// client_coordinator: 2xx -> PASS; 401/403 -> FAIL «токен отклонён»; прочие
+// коды и ошибка соединения -> FAIL с адресом (+ кодом, если HTTP-ответ был).
 func TestClientCoordinator(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.Client.Coordinator = "http://127.0.0.1:18788"
 
-	t.Run("отвечает", func(t *testing.T) {
+	stub := func(status int, err error) {
 		old := httpGet
-		httpGet = func(url, token string) (int, error) { return 200, nil }
-		defer func() { httpGet = old }()
-		r := checkClientCoordinator(&Context{Cfg: cfg})
-		if r.Level != PASS {
-			t.Fatalf("отвечает: %s", r)
+		httpGet = func(url, token string) (int, error) { return status, err }
+		t.Cleanup(func() { httpGet = old })
+	}
+
+	t.Run("2xx — PASS", func(t *testing.T) {
+		stub(200, nil)
+		if r := checkClientCoordinator(&Context{Cfg: cfg}); r.Level != PASS {
+			t.Fatalf("200: %s", r)
 		}
 	})
-	t.Run("не отвечает", func(t *testing.T) {
-		old := httpGet
-		httpGet = func(url, token string) (int, error) { return 0, errors.New("connection refused") }
-		defer func() { httpGet = old }()
+	t.Run("401 — FAIL токен отклонён", func(t *testing.T) {
+		stub(401, nil)
 		r := checkClientCoordinator(&Context{Cfg: cfg})
-		if r.Level != FAIL {
-			t.Fatalf("не отвечает: %s", r)
+		if r.Level != FAIL || !strings.Contains(r.Detail, "токен отклонён") {
+			t.Fatalf("401: %s", r)
 		}
-		if !strings.Contains(r.Detail, "127.0.0.1:18788") {
-			t.Errorf("в FAIL должен быть адрес: %s", r.Detail)
+	})
+	t.Run("403 — FAIL токен отклонён", func(t *testing.T) {
+		stub(403, nil)
+		r := checkClientCoordinator(&Context{Cfg: cfg})
+		if r.Level != FAIL || !strings.Contains(r.Detail, "токен отклонён") {
+			t.Fatalf("403: %s", r)
+		}
+	})
+	t.Run("500 — FAIL с кодом", func(t *testing.T) {
+		stub(500, nil)
+		r := checkClientCoordinator(&Context{Cfg: cfg})
+		if r.Level != FAIL || !strings.Contains(r.Detail, "500") {
+			t.Fatalf("500: %s", r)
+		}
+	})
+	t.Run("301 — FAIL с кодом", func(t *testing.T) {
+		stub(301, nil)
+		r := checkClientCoordinator(&Context{Cfg: cfg})
+		if r.Level != FAIL || !strings.Contains(r.Detail, "301") {
+			t.Fatalf("301: %s", r)
+		}
+	})
+	t.Run("не отвечает — FAIL с адресом", func(t *testing.T) {
+		stub(0, errors.New("connection refused"))
+		r := checkClientCoordinator(&Context{Cfg: cfg})
+		if r.Level != FAIL || !strings.Contains(r.Detail, "127.0.0.1:18788") {
+			t.Fatalf("не отвечает: %s", r)
 		}
 	})
 }
