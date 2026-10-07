@@ -2,7 +2,7 @@ GO ?= go
 TMPDIR ?= /tmp
 STATICCHECK ?= $(shell command -v staticcheck 2>/dev/null || echo "go run honnef.co/go/tools/cmd/staticcheck@latest")
 
-.PHONY: check vet staticcheck test build lint lint-literals lint-web lint-hosts vendor-web icons screenshots visualcheck
+.PHONY: check vet staticcheck test build lint lint-literals lint-web lint-hosts node-upgrade-line vendor-web icons screenshots visualcheck
 
 check: vet staticcheck test lint
 
@@ -30,6 +30,25 @@ lint-hosts:
 
 build:
 	CGO_ENABLED=0 $(GO) build -o runpilot ./cmd/runpilot
+
+# node-upgrade-line — самодостаточная строка обновления УЗЛА (копируется и
+# запускается на узле). Читает sha256sum УСТАНОВЛЕННОГО бинарника координатора
+# (не вручную!). Вывод: SHA256 из 64 hex-символов + аргумент хоста координатора;
+# при любом отклонении (не 64 / не hex) — FAIL, строка не печатается.
+COORD_BIN       ?= /home/user/.local/bin/runpilot
+COORD_HOST      ?= $(shell hostname)
+UPGRADE_NODE_SH ?= $(abspath deploy/upgrade-node.sh)
+
+node-upgrade-line:
+	@sha=$$(sha256sum "$(COORD_BIN)" | awk '{print $$1}'); \
+	n=$$(printf '%s' "$$sha" | wc -c); \
+	if [ "$$n" -ne 64 ]; then \
+	  echo "FAIL: sha256sum '$(COORD_BIN)' = $$n символов (нужно 64 hex): '$$sha'" >&2; \
+	  exit 1; \
+	fi; \
+	case "$$sha" in *[!0-9a-f]*) echo "FAIL: не hex: '$$sha'" >&2; exit 1;; esac; \
+	printf 'scp %s:%s /tmp/upgrade-node.sh \\\n  && bash /tmp/upgrade-node.sh %s %s\n' \
+	  "$(COORD_HOST)" "$(UPGRADE_NODE_SH)" "$$sha" "$(COORD_HOST)"
 
 # W3: фиксированные ESM/шрифты/иконки из npm → web/ + хеши (web/vendor/VERSIONS.txt).
 vendor-web:
