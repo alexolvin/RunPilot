@@ -1,5 +1,75 @@
 # HANDOFF
-Обновлено: 2026-10-07 (W11 доп-2: версия из buildinfo, роли doctor + node_coordinator, тесты веток kill/PGID; выкат aaec90f; приёмка: слот ~2s, FINDING abort-счётчик vLLM не incremented)
+Обновлено: 2026-10-08 (W11 доп-3: локализация abort ЗАМЕРОМ — звено = vLLM, не шлюз; логирование отказов 401/403; выкат cab05b7)
+
+## W11 доп-3 — локализация abort (замером) + лог 401/403 (2026-10-08)
+
+> Оператор: приёмка не пройдена (abort +1 ≤ 3 с не выполнен); локализацию
+> подтвердить замером; «отдельное задание» запрещено. Замер 1a/1b + лог
+> отказов авторизации.
+
+**Коммит/выкат:** `cab05b7` (vcs.modified=false), `/home/user/.local/bin/runpilot`,
+`runpilot.service` active. Бэкап `runpilot.bak-cab05b7-20261007T220213Z`.
+
+### 1. Локализация ЗАМЕРОМ (п.1) — `docs/evidence/W11-accept/localization.md`
+
+Скрипт `localize-curl.sh` (curl -N, kill -9 через 3 с). Таблица a/b:
+
+| | 1a: ПРЯМОЙ (curl→vLLM) | 1b: ЧЕРЕЗ ШЛЮЗ (curl→runpilot→vLLM) |
+|---|---|---|
+| abort до→после | 0 → **0** | 0 → **0** |
+| stop до→после | 650 → 651 (+1) | 653 → 656 (+1) |
+| kill→abort | **НЕ incremented** | **НЕ incremented** |
+| ss runpilot→:8004 ДО/ПОСЛЕ kill+100мс | — | fd=16 **закрыт** |
+
+**Вывод:**
+- **Шлюз корректен**: соединение runpilot→vLLM закрывается за ≤100 мс после
+  kill клиента (ReverseProxy/r.Context() cancel). Локализация
+  `internal/gateway/proxy.go` из прошлой приёмки **неверна**.
+- **Звено, где обрыв не доходит до отмены: сам vLLM.** Даже ПРЯМОЙ запрос (1a)
+  с kill -9 curl даёт stop+1, а не abort+1: vLLM догенерировывает ответ убитого
+  клиента. `finished_reason="abort"` = 0, строк об отмене в журнале контейнера
+  нет. API-сервер vLLM **не отменяет запрос при обрыве TCP-соединения**.
+
+### 2. Звено вне репозитория: vLLM (Docker) — ОСТАНОВКА до решения оператора
+
+- **Звено:** API-сервер vLLM, контейнер `vllm-qwen38-27b-dual-ultramax`
+  (vllm/vllm-openai:v0.30.0, кастомный билд `ced6857a`, buildkite
+  release-v2/7022; патчи FA2/dflash-spec/GDN).
+- **Конфиг:** `--max-num-seqs 2`, `--enable-prefix-caching`,
+  `--enable-chunked-prefill`, `--max-model-len 262144`, `--port 8000`
+  (host 8004).
+- **Предлагаемое изменение:** API-сервер vLLM обязан отменять запрос при обрыве
+  клиента (abort → `finished_reason="abort"`). В стандартном vLLM — отмена
+  async-генератора стрима при disconnect; в данном кастомном билде не
+  срабатывает. Варианты: (1) исправить билд (disconnect → abort_request),
+  (2) проверить regression патчей FA2/spec, (3) если билд не правится —
+  решение оператора.
+- **Рецепт vLLM не менять** (п.2 ТЗ). **Критерий приёмки (п.3: 10× kill -9
+  exec, abort +1 ≤ 3 с) не выполним, пока vLLM не отменяет запрос при обрыве.**
+
+### 4. Логирование отказов авторизации 401/403 (п.4) — ВЫПОЛНЕНО
+
+Каждый отказ 401/403 (`auth`/`nodeAuth`/`jobsAuth`/enroll/`handleDist`) —
+одна строка `api: отказ авторизации`: `client` (адрес), `path`, `token_type`
+(оператор/узел/неизвестный/отсутствует/enroll), `status`, `code`, `msg`.
+**Значение токена в журнал не пишется.** Тест `TestAuthFailLogging`.
+Живой журнал: `token_type=неизвестный`, `path=/api/v1/state`, без токена.
+
+### 5. vzu5-claw (п.5)
+
+vzu5-claw **offline** (не в /api/v1/state). Оператор запускает строку
+обновления; после — версия узла из /api/v1/state. 3p14-aaa = `cab05b7`
+(встроен в координатор).
+
+**node-upgrade-line (vzu5-claw → cab05b7):**
+```
+scp 3p14-aaa:/mdisk/myhub/RunPilot/deploy/upgrade-node.sh /tmp/upgrade-node.sh \
+  && bash /tmp/upgrade-node.sh c15137fe94adb8375e97342a55fd22d8851ab8271b4d28663d6def33070fc821 3p14-aaa
+```
+
+**Ворота (п.6):** `go test -race ./...` + `staticcheck ./...` + `make lint` — 0.
+
+---
 
 ## W11 доп-2 — версия из buildinfo + роли doctor + тесты (2026-10-07) — ВЫПОЛНЕНО
 
