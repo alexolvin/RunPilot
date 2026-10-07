@@ -81,6 +81,8 @@ func execRootsCanon(roots []proto.ExecRoot) string {
 		b.WriteString(strconv.Itoa(r.PID))
 		b.WriteByte(':')
 		b.WriteString(strconv.FormatInt(r.Starttime, decimalBase))
+		b.WriteByte(':')
+		b.WriteString(strconv.Itoa(r.PGID))
 		b.WriteByte(';')
 	}
 	return b.String()
