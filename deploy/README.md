@@ -14,11 +14,14 @@ tailscale), сверяет SHA256, делает предпроверку doctor,
 
 ```
 scp 3p14-aaa:/mdisk/myhub/RunPilot/deploy/upgrade-node.sh /tmp/upgrade-node.sh \
-  && bash /tmp/upgrade-node.sh 2d4e09e9a4674a25dc0734a984dd2baffa47501e06da52695e4c6a2002a3954d 3p14-aaa
+  && bash /tmp/upgrade-node.sh 8717199ef8f1c6e422c592d020bdbcb20ed879056512a2e80de2d928a06b7032 3p14-aaa
 ```
 
-- `2d4e09e9…` — SHA256 бинарника текущего координатора
-  (`/home/user/.local/bin/runpilot` на 3p14-aaa, = HEAD `2bca630`,
+- Строка печатается командой **`make node-upgrade-line`** (на координаторе):
+  читает `sha256sum` установленного бинарника координатора, проверяет 64 hex
+  (иначе FAIL, строка не печатается). Ручной перенос SHA запрещён.
+  `8717199e…` — SHA256 бинарника текущего координатора
+  (`/home/user/.local/bin/runpilot` на 3p14-aaa, = HEAD `c467ef4`,
   `vcs.modified=false`). **Проверить на координаторе:**
   `sha256sum /home/user/.local/bin/runpilot`.
 - `3p14-aaa` — хост координатора (по умолчанию скрипта, указан явно).
@@ -52,5 +55,6 @@ upgrade-node.sh <EXPECTED_SHA256> [COORD_HOST]
   PASS-пути (включая `umask 077`), 16/16.
 
 Артефакты: `docs/evidence/upgrade-node-v3-2026-10-07/upgrade-node.md`
-(п.1), `docs/evidence/coordinator-redeploy-2026-10-07/deploy.md`
-(выкат 2bca630, SHA `2d4e09e9…` — текущий), `docs/evidence/coordinator-deploy-2026-10-07/deploy.md` (первый выкат 5dd21db).
+(п.1), `docs/evidence/coordinator-redeploy-execrule-2026-10-07/deploy.md`
+(выкат c467ef4, SHA `8717199e…` — текущий), `docs/evidence/coordinator-redeploy-2026-10-07/deploy.md`
+(выкат 2bca630, SHA `2d4e09e9…`), `docs/evidence/coordinator-deploy-2026-10-07/deploy.md` (первый выкат 5dd21db).

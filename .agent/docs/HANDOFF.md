@@ -1,5 +1,61 @@
 # HANDOFF
-Обновлено: 2026-10-07 (W11 п.3 редизайн: единое правило «кодер вне очереди» + повторный выкат 2bca630)
+Обновлено: 2026-10-07 (W11 п.3 доп: правило «кодер вне очереди» расширено на EXEC + ExecPID в записи + make node-upgrade-line + выкат координатора c467ef4)
+
+## W11 (п.3, доп) — правило расширено на EXEC + ExecPID + строка узла + выкат c467ef4 (2026-10-07) — ВЫПОЛНЕНО
+
+> Директива (3 пункта): «Правило из прошлого задания было слишком узким: сессия
+> вида EXEC — управляемый запуск. Исключение не добавлять, а расширить правило».
+> Порядок: 1 (расширить правило на EXEC + PID в записи) → 2 (строка обновления
+> узла: SHA256 64 + хост, печатает `make node-upgrade-line`) → 3 (ворота → выкат
+> координатора из HEAD → HANDOFF).
+
+- **п.1 — правило «кодер вне очереди» расширено на EXEC + ExecPID в записи — ✅
+  DONE** (коммит `e403a11`). Управляемый кодер **тогда и только тогда**, когда
+  (а) потомок **корневого процесса живой сессии** (PANE: `pane_pid` панели с
+  `sid`; EXEC: PID процесса `runpilot exec` этой сессии) И (б) `OPENAI_BASE_URL =
+  gateway_url/s/<sid>/v1`. П.1 прошлого задания (только PANE) расширен, а не
+  расширен исключением: **ОДИН механизм** `node.SessionSID(pid, paneSID,
+  coderRunpilotSID, parentOf, argsOf)` обходит дерево **вверх** до init —
+  встретил панель → sid панели; встретил `runpilot exec` (`execCmdRe`) →
+  `RUNPILOT_SID` из env кодера; дошёл до init → `""` (ручной/завершённая
+  сессия). Узел (`ScanExternal`) и doctor (`coder_out_of_queue`) выводят EXEC-корни
+  **локально** (ps на узле — doctor не имеет доступа к БД координатора). Умер
+  exec → qwen репарентирован в init (parent=1) → вне очереди (тест «EXEC
+  завершена, кодер жив»). **PID процесса `runpilot exec` хранится в записи
+  EXEC-сессии**: `store.SessionRecord.ExecPID` + миграция `016_session_exec_pid`
+  (схема 15→16); клиент шлёт `os.Getpid()` при `POST /jobs` (`jobclient.create`
+  → `pid`), координатор (`api/jobs.go`) сохраняет `rec.ExecPID` — авторитетная
+  копия для отчёта/управления, доступна узлу (правило её не читает — вывод
+  локальный). Тесты: node (`ExecLive`/`ExecFinished`/`Cron`/`Systemd`/
+  `CoderOutOfQueue`) + doctor (`ExecManaged`/`ExecFinished` + прежние) —
+  проходят. Артефакт: `docs/evidence/exec-rule-unified-2026-10-07/exec-rule.md`.
+- **п.2 — строка обновления узла: SHA256 64 + хост, печатает `make
+  node-upgrade-line` — ✅ DONE** (коммит `c467ef4`). Строка в отчёте была
+  дефектна: SHA256 из 40 символов (отпечаток комит-хэша) вместо 64, и без
+  аргумента хоста. Теперь её печатает `make node-upgrade-line`: читает
+  `sha256sum` **установленного** бинарника координатора (`$(COORD_BIN)`),
+  проверяет длину 64 + только hex (иначе FAIL, строка не печатается), печатает
+  `scp <хост>:deploy/upgrade-node.sh /tmp/… \ && bash /tmp/upgrade-node.sh
+  <64-hex> <хост>`. Хост/путь по умолчанию — `$(shell hostname)`/`$(abspath …)`
+  (в Makefile нет CGNAT-IP и литералов хоста — линтер). Ручной перенос SHA
+  исключён. Проверка: `make node-upgrade-line` → SHA `8717199e…` =
+  `sha256sum /home/user/.local/bin/runpilot`, хост `3p14-aaa`.
+- **п.3 — ворота → выкат координатора из HEAD `c467ef4` → HANDOFF — ✅ DONE.**
+  Ворота: `go test -race ./…` (0) + `make staticcheck` (0) + `make lint` (0).
+  Бинарник из чистого HEAD (`vcs.modified=false`, **SHA
+  `8717199ef8f1c6e422c592d020bdbcb20ed879056512a2e80de2d928a06b7032`**) →
+  атомарная установка (бэкап `runpilot.bak-2bca630-20261007-062952` [`2d4e09e9…`]
+  + `mv -f`) → `systemctl --user restart runpilot` (MainPID 1054261 →
+  **1541270**) → `/proc/<pid>/exe` vcs=`c467ef4` → doctor **exit 0** (все PASS,
+  WARN `coder_out_of_queue` = 3 ручных qwen — работа правила) → версия схемы БД
+  **16** (миграция 016), колонка `session.exec_pid` на месте, `GET /api/v1/sessions`
+  HTTP 200. Строка обновления узла (deploy/README + этот HANDOFF) — новый SHA
+  `8717199e…` (64 hex) + хост:
+  ```
+  scp 3p14-aaa:/mdisk/myhub/RunPilot/deploy/upgrade-node.sh /tmp/upgrade-node.sh \
+    && bash /tmp/upgrade-node.sh 8717199ef8f1c6e422c592d020bdbcb20ed879056512a2e80de2d928a06b7032 3p14-aaa
+  ```
+  Артефакт: `docs/evidence/coordinator-redeploy-execrule-2026-10-07/deploy.md`.
 
 ## W11 (п.3, редизайн) — единое правило «кодер вне очереди» + повторный выкат (2026-10-07) — ВЫПОЛНЕНО
 
