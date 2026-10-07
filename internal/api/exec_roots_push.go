@@ -64,7 +64,7 @@ func (p *ExecRootsPusher) rootsByHost() (map[string][]proto.ExecRoot, error) {
 	}
 	out := map[string][]proto.ExecRoot{}
 	for _, r := range recs {
-		out[r.Host] = append(out[r.Host], proto.ExecRoot{PID: r.PID, Starttime: r.Starttime, SID: r.SID})
+		out[r.Host] = append(out[r.Host], proto.ExecRoot{PID: r.PID, Starttime: r.Starttime, SID: r.SID, PGID: r.PGID})
 	}
 	for _, roots := range out {
 		sort.Slice(roots, func(i, j int) bool { return roots[i].PID < roots[j].PID })

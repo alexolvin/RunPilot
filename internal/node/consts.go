@@ -39,6 +39,8 @@ const (
 	procEnvSep       = "\x00"
 	openaiBaseURLKey = "OPENAI_BASE_URL="
 	procUidField     = "Uid:"
+	// /proc/<pid>/stat: после «)» поля state,ppid,pgrp,… (0-based).
+	statFieldPgrp = 2
 
 	// killStartTimeToleranceSec — допуск сверки start_time при kill (8.2):
 	// start_time стабилен (now−etimes), допуск покрывает rounding ps etimes.

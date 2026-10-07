@@ -430,6 +430,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/jobs/{sid}/wait", s.jobsAuth(http.HandlerFunc(s.handleJobWait)))
 	mux.Handle("POST /api/v1/jobs/{sid}/heartbeat", s.jobsAuth(http.HandlerFunc(s.handleJobHeartbeat)))
 	mux.Handle("POST /api/v1/jobs/{sid}/finish", s.jobsAuth(http.HandlerFunc(s.handleJobFinish)))
+	mux.Handle("POST /api/v1/jobs/{sid}/exec_pgid", s.jobsAuth(http.HandlerFunc(s.handleJobExecPGID)))
 	mux.Handle("/api/v1/", s.auth(s.idempotent(s.Routes())))
 	return mux
 }

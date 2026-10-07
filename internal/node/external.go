@@ -24,14 +24,15 @@ func GatewayCoderURL(gatewayURL, sid string) string {
 type ExecRoot struct {
 	Starttime int64
 	SID       string
+	PGID      int // PGID кодера (kill -PGID SIGKILL при смерти корня)
 }
 
 // procStartTimeFn — время старта процесса; подменяется в тестах (ScanExternal).
 var procStartTimeFn = ProcStartTime
 
 // ProcStartTime — время старта процесса (/proc/<pid>/stat, поле 22: clock
-// ticks с boot). 0, если процесс не найден / stat не читается (тогда PID не
-// считается живым корнем: совпадение со старта-0 невозможно).
+// ticks с boot). 0, если процесс не найден / stat не читается / процесс
+// zombie (Z) — zombie считается мёртвым (п.3 плана оператора).
 // comm (поле 2) может содержать пробелы и скобки — режем после последней «)».
 func ProcStartTime(pid int) int64 {
 	b, err := os.ReadFile(procDir + "/" + strconv.Itoa(pid) + "/stat")
@@ -48,6 +49,10 @@ func ProcStartTime(pid int) int64 {
 	// fields[statStarttimeIdx] (0-based).
 	f := strings.Fields(s[i+1:])
 	if len(f) < statStarttimeIdx+1 {
+		return 0
+	}
+	// Zombie (Z) — процесс мёртв, starttime не имеет смысла.
+	if f[0] == "Z" {
 		return 0
 	}
 	v, err := strconv.ParseInt(f[statStarttimeIdx], decimalBase, int64Bits)

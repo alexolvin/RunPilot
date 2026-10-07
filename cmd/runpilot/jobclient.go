@@ -140,6 +140,13 @@ func (j *jobAPI) finish(ctx context.Context, sid string, exitCode int, signal st
 	return j.do(ctx, http.MethodPost, "/api/v1/jobs/"+sid+"/finish", body, nil)
 }
 
+// setExecPGID — POST /api/v1/jobs/{sid}/exec_pgid {pgid}. PGID кодера
+// (PID кодера, Setpgid=true): узел убивает группу при смерти корня.
+func (j *jobAPI) setExecPGID(ctx context.Context, sid string, pgid int) error {
+	body := map[string]any{"pgid": pgid}
+	return j.do(ctx, http.MethodPost, "/api/v1/jobs/"+sid+"/exec_pgid", body, nil)
+}
+
 // truncate — обрезать тело для сообщения об ошибке.
 func truncate(b []byte) string {
 	if len(b) <= jobErrBodyLimit {

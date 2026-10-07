@@ -152,6 +152,16 @@ func runExec(o execOpts) (int, error) {
 		finishOnce(1, "")
 		return 1, fmt.Errorf("запуск %s: %w", prof.Command, err)
 	}
+	// PGID кодера (PID кодера, Setpgid=true): узел убивает группу при
+	// смерти корня. Ошибка — фатальна: без PGID узел не сможет убить
+	// осиротевший qwen (внучатый процесс) → kill группы, finish, exit.
+	if pgid := cmd.Process.Pid; pgid > 0 {
+		if err := api.setExecPGID(ctx, sid, pgid); err != nil {
+			_ = syscall.Kill(-pgid, syscall.SIGKILL)
+			finishOnce(1, "")
+			return 1, fmt.Errorf("setExecPGID: %w", err)
+		}
+	}
 
 	// 5) Пульсы (п.5) + 6) --timeout (п.6): конкурентно с ожиданием выхода.
 	killGrace := time.Duration(cfg.Turn.KillGraceSec) * time.Second
@@ -194,14 +204,16 @@ func runExec(o execOpts) (int, error) {
 		timeoutCh = make(chan time.Time) // никогда
 	}
 
-	// kill: SIGTERM, через killGrace — SIGKILL.
+	// kill: SIGTERM группе, через killGrace — SIGKILL группе. PGID = PID
+	// кодера (Setpgid=true): убиваем всю группу (внучатые процессы тоже).
 	kill := func() {
-		_ = cmd.Process.Signal(syscall.SIGTERM)
+		pgid := cmd.Process.Pid
+		_ = syscall.Kill(-pgid, syscall.SIGTERM)
 		go func() {
 			select {
 			case <-doneCh:
 			case <-time.After(killGrace):
-				_ = cmd.Process.Kill()
+				_ = syscall.Kill(-pgid, syscall.SIGKILL)
 			}
 		}()
 	}

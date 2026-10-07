@@ -7,6 +7,7 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -17,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"runpilot/internal/clock"
@@ -174,6 +176,10 @@ func (n *Node) reportDeadExecRoots(send func(proto.Msg) error) {
 			continue // нештатный корень без времени старта — не проверяем
 		}
 		if procStartTimeFn(pid) != root.Starttime {
+			// Корень мёртв: убить процессы кодера (pgrp == PGID И
+			// RUNPILOT_SID == sid в environ). Внучатый qwen (relaunch)
+			// держит соединение со шлюзом — без kill FIN не придёт.
+			killCoderGroup(root.PGID, root.SID)
 			m := proto.New(proto.KindExecRootDead)
 			m.SID = root.SID
 			m.PID = pid
@@ -189,10 +195,72 @@ func (n *Node) reportDeadExecRoots(send func(proto.Msg) error) {
 func (n *Node) applyExecRoots(m proto.Msg) (*Reply, error) {
 	roots := make(map[int]ExecRoot, len(m.ExecRoots))
 	for _, r := range m.ExecRoots {
-		roots[r.PID] = ExecRoot{Starttime: r.Starttime, SID: r.SID}
+		roots[r.PID] = ExecRoot{Starttime: r.Starttime, SID: r.SID, PGID: r.PGID}
 	}
 	n.SetExecRoots(roots)
 	return &Reply{CmdID: m.CmdID, Result: ResSent}, nil
+}
+
+// killCoderGroup — убить процессы кодера: pgrp == PGID И RUNPILOT_SID == sid
+// в environ. Процессы без совпадения не трогаем (безопасность: не убиваем
+// чужие процессы в той же группе).
+func killCoderGroup(pgid int, sid string) {
+	if pgid <= 0 || sid == "" {
+		return
+	}
+	entries, err := os.ReadDir(procDir)
+	if err != nil {
+		return
+	}
+	targetEnv := "RUNPILOT_SID=" + sid
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		// pgrp из /proc/<pid>/stat: после «)» поля state,ppid,pgrp,…
+		stat, err := os.ReadFile(procDir + "/" + e.Name() + "/stat")
+		if err != nil {
+			continue
+		}
+		s := string(stat)
+		i := strings.LastIndexByte(s, ')')
+		if i < 0 {
+			continue
+		}
+		f := strings.Fields(s[i+1:])
+		if len(f) < statFieldPgrp+1 {
+			continue
+		}
+		pgrp, err := strconv.Atoi(f[statFieldPgrp])
+		if err != nil || pgrp != pgid {
+			continue
+		}
+		// RUNPILOT_SID из /proc/<pid>/environ (null-separated).
+		env, err := os.ReadFile(procDir + "/" + e.Name() + "/environ")
+		if err != nil {
+			continue
+		}
+		if !hasEnvPair(env, targetEnv) {
+			continue
+		}
+		if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
+			slog.Default().Warn("node: killCoderGroup: kill", "pid", pid, "err", err)
+		}
+	}
+}
+
+// hasEnvPair — environ (null-separated KEY=VALUE) содержит точное совпадение.
+func hasEnvPair(env []byte, pair string) bool {
+	for _, p := range bytes.Split(env, []byte{0}) {
+		if string(p) == pair {
+			return true
+		}
+	}
+	return false
 }
 
 // profileApprovalOptions — варианты подтверждения профиля → Profile узла.

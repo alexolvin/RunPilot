@@ -48,13 +48,17 @@ type SessionRecord struct {
 	// доступны узлу (координатор шлёт EXEC-корни узлу; doctor читает из БД).
 	ExecPID       int
 	ExecStarttime int64
+	// ExecPGID — PGID кодера (PID кодера, Setpgid=true). При смерти корня
+	// узел убивает группу kill(-PGID, SIGKILL): осиротевший qwen (внучатый
+	// процесс) не держит соединение со шлюзом. 0 = ещё не запущен.
+	ExecPGID int
 }
 
 const sessionCols = `sid, name, host, host_ip, tmux_session, window, pane_id,
 profile, agent_version, kind, state, state_changed_at, hold_reason, class,
 constraint_kind, constraint_server, auto_enqueue, last_server,
 last_turn_end, last_migrated_from, attempts, created_at, launch_command,
-exec_pid, exec_starttime`
+exec_pid, exec_starttime, exec_pgid`
 
 func scanSession(row interface{ Scan(...any) error }) (SessionRecord, error) {
 	var r SessionRecord
@@ -65,7 +69,7 @@ func scanSession(row interface{ Scan(...any) error }) (SessionRecord, error) {
 		&r.PaneID, &r.Profile, &r.AgentVersion, &kind, &state, &changed, &hold,
 		&class, &ckind, &r.ConstraintServer, &auto, &r.LastServer,
 		&turnEnd, &r.LastMigratedFrom, &r.Attempts, &created, &r.LaunchCommand,
-		&r.ExecPID, &r.ExecStarttime)
+		&r.ExecPID, &r.ExecStarttime, &r.ExecPGID)
 	if err == nil {
 		r.Class = model.QueueClass(class)
 	}
@@ -98,14 +102,14 @@ func (s *Store) CreateSession(r SessionRecord) error {
 			agent_version, kind, state, state_changed_at, hold_reason, class,
 			constraint_kind, constraint_server, auto_enqueue, last_server,
 			last_turn_end, last_migrated_from, attempts, created_at,
-			launch_command, exec_pid, exec_starttime
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			launch_command, exec_pid, exec_starttime, exec_pgid
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			r.SID, r.Name, r.Host, r.HostIP, r.TmuxSession, r.Window, r.PaneID,
 			r.Profile, r.AgentVersion, r.Kind, r.State, ts(r.StateChangedAt),
 			r.HoldReason, int(r.Class), r.ConstraintKind, r.ConstraintServer,
 			boolInt(r.AutoEnqueue), r.LastServer, ts(r.LastTurnEnd),
 			r.LastMigratedFrom, r.Attempts, ts(r.CreatedAt), r.LaunchCommand,
-			r.ExecPID, r.ExecStarttime)
+			r.ExecPID, r.ExecStarttime, r.ExecPGID)
 		return err
 	})
 }
@@ -351,21 +355,23 @@ func (s *Store) ListSessions(includeGone bool) ([]SessionRecord, error) {
 	return out, rows.Err()
 }
 
-// ExecRootRecord — живой EXEC-корень: (host, sid, exec_pid, exec_starttime).
-// Для правила «кодер вне очереди»: кодер управляем, если потомок exec_pid и
-// время старта процесса совпадает с exec_starttime.
+// ExecRootRecord — живой EXEC-корень: (host, sid, exec_pid, exec_starttime,
+// exec_pgid). Для правила «кодер вне очереди»: кодер управляем, если потомок
+// exec_pid и время старта процесса совпадает с exec_starttime. ExecPGID —
+// PGID кодера (для kill(-PGID, SIGKILL) при смерти корня).
 type ExecRootRecord struct {
 	Host      string
 	SID       string
 	PID       int
 	Starttime int64
+	PGID      int
 }
 
 // LiveExecRoots — живые EXEC-корни (JOB-сессии, не GONE, exec_pid > 0).
 // «Живость» самого процесса (PID не переиспользован) проверяет вызывающий
 // сверкой времени старта (node.ProcStartTime / doctor).
 func (s *Store) LiveExecRoots() ([]ExecRootRecord, error) {
-	rows, err := s.DB().Query(`SELECT host, sid, exec_pid, exec_starttime FROM session
+	rows, err := s.DB().Query(`SELECT host, sid, exec_pid, exec_starttime, exec_pgid FROM session
 		WHERE kind = 'JOB' AND state <> 'GONE' AND exec_pid > 0`)
 	if err != nil {
 		return nil, err
@@ -374,12 +380,24 @@ func (s *Store) LiveExecRoots() ([]ExecRootRecord, error) {
 	var out []ExecRootRecord
 	for rows.Next() {
 		var r ExecRootRecord
-		if err := rows.Scan(&r.Host, &r.SID, &r.PID, &r.Starttime); err != nil {
+		if err := rows.Scan(&r.Host, &r.SID, &r.PID, &r.Starttime, &r.PGID); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// SetSessionExecPGID — PGID кодера (PID кодера, Setpgid=true). Вызывается
+// exec после cmd.Start(): узел убивает группу при смерти корня.
+func (s *Store) SetSessionExecPGID(sid string, pgid int) error {
+	return s.DoWrite(func(tx *sql.Tx) error {
+		res, err := tx.Exec(`UPDATE session SET exec_pgid = ? WHERE sid = ?`, pgid, sid)
+		if err != nil {
+			return err
+		}
+		return requireRows(res)
+	})
 }
 
 func (s *Store) queryOne(q string, arg string) (SessionRecord, error) {

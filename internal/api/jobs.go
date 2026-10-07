@@ -296,6 +296,37 @@ func (s *Server) handleJobFinish(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "outcome": outcome})
 }
 
+// jobExecPGIDRequest — тело POST /jobs/{sid}/exec_pgid.
+type jobExecPGIDRequest struct {
+	PGID int `json:"pgid"`
+}
+
+// handleJobExecPGID — exec сообщил PGID кодера (PID кодера, Setpgid=true).
+// Узел убивает группу kill(-PGID, SIGKILL) при смерти корня.
+func (s *Server) handleJobExecPGID(w http.ResponseWriter, r *http.Request) {
+	si := r.PathValue("sid")
+	sess, err := s.store.GetSession(si)
+	if errors.Is(err, store.ErrNotFound) {
+		httpError(w, http.StatusNotFound, "NOT_FOUND", "нет сессии")
+		return
+	}
+	var req jobExecPGIDRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if req.PGID <= 0 {
+		httpError(w, http.StatusBadRequest, "BAD_REQUEST", "pgid <= 0")
+		return
+	}
+	if err := s.store.SetSessionExecPGID(si, req.PGID); err != nil {
+		httpError(w, http.StatusInternalServerError, "INTERNAL", err.Error())
+		return
+	}
+	s.log.Info("api: jobs: exec_pgid", "sid", si, "pgid", req.PGID,
+		"state", sess.State)
+	// PGID изменился — переслать EXEC-корни узлу (узнает PGID для kill группы).
+	s.ExecRootsPush()
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+}
+
 // mustJSON — JSON-мarshal без ошибки (payload события).
 func mustJSON(v any) []byte {
 	b, _ := json.Marshal(v)

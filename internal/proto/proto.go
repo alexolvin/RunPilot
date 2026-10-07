@@ -321,6 +321,7 @@ type ExecRoot struct {
 	PID       int    `json:"pid"`
 	Starttime int64  `json:"start_time"`
 	SID       string `json:"sid"`
+	PGID      int    `json:"pgid,omitempty"` // PGID кодера (kill -PGID SIGKILL)
 }
 
 // UnmanagedPane — панель с кодером, запущенным не через runpilot (8.3 X1):
