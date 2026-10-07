@@ -206,6 +206,8 @@ func newServeCmd() *cobra.Command {
 			gw.SetRequestHook(sch.RequestTick)
 			gw.Servers().OnChange(sch.ServerState)
 			srv.SetScheduler(sch)
+			// GONE → отмена идущих запросов sid + аренда после inflight(sid)=0.
+			srv.SetGateway(gw)
 			// П.6(c): пуш строки статуса (set_status/set_summary) координатор
 			// → узлы. Источник текста — планировщик (HeldStatus/SummaryText);
 			// триггер — планировщик зовёт OnStatus после тика и смены состояния

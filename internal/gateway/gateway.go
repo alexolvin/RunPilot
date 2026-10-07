@@ -61,16 +61,20 @@ type Gateway struct {
 	wm      sync.Mutex
 	waiters map[chan struct{}]struct{}
 
-	// Счётчики inflight сессии и сервера (раздел 6 ТЗ).
-	im       sync.Mutex
-	total    int
-	bySID    map[string]int
-	byServer map[string]int
+	// Счётчики inflight сессии и сервера (раздел 6 ТЗ). pendingGone — аренда
+	// сессии снимается после GONE, когда inflight(sid)=0 (запрос завершён),
+	// не раньше (иначе слот выдался бы, пока запрос убитой сессии летит в апстрим).
+	im          sync.Mutex
+	total       int
+	bySID       map[string]int
+	byServer    map[string]int
+	pendingGone map[string]string // sid → reason (снять аренду, когда inflight(sid)=0)
 
 	// W7 (6.2): контексты идущих генерирующих запросов — аварийная
 	// остановка отменяет все (CancelAll): vLLM прекращает генерацию.
 	ic          sync.Mutex
 	inflightCtx map[int]context.CancelFunc
+	inflightSID map[int]string // id → sid (отмена запросов конкретной сессии при GONE)
 	icSeq       int64
 
 	// last_request_end действующих аренд (раздел 6 ТЗ; в памяти,
@@ -148,7 +152,9 @@ func NewGateway(cfg *config.Config, st *store.Store, clk clock.Clock, log *slog.
 		waiters:     map[chan struct{}]struct{}{},
 		bySID:       map[string]int{},
 		byServer:    map[string]int{},
+		pendingGone: map[string]string{},
 		inflightCtx: map[int]context.CancelFunc{},
+		inflightSID: map[int]string{},
 		lastEnd:     map[int64]time.Time{},
 	}
 	return g, nil
@@ -238,9 +244,9 @@ func (g *Gateway) handleGenerative(w http.ResponseWriter, r *http.Request, sess 
 	defer g.unBumpTotalInflight()
 
 	// W7 (6.2): контекст запроса регистрируется — аварийная остановка
-	// отменяет все идущие (CancelAll): апстримы прекращают генерацию.
+	// отменяет все идущие (CancelAll), а GONE сессии — CancelSID.
 	pctx, cancel := context.WithCancel(ctx)
-	id := g.registerInflight(cancel)
+	id := g.registerInflight(sess.SID, cancel)
 	defer g.unregisterInflight(id)
 	r = r.Clone(pctx)
 	ctx = pctx
@@ -340,10 +346,11 @@ func (g *Gateway) writeMode503(w http.ResponseWriter, code, message string) {
 }
 
 // registerInflight — зарегистрировать контекст идущего запроса (W7 6.2).
-func (g *Gateway) registerInflight(cancel context.CancelFunc) int {
+func (g *Gateway) registerInflight(sid string, cancel context.CancelFunc) int {
 	id := atomic.AddInt64(&g.icSeq, 1)
 	g.ic.Lock()
 	g.inflightCtx[int(id)] = cancel
+	g.inflightSID[int(id)] = sid
 	g.ic.Unlock()
 	return int(id)
 }
@@ -352,6 +359,7 @@ func (g *Gateway) registerInflight(cancel context.CancelFunc) int {
 func (g *Gateway) unregisterInflight(id int) {
 	g.ic.Lock()
 	delete(g.inflightCtx, id)
+	delete(g.inflightSID, id)
 	g.ic.Unlock()
 }
 
@@ -364,6 +372,24 @@ func (g *Gateway) CancelAll() {
 		cancels = append(cancels, c)
 	}
 	g.inflightCtx = map[int]context.CancelFunc{}
+	g.inflightSID = map[int]string{}
+	g.ic.Unlock()
+	for _, c := range cancels {
+		c()
+	}
+}
+
+// CancelSID — отменить все идущие запросы сессии sid (сцена GONE: кодер убит
+// / сессия завершена): апстримы прекращают генерацию, обработчики выходят
+// (unBumpInflight снимает аренду, когда inflight(sid) дойдёт до 0).
+func (g *Gateway) CancelSID(sid string) {
+	g.ic.Lock()
+	var cancels []context.CancelFunc
+	for id, c := range g.inflightCtx {
+		if g.inflightSID[id] == sid {
+			cancels = append(cancels, c)
+		}
+	}
 	g.ic.Unlock()
 	for _, c := range cancels {
 		c()
@@ -399,14 +425,25 @@ func (g *Gateway) bumpInflight(sid, server string) {
 func (g *Gateway) unBumpInflight(sid, server string) {
 	g.im.Lock()
 	g.bySID[sid]--
+	reason := ""
+	releaseNow := false
 	if g.bySID[sid] <= 0 {
 		delete(g.bySID, sid)
+		if r, ok := g.pendingGone[sid]; ok {
+			// Сессия GONE и последний запрос завершён (t_end записан) —
+			// теперь безопас снять аренду.
+			delete(g.pendingGone, sid)
+			reason, releaseNow = r, true
+		}
 	}
 	g.byServer[server]--
 	if g.byServer[server] <= 0 {
 		delete(g.byServer, server)
 	}
 	g.im.Unlock()
+	if releaseNow {
+		g.releaseAndWake(sid, reason)
+	}
 }
 
 // --- ждущие слота ---
@@ -444,6 +481,29 @@ func (g *Gateway) Release(sid, reason string) {
 	if err := g.st.LeaseRelease(sid, reason, g.clk.Now()); err == nil {
 		g.wake()
 	}
+}
+
+// releaseAndWake — снять аренду + разбудить ждущих (вне блокировок im).
+func (g *Gateway) releaseAndWake(sid, reason string) {
+	if err := g.st.LeaseRelease(sid, reason, g.clk.Now()); err == nil {
+		g.wake()
+	}
+}
+
+// ReleaseOnGone — сессия GONE (любая причина): отменить идущие запросы sid и
+// снять аренду, но ТОЛЬКО после того, как inflight(sid)=0 (запрос завершён,
+// t_end записан) — иначе слот выдался бы, пока запрос убитой сессии ещё летит
+// в апстрим. Если запросов уже нет — снять сразу.
+func (g *Gateway) ReleaseOnGone(sid, reason string) {
+	g.CancelSID(sid)
+	g.im.Lock()
+	if g.bySID[sid] <= 0 {
+		g.im.Unlock()
+		g.releaseAndWake(sid, reason)
+		return
+	}
+	g.pendingGone[sid] = reason
+	g.im.Unlock()
 }
 
 // Wake — разбудить ждущих слота (удержание): вызывается планировщиком,

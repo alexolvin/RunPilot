@@ -88,9 +88,10 @@ func runExec(o execOpts) (int, error) {
 	// ProcStartTime(os.Getpid()) — время его старта (/proc/self/stat, поле 22):
 	// пара (PID, starttime) — EXEC-корень (exec_pid + exec_starttime), доступен
 	// узлу; сверка времени старта защищает от переиспользования PID. host —
-	// имя узла этой машины (os.Hostname, то же, что узел шлёт в hello): корень
-	// пушится только этому узлу, и только он сообщает о смерти корня.
-	host := node.Hostname()
+	// имя узла этой машины ТЕМ ЖЕ способом, что узел шлёт в hello
+	// (node.host из конфига, иначе os.Hostname): корень пушится только этому
+	// узлу, и только он сообщает о смерти корня.
+	host := node.HostnameOrDefault(cfg.Node.Host)
 	sid, err := api.create(ctx, o.name, o.prio, o.pin, o.prefer, host, os.Getpid(), node.ProcStartTime(os.Getpid()))
 	if err != nil {
 		return jobExitCode(err), err
@@ -267,8 +268,11 @@ func buildQwenCmd(command string, args []string, env map[string]string) (*exec.C
 	cmd.Stdin = devNull
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	// Свой процесс-групп: SIGTERM/SIGKILL к группе при завершении.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Свой процесс-групп (SIGTERM/SIGKILL к группе при завершении) +
+	// Pdeathsig=SIGKILL (Linux): когда exec-процесс умирает (kill -9), ядро
+	// тут же убивает кодера — осиротевший qwen не репарентится в init и не
+	// продолжает держать запрос/подключение к шлюзу.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
 	return cmd, nil
 }
 

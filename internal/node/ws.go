@@ -254,7 +254,9 @@ func (w *WSClient) awaitReplyWritten(flushReq chan chan struct{}, out chan proto
 // hello — приветствие и полный список панелей (раздел 13 ТЗ).
 func (w *WSClient) hello(ctx context.Context, conn *websocket.Conn) error {
 	m := proto.New(proto.KindHello)
-	m.Host = Hostname()
+	// Имя узла = node.host из конфига, иначе os.Hostname (то же, что embedded
+	// и host EXEC-сессии в runpilot exec) — единая функция.
+	m.Host = HostnameOrDefault(w.node.cfg.Node.Host)
 	m.HostIP = HostIP(hostPort(w.url))
 	m.RUNPILOTVersion = w.runpilotVersion
 	m.TmuxVersion = TmuxVersion(ctx, w.node.ex)

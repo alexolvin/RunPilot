@@ -5,6 +5,7 @@
 package fakellm
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -48,6 +49,12 @@ type Server struct {
 	lastMaxTokens         int
 	lastMaxCompletionTok  int
 	sawStreamOptions      bool
+
+	// disconnected / lastDisconnect — потоковые запросы, оборванные
+	// клиентом до конца (r.Context().Done() посреди SSE): фиксация
+	// разрыва соединения (сцена GONE: шлюз отменил запрос).
+	disconnected   int
+	lastDisconnect time.Time
 }
 
 // New — fakellm без listener (встраивание в чужой mux: runpilot-fakellm).
@@ -165,6 +172,27 @@ func (s *Server) SawStreamOptions() bool {
 	return s.sawStreamOptions
 }
 
+// Disconnects — число потоковых запросов, оборванных клиентом до конца.
+func (s *Server) Disconnects() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.disconnected
+}
+
+// LastDisconnect — момент последнего разрыва соединения (wall clock).
+func (s *Server) LastDisconnect() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastDisconnect
+}
+
+func (s *Server) recordDisconnectAt(at time.Time) {
+	s.mu.Lock()
+	s.disconnected++
+	s.lastDisconnect = at
+	s.mu.Unlock()
+}
+
 // handle — маршрутизация fakellm.
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	switch {
@@ -263,7 +291,7 @@ func (s *Server) serveCompletion(w http.ResponseWriter, r *http.Request) {
 	if body.Stream {
 		if failMode == "post" && failN > 0 {
 			// Отказ после начала: часть чанков, затем обрыв.
-			s.writeSSE(w, chunks/chunkHalfDiv+1, chunkPause)
+			s.writeSSE(w, r.Context(), chunks/chunkHalfDiv+1, chunkPause)
 			hj, ok := w.(http.Hijacker)
 			if ok {
 				if conn, _, err := hj.Hijack(); err == nil {
@@ -272,7 +300,7 @@ func (s *Server) serveCompletion(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		s.writeSSE(w, chunks, chunkPause)
+		s.writeSSE(w, r.Context(), chunks, chunkPause)
 		return
 	}
 
@@ -281,14 +309,35 @@ func (s *Server) serveCompletion(w http.ResponseWriter, r *http.Request) {
 }
 
 // writeSSE — chunks чанков SSE (формат OpenAI), с паузой между ними.
-func (s *Server) writeSSE(w http.ResponseWriter, chunks int, pause time.Duration) {
+// ctx — контекст запроса: разрыв клиентом посреди потока фиксируется
+// (recordDisconnectAt) и поток завершается досрочно. false — поток
+// оборван. Момент разрыва — время срабатывания ctx.Done() (watchdog),
+// а не момент обнаружения циклом чанков.
+func (s *Server) writeSSE(w http.ResponseWriter, ctx context.Context, chunks int, pause time.Duration) bool {
+	breakAt := make(chan time.Time, 1)
+	go func() {
+		<-ctx.Done()
+		select {
+		case breakAt <- time.Now():
+		default:
+		}
+	}()
 	flusher, _ := w.(http.Flusher)
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.WriteHeader(http.StatusOK)
 	for i := 0; i < chunks; i++ {
+		if ctx.Err() != nil {
+			s.recordDisconnectAt(<-breakAt)
+			return false
+		}
 		if i > 0 && pause > 0 {
-			time.Sleep(pause)
+			select {
+			case <-time.After(pause):
+			case <-ctx.Done():
+				s.recordDisconnectAt(<-breakAt)
+				return false
+			}
 		}
 		// Финальный чанк несёт finish_reason:"stop" (формат OpenAI); иначе
 		// qwen считает, что «stream ended without a finish reason».
@@ -305,6 +354,7 @@ func (s *Server) writeSSE(w http.ResponseWriter, chunks int, pause time.Duration
 	if flusher != nil {
 		flusher.Flush()
 	}
+	return true
 }
 
 // failBefore — отказ ДО первого байта.

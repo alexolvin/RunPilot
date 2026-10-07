@@ -275,8 +275,8 @@ func (s *Server) handleJobFinish(w http.ResponseWriter, r *http.Request) {
 	if req.ExitCode == 0 && req.Signal == "" {
 		outcome = "OK"
 	}
-	// Аренда снимается TURN_DONE (идемпотентно, если уже снята).
-	_ = s.store.LeaseRelease(si, model.ReleaseTurnDone, now)
+	// Аренда снимает шлюз TURN_DONE (идемпотентно; после inflight(sid)=0).
+	s.releaseOnGone(si, model.ReleaseTurnDone)
 	_ = s.store.QueueDelete(si)
 	_ = s.store.JobDelete(si)
 	_ = s.store.EventRecord(model.Event{

@@ -506,3 +506,13 @@ func Hostname() string {
 	}
 	return h
 }
+
+// HostnameOrDefault — имя узла на этой машине: node.host из конфига, иначе
+// os.Hostname. Единая функция для имени узла (hello/embedded) и host
+// EXEC-сессии (runpilot exec) — чтобы корень пушился узлу с тем же именем.
+func HostnameOrDefault(cfgHost string) string {
+	if cfgHost != "" {
+		return cfgHost
+	}
+	return Hostname()
+}

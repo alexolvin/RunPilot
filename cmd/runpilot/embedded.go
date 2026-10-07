@@ -63,7 +63,8 @@ func embeddedNode(ctx context.Context, srv *api.Server, hub *api.Hub,
 	// при старте ещё не известен (0) — обновится через spawn/config, когда
 	// координатор получит max_model_len из /v1/models.
 	n.EnsureQwenSettings(cfg.Profiles.Qwen.ModelAlias, 0)
-	host := node.Hostname()
+	// Имя узла = node.host из конфига, иначе os.Hostname (то же, что WS hello).
+	host := node.HostnameOrDefault(cfg.Node.Host)
 	im := &memConn{cmds: make(chan proto.Msg, embeddedCmdChanLen), done: ctx.Done()}
 	info := &api.NodeInfo{
 		Host:        host,

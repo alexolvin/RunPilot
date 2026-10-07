@@ -16,6 +16,7 @@ import (
 
 	"runpilot/internal/clock"
 	"runpilot/internal/config"
+	"runpilot/internal/gateway"
 	"runpilot/internal/model"
 	"runpilot/internal/monitor"
 	"runpilot/internal/proto"
@@ -69,6 +70,11 @@ type Server struct {
 	// правило «кодер вне очереди». Ставится из serve.go; nil — пуш выключен
 	// (тесты). Чтение в handleNodeWS/handleJobCreate/handleJobFinish/embedded.
 	execRootsPusher *ExecRootsPusher
+
+	// gw — шлюз: при GONE отменяет идущие запросы sid и снимает аренду
+	// ТОЛЬКО после inflight(sid)=0. Ставится из serve.go; nil (тесты) →
+	// аренда снимается сразу (releaseOnGone).
+	gw *gateway.Gateway
 
 	// Активные SSE-подключения (cancel их контекста = разрыв для клиента;
 	// используется стендом для проверки RESYNC, v2 CONTROL 2).
@@ -241,6 +247,20 @@ func (s *Server) SetStatusPusher(p *StatusPusher) { s.pusher = p }
 
 // SetExecRootsPusher — пуш EXEC-корней (KindExecRoots) координатор → узел.
 func (s *Server) SetExecRootsPusher(p *ExecRootsPusher) { s.execRootsPusher = p }
+
+// SetGateway — шлюз для снятия аренды при GONE (отмена идущих запросов +
+// аренда после inflight(sid)=0). Вызывается из serve.go.
+func (s *Server) SetGateway(gw *gateway.Gateway) { s.gw = gw }
+
+// releaseOnGone — снять аренду сессии при GONE: через шлюз (отменить идущие
+// запросы sid, снять аренду после inflight(sid)=0). Без шлюза (тесты) — сразу.
+func (s *Server) releaseOnGone(sid, reason string) {
+	if s.gw != nil {
+		s.gw.ReleaseOnGone(sid, reason)
+		return
+	}
+	_ = s.store.LeaseRelease(sid, reason, s.clk.Now())
+}
 
 // ExecRootsPush — разослать узлам набор EXEC-корней, только при изменении
 // (create/finish exec, тик). nil-пушер — no-op (тесты).
@@ -955,7 +975,8 @@ func (s *Server) onExecRootDead(sid string, pid int) {
 	now := s.clk.Now()
 	s.log.Warn("api: execroot: корень мёртв без finish → GONE",
 		"sid", sid, "pid", pid, "state", sess.State)
-	_ = s.store.LeaseRelease(sid, model.ReleaseCrash, now)
+	// Аренда снимает шлюз ПОСЛЕ inflight(sid)=0 (отменяет идущие запросы).
+	s.releaseOnGone(sid, model.ReleaseCrash)
 	_ = s.store.QueueDelete(sid)
 	_ = s.store.JobDelete(sid)
 	_ = s.store.EventRecord(model.Event{TS: now, Kind: model.KindJobState, SID: sid,
