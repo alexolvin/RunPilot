@@ -45,10 +45,12 @@ func (s *Server) jobsAuth(next http.Handler) http.Handler {
 		// Токен узла: верификация + host_ip = IP узла (раздел 15.3).
 		host, ok := s.store.VerifyNodeToken(tok)
 		if !ok {
+			s.logAuthFail(r, http.StatusForbidden, "JOB_AUTH", "неверный или отозванный токен узла", "")
 			httpError(w, http.StatusForbidden, "JOB_AUTH", "неверный или отозванный токен узла")
 			return
 		}
 		if n, ok := s.hub.Node(host); ok && n.HostIP != "" && n.HostIP != remoteIP(r) {
+			s.logAuthFail(r, http.StatusForbidden, "JOB_IP", "IP запроса не совпадает с узлом", "")
 			httpError(w, http.StatusForbidden, "JOB_IP", "IP запроса не совпадает с узлом")
 			return
 		}

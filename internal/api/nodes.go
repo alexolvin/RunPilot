@@ -62,6 +62,7 @@ func (s *Server) nodeAuth(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), nodeTokenHostKey{}, host)))
 			return
 		}
+		s.logAuthFail(r, http.StatusUnauthorized, "UNAUTHORIZED", "неверный или отозванный токен узла", "")
 		httpError(w, http.StatusUnauthorized, "UNAUTHORIZED", "неверный или отозванный токен узла")
 	})
 }
@@ -156,6 +157,7 @@ chmod 600 "$secrets"
 // enrollInstall — GET /enroll/<token>/install.sh.
 func (s *Server) enrollInstall(w http.ResponseWriter, r *http.Request, token string) {
 	if !s.tokenExists(token) {
+		s.logAuthFail(r, http.StatusUnauthorized, "BAD_TOKEN", "enroll-токен недействителен", "enroll")
 		httpError(w, http.StatusUnauthorized, "BAD_TOKEN", "enroll-токен недействителен")
 		return
 	}
@@ -261,6 +263,7 @@ echo "runpilot: узел запущен (runpilot-node: ${STATUS:-unknown}) — 
 // enrollFile — GET /enroll/<token>/<file>: бинарник.
 func (s *Server) enrollFile(w http.ResponseWriter, r *http.Request, token, file string) {
 	if !s.tokenExists(token) {
+		s.logAuthFail(r, http.StatusUnauthorized, "BAD_TOKEN", "enroll-токен недействителен", "enroll")
 		httpError(w, http.StatusUnauthorized, "BAD_TOKEN", "enroll-токен недействителен")
 		return
 	}
@@ -287,6 +290,7 @@ func (s *Server) enrollClaim(w http.ResponseWriter, r *http.Request, token strin
 	}
 	if err := s.store.BindTokenHost(token, body.Host, s.clk.Now()); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
+			s.logAuthFail(r, http.StatusUnauthorized, "BAD_TOKEN", "enroll-токен недействителен", "enroll")
 			httpError(w, http.StatusUnauthorized, "BAD_TOKEN", "enroll-токен недействителен")
 			return
 		}
@@ -347,6 +351,7 @@ func sha256FileHex(path string) (string, error) {
 func (s *Server) handleDist(w http.ResponseWriter, r *http.Request) {
 	tok := bearerToken(r)
 	if _, ok := s.store.VerifyNodeToken(tok); !ok {
+		s.logAuthFail(r, http.StatusUnauthorized, "UNAUTHORIZED", "нужен токен узла", "")
 		httpError(w, http.StatusUnauthorized, "UNAUTHORIZED", "нужен токен узла")
 		return
 	}

@@ -435,11 +435,43 @@ func (s *Server) Handler() http.Handler {
 	return mux
 }
 
+// authFailType — тип токена для лога отказа авторизации (W11 доп-3, п.4):
+// оператор / узел / неизвестный / отсутствует. По Bearer-заголовку; значение
+// токена не раскрывает.
+func (s *Server) authFailType(r *http.Request) string {
+	tok := bearerToken(r)
+	if tok == "" {
+		return "отсутствует"
+	}
+	if s.token != "" && tok == s.token {
+		return "оператор"
+	}
+	if _, ok := s.store.VerifyNodeToken(tok); ok {
+		return "узел"
+	}
+	return "неизвестный"
+}
+
+// logAuthFail — одна строка в журнал координатора при отказе авторизации
+// (401/403, W11 доп-3, п.4): адрес клиента, путь, тип токена. Значение
+// токена в журнал не пишется. tokenType — явный тип (для токена в пути,
+// например enroll); пусто — тип из Bearer-заголовка.
+func (s *Server) logAuthFail(r *http.Request, status int, code, msg, tokenType string) {
+	if tokenType == "" {
+		tokenType = s.authFailType(r)
+	}
+	s.log.Warn("api: отказ авторизации",
+		"status", status, "code", code,
+		"client", r.RemoteAddr, "path", r.URL.Path,
+		"token_type", tokenType, "msg", msg)
+}
+
 // auth — Bearer $RUNPILOT_TOKEN (раздел 14 ТЗ); пустой токен — локальный режим.
 func (s *Server) auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.token != "" {
 			if r.Header.Get("Authorization") != "Bearer "+s.token {
+				s.logAuthFail(r, http.StatusUnauthorized, "UNAUTHORIZED", "нет Bearer-токена", "")
 				httpError(w, http.StatusUnauthorized, "UNAUTHORIZED", "нет Bearer-токена")
 				return
 			}

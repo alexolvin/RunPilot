@@ -54,6 +54,65 @@ func TestRequestBaseNoPathBindAPIPort(t *testing.T) {
 	}
 }
 
+// TestAuthFailLogging — W11 доп-3, п.4: каждый отказ авторизации (401/403)
+// логируется одной строкой: адрес клиента, путь, тип токена. Значение токена
+// в журнал не пишется.
+func TestAuthFailLogging(t *testing.T) {
+	t.Setenv("RUNPILOT_TOKEN", "test-operator-token")
+	dbDir := t.TempDir()
+	st, err := store.Open(filepath.Join(dbDir, "runpilot.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	cfg := config.Defaults()
+	clk := clock.NewReal()
+	hub := NewHub(clk)
+	var logBuf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logBuf, nil))
+	srv := NewServer(cfg, st, hub, clk, log)
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	// Неверный (неизвестный) токен → 401 + лог.
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/state", nil)
+	req.Header.Set("Authorization", "Bearer wrong-token")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("статус=%d, хочу 401", resp.StatusCode)
+	}
+	out := logBuf.String()
+	for _, want := range []string{
+		"отказ авторизации", "token_type=неизвестный", "path=/api/v1/state",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("лог не содержит %q:\n%s", want, out)
+		}
+	}
+	// Значение токена не в логе.
+	if strings.Contains(out, "test-operator-token") {
+		t.Errorf("лог содержит значение токена:\n%s", out)
+	}
+
+	// Без токена → 401 + token_type=отсутствует.
+	logBuf.Reset()
+	resp2, err := http.Get(ts.URL + "/api/v1/state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("статус без токена=%d, хочу 401", resp2.StatusCode)
+	}
+	if !strings.Contains(logBuf.String(), "token_type=отсутствует") {
+		t.Errorf("лог без токена не содержит token_type=отсутствует:\n%s", logBuf.String())
+	}
+}
+
 // doJSON — POST/PATCH JSON; возвращает статус и code/detail/sid из тела.
 func doJSON(t *testing.T, method, url string, body any) (int, map[string]string) {
 	t.Helper()
