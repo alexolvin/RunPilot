@@ -1,5 +1,69 @@
 # HANDOFF
-Обновлено: 2026-10-07 (W11 доп: kill группы кодера при смерти EXEC-корня — ExecPGID + killCoderGroup + execRootsCanon PGID; выкат 482bf4e; приёмка 10/10 PASS ~2s)
+Обновлено: 2026-10-07 (W11 доп-2: версия из buildinfo, роли doctor + node_coordinator, тесты веток kill/PGID; выкат aaec90f; приёмка: слот ~2s, FINDING abort-счётчик vLLM не incremented)
+
+## W11 доп-2 — версия из buildinfo + роли doctor + тесты (2026-10-07) — ВЫПОЛНЕНО
+
+> Оператор (фидбек #3): закрыть 6 пунктов. 1 (zombie тест без SKIP) ✅,
+> 2 (staticcheck в воротах) ✅, 3 (тесты двух веток) ✅, 4 (приёмка с замерами)
+> ✅ (с FINDING), 5 (версия узла из vcs.revision) ✅, 6 (ворота→выкат→
+> node-upgrade-line→HANDOFF) ✅. Плюс: 401 на vzu5-claw (причина найдена),
+> роли doctor --role coordinator|node|client.
+
+**Коммит:** `aaec90f` (vcs.modified=false).
+
+- **Версия из buildinfo** (`cmd/runpilot/version.go` `buildVersion()`):
+  короткий хеш `vcs.revision` (7) + суффикс `-dirty` при `vcs.modified=true`;
+  ldflags `-X main.version=...` — приоритет. Тест `TestBuildVersionBinary`
+  собирает бинарник и сверяет `runpilot version` с buildinfo.
+- **Роли doctor** (`--role coordinator|node|client`; без флага — все):
+  - coordinator: coordinator_bind, allow_cidrs, metrics, require_direct
+  - client: client_coordinator
+  - node: tmux, qwen_settings, qwen_timeout_guard, coder_timeout_env,
+    coder_out_of_queue, file_mode, **node_coordinator** (NEW)
+  - `node_coordinator`: WS-handshake `/api/v1/node` с токеном узла
+    (EnvironmentFile службы узла). PASS при upgrade; 401/403 — FAIL «токен
+    отклонён»; токен пуст — FAIL «токен не задан: <var>».
+  - Различение сообщений: «токен не задан: <var>» (переменная пуста) vs
+    «токен отклонён» (переданный токен отвергнут).
+- **upgrade-node.sh**: пред/пост-проверка — только `doctor --role node`.
+- **Тесты двух веток**: `TestRunExecSetExecPGID500` (500 → кодер мёртв,
+  finish exit_code=1, слот свободен), `TestExecRootsPushPGIDChange`
+  (смена PGID → повторный пуш). `TestProcStartTimeZombie` — детерминированный
+  (exec.Command("true") без Wait → zombie), **без SKIP**.
+- **Ворота**: `go test -race ./...` + `staticcheck ./...` + `make lint` — 0.
+
+### 401 на vzu5-claw (причина)
+
+Старый upgrade-node.sh запускал `doctor` (все роли) включая `client_coordinator`,
+который на узле шлёт **токен узла** (`RUNPILOT_NODE_TOKEN` = `cfg.Client.TokenEnv`)
+на `GET /api/v1/meta`. А `/api/v1/meta` защищён `auth()` и требует **операторский**
+токен (`RUNPILOT_TOKEN`) → 401 «нет Bearer-токена». Координатор 401 не логирует
+(`httpError` без логирования). **Фикс**: `--role node` исключает client_coordinator
+из пред/пост-проверки узла — токен узла больше не идёт на /meta.
+
+### Приёмка kill -9 (10 повторов) — см. `docs/evidence/W11-accept/`
+
+- Шаг 1: дерево группы кодера ДО kill — 1 proc (qwen/node); ПОСЛЕ — 0 (пусто);
+  `ss 'dport = :8787'` после kill — 0 conn.
+- kill→LEASE_RELEASE: 0.086–1.951 с (макс **1.951 с**); t_end < LEASE_GRANT next —
+  **PASS** (все 10).
+- **FINDING: abort-счётчик vLLM не incremented** (`finished_reason="abort"` = 0,
+  `stop` +23). Шлюз НЕ отменяет upstream vLLM при обрыве клиента: ReverseProxy не
+  закрывает upstream-соединение при cancel контекста → vLLM догенерировывает ответ
+  мёртвой сессии. Первоначальный дефект «vLLM keeps generating» **не закрыт
+  полностью** (слот освобождается, GPU генерирует). Локализация:
+  `internal/gateway/proxy.go`. **Требует отдельного задания.**
+
+**node-upgrade-line (vzu5-claw → aaec90f):**
+```
+scp 3p14-aaa:/mdisk/myhub/RunPilot/deploy/upgrade-node.sh /tmp/upgrade-node.sh \
+  && bash /tmp/upgrade-node.sh f464940574694b14b8cd5a25355187058f92839dcd92a0c436cb4cb3bdadeb28 3p14-aaa
+```
+
+**Версии узлов:** 3p14-aaa: `aaec90f` (embedded), vzu5-claw: `0.0.0-dev`
+(ожидает выкатки строкой выше).
+
+---
 
 ## W11 доп — kill группы кодера при смерти EXEC-корня (2026-10-07) — ВЫПОЛНЕНО
 
