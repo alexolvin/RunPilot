@@ -115,58 +115,28 @@ func TestKillCoderGroupSelective(t *testing.T) {
 	}
 }
 
-// ProcStartTime: zombie (Z) — мёртв (возвращает 0).
+// ProcStartTime: zombie (Z) — мёртв (возвращает 0). Детерминированный
+// zombie: потомок exec.Command завершается, а родитель (тест) не reap'ит
+// (нет cmd.Wait) — Go не reap'ит автоматически, zombie живёт до Wait.
 func TestProcStartTimeZombie(t *testing.T) {
-	// bash: потомок exit → zombie; disown — shell не reap'ит; sleep 30с.
-	cmd := exec.Command("bash", "-c", "true & disown; sleep 30")
+	cmd := exec.Command("true")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
-	bashPID := cmd.Process.Pid
-
-	// Ищем zombie-потомка: state=Z, ppid=bashPID.
-	time.Sleep(300 * time.Millisecond)
-	entries, err := os.ReadDir(procDir)
-	if err != nil {
-		t.Fatal(err)
+	pid := cmd.Process.Pid
+	// Ждём, пока потомок завершится → state=Z (zombie).
+	deadline := time.Now().Add(3 * time.Second)
+	for procState(pid) != "Z" {
+		if time.Now().After(deadline) {
+			t.Fatalf("zombie не появился за 3 с (state=%q)", procState(pid))
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
-	var zombiePid int
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		pid, ok := atoiSafe(e.Name())
-		if !ok {
-			continue
-		}
-		stat, err := os.ReadFile(procDir + "/" + e.Name() + "/stat")
-		if err != nil {
-			continue
-		}
-		s := statString(stat)
-		i := lastIdx(s, ')')
-		if i < 0 {
-			continue
-		}
-		f := stringsFields(s[i+1:])
-		if len(f) < 3 {
-			continue
-		}
-		if f[0] == "Z" && f[1] == itoa(bashPID) {
-			zombiePid = pid
-			break
-		}
-	}
-	if zombiePid == 0 {
-		t.Skip("zombie не найден (race: уже reaped)")
-	}
-	if st := ProcStartTime(zombiePid); st != 0 {
+	if st := ProcStartTime(pid); st != 0 {
 		t.Fatalf("ProcStartTime(zombie) = %d, хочу 0", st)
 	}
+	_ = cmd.Wait() // reap
 }
-
-func statString(b []byte) string { return string(b) }
 
 func lastIdx(s string, b byte) int {
 	for i := len(s) - 1; i >= 0; i-- {
@@ -175,20 +145,6 @@ func lastIdx(s string, b byte) int {
 		}
 	}
 	return -1
-}
-
-func stringsFields(s string) []string {
-	var out []string
-	start := 0
-	for i := 0; i <= len(s); i++ {
-		if i == len(s) || s[i] == ' ' {
-			if i > start {
-				out = append(out, s[start:i])
-			}
-			start = i + 1
-		}
-	}
-	return out
 }
 
 func itoa(n int) string {
@@ -203,17 +159,6 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(b[i:])
-}
-
-func atoiSafe(s string) (int, bool) {
-	n := 0
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0, false
-		}
-		n = n*10 + int(c-'0')
-	}
-	return n, true
 }
 
 // procState — state из /proc/<pid>/stat ("", "S", "Z", "R", …).

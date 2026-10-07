@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,6 +21,8 @@ import (
 
 	"runpilot/internal/config"
 	"runpilot/internal/node"
+
+	"github.com/gorilla/websocket"
 )
 
 // Level — результат проверки.
@@ -112,23 +115,55 @@ var (
 	}
 )
 
-// DefaultChecks — проверки каркаса (Э0/Э2) + мониторинг (Э6).
-func DefaultChecks() []Check {
-	return []Check{
-		{Name: "config", Run: checkConfig},
-		{Name: "allow_cidrs", Run: checkAllowCIDRs},
-		{Name: "coordinator_bind", Run: checkBind},
-		{Name: "client_coordinator", Run: checkClientCoordinator},
-		{Name: "secrets_env", Run: checkSecretsEnv},
-		{Name: "tmux", Run: checkTmux},
-		{Name: "qwen_settings", Run: checkQwenSettings},
-		{Name: "qwen_timeout_guard", Run: checkQwenTimeoutGuard},
-		{Name: "coder_timeout_env", Run: checkCoderTimeoutEnv},
-		{Name: "coder_out_of_queue", Run: checkCoderOutOfQueue},
-		{Name: "file_mode", Run: checkFileMode},
-		{Name: "metrics", Run: checkMetrics},
-		{Name: "require_direct", Run: checkRequireDirect},
+// Role — роль doctor: подмножество проверок, релевантное машине.
+// runpilot doctor --role coordinator|node|client; без флага — все роли
+// (DefaultChecks = объединение ролей + базовые config/secrets_env).
+type Role string
+
+const (
+	RoleCoordinator Role = "coordinator"
+	RoleNode        Role = "node"
+	RoleClient      Role = "client"
+)
+
+// RoleChecks — проверки роли (раздел: роли doctor).
+func RoleChecks(r Role) []Check {
+	switch r {
+	case RoleCoordinator:
+		return []Check{
+			{Name: "coordinator_bind", Run: checkBind},
+			{Name: "allow_cidrs", Run: checkAllowCIDRs},
+			{Name: "metrics", Run: checkMetrics},
+			{Name: "require_direct", Run: checkRequireDirect},
+		}
+	case RoleClient:
+		return []Check{
+			{Name: "client_coordinator", Run: checkClientCoordinator},
+		}
+	case RoleNode:
+		return []Check{
+			{Name: "tmux", Run: checkTmux},
+			{Name: "qwen_settings", Run: checkQwenSettings},
+			{Name: "qwen_timeout_guard", Run: checkQwenTimeoutGuard},
+			{Name: "coder_timeout_env", Run: checkCoderTimeoutEnv},
+			{Name: "coder_out_of_queue", Run: checkCoderOutOfQueue},
+			{Name: "file_mode", Run: checkFileMode},
+			{Name: "node_coordinator", Run: checkNodeCoordinator},
+		}
 	}
+	return nil
+}
+
+// DefaultChecks — все роли (без --role) + базовые config/secrets_env.
+func DefaultChecks() []Check {
+	out := []Check{
+		{Name: "config", Run: checkConfig},
+		{Name: "secrets_env", Run: checkSecretsEnv},
+	}
+	for _, r := range []Role{RoleCoordinator, RoleClient, RoleNode} {
+		out = append(out, RoleChecks(r)...)
+	}
+	return out
 }
 
 // Run применяет проверки и собирает отчёт.
@@ -205,7 +240,13 @@ func checkClientCoordinator(ctx *Context) Result {
 	if addr == "" {
 		return result(name, FAIL, "client.coordinator не задан")
 	}
-	status, err := httpGet(addr+"/api/v1/meta", os.Getenv(ctx.Cfg.Client.TokenEnv))
+	// «токен не задан» (переменная пуста) — отличаем от «токен отклонён»
+	// (переданный токен отвергнут координатором).
+	token := os.Getenv(ctx.Cfg.Client.TokenEnv)
+	if token == "" {
+		return result(name, FAIL, "токен не задан: "+ctx.Cfg.Client.TokenEnv)
+	}
+	status, err := httpGet(addr+"/api/v1/meta", token)
 	if err != nil {
 		return result(name, FAIL, "не отвечает "+addr+": "+err.Error())
 	}
@@ -218,6 +259,102 @@ func checkClientCoordinator(ctx *Context) Result {
 	default:
 		return result(name, FAIL, fmt.Sprintf("HTTP %d: %s", status, addr))
 	}
+}
+
+// wsDial — WS-dial /api/v1/node с Bearer-токеном; handshake (upgrade) +
+// закрытие соединения. Возврат: (принят, http-статус, error). При отклонённом
+// токене принят=false, статус=401/403. Подменяется в тестах.
+var wsDial = func(wsURL, token string) (accepted bool, status int, err error) {
+	d := websocket.Dialer{HandshakeTimeout: clientCoordinatorTimeoutSec * time.Second}
+	hdr := http.Header{}
+	if token != "" {
+		hdr.Set("Authorization", "Bearer "+token)
+	}
+	conn, resp, derr := d.Dial(wsURL, hdr)
+	if derr != nil {
+		if resp != nil {
+			return false, resp.StatusCode, derr
+		}
+		return false, 0, derr
+	}
+	_ = conn.Close() // токен принят (upgrade); hello не шлём — узел не регистрируется
+	return true, httpSwitchingProtocols, nil
+}
+
+// coordWSURL — http(s)://host:port → ws(s)://host:port/api/v1/node.
+func coordWSURL(coordURL string) string {
+	u, err := url.Parse(coordURL)
+	if err != nil {
+		u = &url.URL{Scheme: "http", Host: coordURL}
+	}
+	scheme := "ws"
+	if u.Scheme == "https" {
+		scheme = "wss"
+	}
+	u.Scheme = scheme
+	u.Path = "/api/v1/node"
+	u.RawQuery = ""
+	return u.String()
+}
+
+// nodeTokenValue — токен узла: env (EnvironmentFile службы, source'нут
+// upgrade-node.sh) → ~/.config/runpilot/secrets.env → env.
+func nodeTokenValue(envName string) string {
+	if v := os.Getenv(envName); v != "" {
+		return v
+	}
+	home, err := homeDir()
+	if err != nil {
+		return ""
+	}
+	for _, f := range []string{"secrets.env", "env"} {
+		data, err := os.ReadFile(filepath.Join(home, ".config", "runpilot", f))
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			if v, ok := strings.CutPrefix(line, envName+"="); ok {
+				return strings.TrimSpace(v)
+			}
+		}
+	}
+	return ""
+}
+
+// checkNodeCoordinator — handshake узла: WS-dial /api/v1/node с Bearer-токеном
+// узла (из EnvironmentFile службы узла). Токен принят (upgrade) → PASS;
+// 401/403 → FAIL «токен отклонён»; токен пуст → FAIL «токен не задан: <var>»;
+// ошибка соединения → FAIL «не отвечает».
+func checkNodeCoordinator(ctx *Context) Result {
+	const name = "node_coordinator"
+	if ctx.Cfg == nil {
+		return result(name, FAIL, "нет конфигурации")
+	}
+	addr := strings.TrimRight(ctx.Cfg.Client.Coordinator, "/")
+	if addr == "" {
+		return result(name, FAIL, "client.coordinator не задан")
+	}
+	envName := ctx.Cfg.Client.TokenEnv
+	token := nodeTokenValue(envName)
+	if token == "" {
+		return result(name, FAIL, "токен не задан: "+envName)
+	}
+	accepted, status, err := wsDial(coordWSURL(addr), token)
+	if err != nil {
+		switch {
+		case status == httpUnauthorized || status == httpForbidden:
+			return result(name, FAIL,
+				"токен отклонён "+addr+" (HTTP "+strconv.Itoa(status)+")")
+		case status != 0:
+			return result(name, FAIL, fmt.Sprintf("HTTP %d: %s", status, addr))
+		default:
+			return result(name, FAIL, "не отвечает "+addr+": "+err.Error())
+		}
+	}
+	if !accepted {
+		return result(name, FAIL, "handshake не принят "+addr)
+	}
+	return result(name, PASS, "handshake принят "+addr)
 }
 
 func checkBind(ctx *Context) Result {

@@ -16,6 +16,11 @@ func runAll(t *testing.T, cfg *config.Config, path string) []Result {
 	oldGet := httpGet
 	httpGet = func(url, token string) (int, error) { return 200, nil }
 	t.Cleanup(func() { httpGet = oldGet })
+	// node_coordinator: dummy-токен + stub wsDial (без реального WS-dial).
+	oldDial := wsDial
+	wsDial = func(url, token string) (bool, int, error) { return true, httpSwitchingProtocols, nil }
+	t.Cleanup(func() { wsDial = oldDial })
+	t.Setenv(cfg.Client.TokenEnv, "test-node-token")
 	return Run(&Context{Cfg: cfg, CfgPath: path}, DefaultChecks())
 }
 
@@ -24,6 +29,7 @@ func runAll(t *testing.T, cfg *config.Config, path string) []Result {
 func TestClientCoordinator(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.Client.Coordinator = "http://127.0.0.1:18788"
+	t.Setenv(cfg.Client.TokenEnv, "test-client-token") // токен задан → проверяем статус
 
 	stub := func(status int, err error) {
 		old := httpGet

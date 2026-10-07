@@ -84,8 +84,9 @@ if [ -f "$NODE_ENV" ]; then
   set +a
 fi
 
-# run_doctor <бинарник> <файл-выход> -> 0=PASS, 1=FAIL
-run_doctor() { "$1" doctor >"$2" 2>&1; }
+# run_doctor <бинарник> <файл-выход> -> 0=PASS, 1=FAIL. Только роль node:
+# узел не обязан знать токен клиента (client_coordinator не в роли node).
+run_doctor() { "$1" doctor --role node >"$2" 2>&1; }
 
 # restart_node — перезапуск службы (systemctl по умолчанию, RESTART_CMD — хук)
 restart_node() {

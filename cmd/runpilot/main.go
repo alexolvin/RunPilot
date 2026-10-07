@@ -9,10 +9,12 @@ import (
 	"runpilot/internal/config"
 )
 
-// version — подставляется через -ldflags "-X main.version=...".
-var version = "0.0.0-dev"
+// version — по умолчанию из buildinfo (buildVersion); подставляется через
+// -ldflags "-X main.version=..." (имеет приоритет).
+var version = versionDev
 
 func main() {
+	version = buildVersion()
 	root := newRoot(version)
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "runpilot:", err)

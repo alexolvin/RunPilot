@@ -24,6 +24,8 @@ const (
 	http2xxHigh                 = 300
 	httpUnauthorized            = 401
 	httpForbidden               = 403
+	// httpSwitchingProtocols — статус успешного WS-upgrade (node_coordinator).
+	httpSwitchingProtocols = 101
 	// Позиции полей формата checkCoderTimeoutEnv:
 	// "#{pane_dead}\t#{pane_pid}\t#{session_name}\t#{@runpilot_sid}".
 	paneFieldDead    = 0

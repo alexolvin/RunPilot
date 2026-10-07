@@ -18,8 +18,9 @@ import (
 var errDoctorFail = errors.New("doctor: есть FAIL")
 
 func newDoctorCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "doctor",
+	var role string
+	cmd := &cobra.Command{
+		Use:   "doctor [--role coordinator|node|client]",
 		Short: "Построчные проверки PASS/FAIL/WARN; код 1 при любом FAIL",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// v2 раздел 4: рабочие значения (model_alias и пр.) живут в БД,
@@ -52,7 +53,16 @@ func newDoctorCmd() *cobra.Command {
 			if prof, perr := profiles.LoadQwen(); perr == nil {
 				cmdline = prof.Cmdline()
 			}
-			results := doctor.Run(&doctor.Context{Cfg: cfg, CfgPath: resolvedPath, Cmdline: cmdline, ExecRoots: execRoots}, doctor.DefaultChecks())
+			// --role: подмножество проверок роли; без флага — все роли.
+			checks := doctor.DefaultChecks()
+			if role != "" {
+				rc := doctor.RoleChecks(doctor.Role(role))
+				if len(rc) == 0 {
+					return fmt.Errorf("неизвестная роль %q (coordinator|node|client)", role)
+				}
+				checks = rc
+			}
+			results := doctor.Run(&doctor.Context{Cfg: cfg, CfgPath: resolvedPath, Cmdline: cmdline, ExecRoots: execRoots}, checks)
 			for _, r := range results {
 				fmt.Println(r)
 			}
@@ -62,4 +72,6 @@ func newDoctorCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&role, "role", "", "роль: coordinator|node|client (без флага — все)")
+	return cmd
 }

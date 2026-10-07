@@ -57,6 +57,33 @@ func TestExecRootsPushPerHost(t *testing.T) {
 	}
 }
 
+// Регресс (482bf4e): PGID в каноническом отпечатке. Смена PGID (setExecPGID)
+// → набор «изменился» → пуш узлу переотправлен. До фикса узел держал PGID=0
+// и kill группы кодера не работал.
+func TestExecRootsPushPGIDChange(t *testing.T) {
+	hub := NewHub(clock.NewReal())
+	connA := &recConn{}
+	hub.Register(&NodeInfo{Host: "hostA", HostIP: "127.0.0.1", Conn: connA})
+	t.Cleanup(func() { hub.Unregister("hostA") })
+
+	src := &fakeExecRootsSrc{recs: []store.ExecRootRecord{
+		{Host: "hostA", SID: "sidA", PID: 100, Starttime: 111}, // PGID=0
+	}}
+	p := NewExecRootsPusher(hub, src, nil)
+	p.PushAll() // 1-й пуш (PGID=0)
+
+	// setExecPGID: PGID = PID кодера (Setpgid).
+	src.recs = []store.ExecRootRecord{
+		{Host: "hostA", SID: "sidA", PID: 100, Starttime: 111, PGID: 100},
+	}
+	p.PushAll() // обязан переотправить
+
+	got := connA.lastExecRoots()
+	if len(got) != 1 || got[0].PGID != 100 {
+		t.Fatalf("после смены PGID: %+v, хочу переотправку с PGID=100", got)
+	}
+}
+
 // корень hostA исчез (finish) → hostA получает пустой набор (сброс map узла).
 func TestExecRootsPushHostGone(t *testing.T) {
 	hub := NewHub(clock.NewReal())
