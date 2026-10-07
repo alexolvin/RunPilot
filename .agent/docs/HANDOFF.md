@@ -1,5 +1,39 @@
 # HANDOFF
-Обновлено: 2026-10-07 (W11: исправлены 2 дефекта exec — промпт кодеру + освобождение слота (host/per-host/exec_root_dead) + doctor client_coordinator строгий + тест client.coordinator + выкат 5a0d9fc + приёмка exec на /mdisk/myhub/test)
+Обновлено: 2026-10-07 (W11 доп: kill группы кодера при смерти EXEC-корня — ExecPGID + killCoderGroup + execRootsCanon PGID; выкат 482bf4e; приёмка 10/10 PASS ~2s)
+
+## W11 доп — kill группы кодера при смерти EXEC-корня (2026-10-07) — ВЫПОЛНЕНО
+
+> Дефект: kill -9 exec в RUNNING → vLLM продолжает генерацию ~17-32с.
+> Корень: qwen self-relaunch (внучатый процесс) держит TCP-соединение со
+> шлюзом; Pdeathsig убивает только прямого потомка. Фикс: узел убивает
+> процессы кодера (pgrp + RUNPILOT_SID из environ) при смерти корня.
+
+**Коммиты:** `52edc2a` (основной) + `482bf4e` (execRootsCanon PGID).
+
+- **ExecPGID** в `SessionRecord` + миграция `018_session_exec_pgid.sql`.
+- **exec**: после `cmd.Start()` → `api.setExecPGID(ctx, sid, pgid)`; ошибка →
+  kill группы + finish + exit(1).
+- **node**: `killCoderGroup(pgid, sid)` — перечисляет /proc, выбирает процессы
+  с `pgrp == PGID` И `RUNPILOT_SID == sid` в environ, SIGKILL каждому.
+  Без слепого `kill(-PGID)`.
+- **ProcStartTime**: zombie (Z) → 0 (мёртв).
+- **execRootsCanon**: включает PGID — пуш пересылается при изменении PGID.
+- **Endpoint**: `POST /api/v1/jobs/{sid}/exec_pgid`.
+- **Тесты**: `TestKillCoderGroupSelective` (PASS), `TestProcStartTimeZombie`
+  (SKIP — race), `TestCancelSIDBreaksStreamLiveClient` (PASS, 69µs).
+
+**Приёмка (10× kill -9 exec в RUNNING):** 10/10 PASS, группа мёртва ~2s
+(scan cycle). Критерии: процессы группы через 1с после kill — нет ни одного.
+
+**node-upgrade-line:**
+```
+scp 3p14-aaa:/mdisk/myhub/RunPilot/deploy/upgrade-node.sh /tmp/upgrade-node.sh \
+  && bash /tmp/upgrade-node.sh e1fc6ba211be467b3356d2b2ea8049286e27aa5c3bdbaa43dc80bb841bddc293 3p14-aaa
+```
+
+**Версии узлов:** 3p14-aaa: 0.0.0-dev, vzu5-claw: 0.0.0-dev.
+
+---
 
 ## W11 — исправление 2 дефектов exec + doctor client_coordinator + выкат 5a0d9fc + приёмка (2026-10-07) — ВЫПОЛНЕНО
 
