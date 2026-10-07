@@ -55,6 +55,12 @@ type Node struct {
 	gatewayURL string
 	gwMu       sync.Mutex
 
+	// execRoots — EXEC-корни сессий (PID → {время старта, sid}) от координатора
+	// (KindExecRoots): для единого правила «кодер вне очереди» (ScanExternal).
+	// Чтение/запись под execRootsMu.
+	execRoots   map[int]ExecRoot
+	execRootsMu sync.Mutex
+
 	// nodeToken — Bearer-токен узла для загрузки дистрибутива (14.2).
 	nodeToken string
 	// binPathOverride — путь бинарника узла (подмена в тестах self-update).
@@ -133,6 +139,39 @@ func (n *Node) SetGatewayURL(u string) {
 	n.gwMu.Lock()
 	defer n.gwMu.Unlock()
 	n.gatewayURL = u
+}
+
+// SetExecRoots — принять EXEC-корни от координатора (KindExecRoots): полная
+// замена (PID → {время старта, sid}). Пустая карта = сброс (нет живых EXEC).
+func (n *Node) SetExecRoots(roots map[int]ExecRoot) {
+	n.execRootsMu.Lock()
+	defer n.execRootsMu.Unlock()
+	if roots == nil {
+		roots = map[int]ExecRoot{}
+	}
+	n.execRoots = roots
+}
+
+// execRootsValue — текущая копия EXEC-корней (для ScanExternal).
+func (n *Node) execRootsValue() map[int]ExecRoot {
+	n.execRootsMu.Lock()
+	defer n.execRootsMu.Unlock()
+	out := make(map[int]ExecRoot, len(n.execRoots))
+	for k, v := range n.execRoots {
+		out[k] = v
+	}
+	return out
+}
+
+// applyExecRoots — KindExecRoots: принять EXEC-корни (PID → {время старта,
+// sid}). Fire-and-forget: ответ отбрасывается координатором (пустой CmdID).
+func (n *Node) applyExecRoots(m proto.Msg) (*Reply, error) {
+	roots := make(map[int]ExecRoot, len(m.ExecRoots))
+	for _, r := range m.ExecRoots {
+		roots[r.PID] = ExecRoot{Starttime: r.Starttime, SID: r.SID}
+	}
+	n.SetExecRoots(roots)
+	return &Reply{CmdID: m.CmdID, Result: ResSent}, nil
 }
 
 // profileApprovalOptions — варианты подтверждения профиля → Profile узла.
@@ -287,7 +326,7 @@ func (n *Node) cycle(ctx context.Context, send func(proto.Msg) error) error {
 	// координатор сверяет живое множество и помечает исчезнувшие GONE.
 	// Пустой список не отбрасываем: иначе «труп» после перезапуска кодера
 	// оставался ACTIVE в БД вечно.
-	ext := ScanExternal(table, panePIDToSID, n.prof.Cmdline(), n.gatewayURLValue(), readOpenAIBaseURL, readRunpilotSID, readProcCwd)
+	ext := ScanExternal(table, panePIDToSID, n.prof.Cmdline(), n.gatewayURLValue(), readOpenAIBaseURL, n.execRootsValue(), readProcCwd)
 	em := proto.New(proto.KindExternal)
 	em.Externals = ext
 	if err := send(em); err != nil {
@@ -365,6 +404,8 @@ func (n *Node) Handle(ctx context.Context, m proto.Msg) (*Reply, error) {
 		return n.uninstall(ctx, m)
 	case proto.KindConfig:
 		return n.config(ctx, m)
+	case proto.KindExecRoots:
+		return n.applyExecRoots(m)
 	case proto.KindQwenSettings:
 		return n.qwenSettings(ctx, m)
 	case proto.KindAdopt:

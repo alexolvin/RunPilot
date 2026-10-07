@@ -65,6 +65,11 @@ type Server struct {
 	// Чтение в handleNodeWS (переподключение → ResendHost) — после Set*.
 	pusher *StatusPusher
 
+	// execRootsPusher — пуш EXEC-корней (KindExecRoots) координатор → узел:
+	// правило «кодер вне очереди». Ставится из serve.go; nil — пуш выключен
+	// (тесты). Чтение в handleNodeWS/handleJobCreate/handleJobFinish/embedded.
+	execRootsPusher *ExecRootsPusher
+
 	// Активные SSE-подключения (cancel их контекста = разрыв для клиента;
 	// используется стендом для проверки RESYNC, v2 CONTROL 2).
 	sseMu      sync.Mutex
@@ -233,6 +238,25 @@ func (s *Server) SetScheduler(sch *scheduler.Scheduler) { s.sched = sch }
 // координатор → узлы. Вызывается из serve.go после планировщика; при
 // переподключении узла handleNodeWS зовёт pusher.ResendHost.
 func (s *Server) SetStatusPusher(p *StatusPusher) { s.pusher = p }
+
+// SetExecRootsPusher — пуш EXEC-корней (KindExecRoots) координатор → узел.
+func (s *Server) SetExecRootsPusher(p *ExecRootsPusher) { s.execRootsPusher = p }
+
+// ExecRootsPush — разослать узлам набор EXEC-корней, только при изменении
+// (create/finish exec, тик). nil-пушер — no-op (тесты).
+func (s *Server) ExecRootsPush() {
+	if s.execRootsPusher != nil {
+		s.execRootsPusher.PushAll()
+	}
+}
+
+// ExecRootsResend — переподключение/подключение узла: отправить ему актуальный
+// набор EXEC-корней. nil-пушер — no-op.
+func (s *Server) ExecRootsResend(host string) {
+	if s.execRootsPusher != nil {
+		s.execRootsPusher.ResendHost(host)
+	}
+}
 
 // SetMonitor — монитор (Э6): серверная часть doctor (/api/v1/doctor).
 func (s *Server) SetMonitor(mon *monitor.Monitor) { s.mon = mon }
@@ -826,6 +850,9 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 		s.log.Warn("api: node: config (hello-ответ): "+err.Error(), "host", host)
 		return
 	}
+	// EXEC-корни (KindExecRoots): при подключении/переподключении узла —
+	// актуальный набор (правило «кодер вне очереди»).
+	s.ExecRootsResend(host)
 	// П.6(c): после переподключения (hello + первый полный список panes)
 	// переотправить строки статуса всех панелей узла + сводку. Только на
 	// ПЕРВОМ panes соединения: узел шлёт полный список и по hello, и далее

@@ -16,20 +16,56 @@ func GatewayCoderURL(gatewayURL, sid string) string {
 	return strings.TrimRight(gatewayURL, "/") + "/s/" + sid + "/v1"
 }
 
-// execCmdRe — cmdline процесса runpilot exec (JOB-сессия, 8.1 ТЗ): «runpilot
-// exec …», с путём или без. Корень EXEC-сессии — PID этого процесса.
-var execCmdRe = regexp.MustCompile(`(^|/)runpilot exec( |$)`)
+// ExecRoot — EXEC-корень сессии: время старта процесса runpilot exec
+// (/proc/<pid>/stat, поле 22, clock ticks с boot) и sid сессии. PID хранится
+// в ключе карты (map[int]ExecRoot). Кодекс: кодер управляем, если он потомок
+// живого корня И время старта корневого процесса совпадает с сохранённым
+// (совпадение защищает от переиспользования PID).
+type ExecRoot struct {
+	Starttime int64
+	SID       string
+}
+
+// procStartTimeFn — время старта процесса; подменяется в тестах (ScanExternal).
+var procStartTimeFn = ProcStartTime
+
+// ProcStartTime — время старта процесса (/proc/<pid>/stat, поле 22: clock
+// ticks с boot). 0, если процесс не найден / stat не читается (тогда PID не
+// считается живым корнем: совпадение со старта-0 невозможно).
+// comm (поле 2) может содержать пробелы и скобки — режем после последней «)».
+func ProcStartTime(pid int) int64 {
+	b, err := os.ReadFile(procDir + "/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return 0
+	}
+	s := string(b)
+	// comm (поле 2) может содержать пробелы/скобки — режем после последней «)».
+	i := strings.LastIndexByte(s, ')')
+	if i < 0 {
+		return 0
+	}
+	// После «)» поля сдвинуты: state=fields[0], ..., starttime (поле 22) =
+	// fields[statStarttimeIdx] (0-based).
+	f := strings.Fields(s[i+1:])
+	if len(f) < statStarttimeIdx+1 {
+		return 0
+	}
+	v, err := strconv.ParseInt(f[statStarttimeIdx], decimalBase, int64Bits)
+	if err != nil {
+		return 0
+	}
+	return v
+}
 
 // CoderOutOfQueue — единое правило «кодер вне очереди» (правило 2 ТЗ), общее
 // для doctor (coder_out_of_queue) и веба (ScanExternal). Процесс кодера
 // (cmdline_regex) УПРАВЛЯЕМ тогда и только тогда, когда выполнены оба условия:
-//   (а) он процесс кодера живой сессии — потомок корневого процесса сессии
-//       (sessionSID != ""): для PANE — панель с sid, для EXEC — процесс
-//       runpilot exec;
+//   (а) он потомок корня живой сессии (sessionSID != ""): PANE-корень — панель
+//       с sid, EXEC-корень — сохранённый PID exec (время старта совпадает);
 //   (б) его OPENAI_BASE_URL = gatewayURL/s/<sessionSID>/v1.
-// Всё остальное — вне очереди (true). Включает ручной запуск qwen (нет корня,
-// нет/чужой URL), qwen под vLLM напрямую и qwen завершённой EXEC-сессии
-// (exec умер → кодёр репарентирован в init → не потомок живого корня).
+// Всё остальное — вне очереди (true): ручной запуск qwen (нет корня,
+// нет/чужой URL), qwen под vLLM напрямую, qwen завершённой EXEC-сессии
+// (exec умер → не потомок живого корня).
 func CoderOutOfQueue(sessionSID, openAIBaseURL, gatewayURL string) bool {
 	if sessionSID == "" {
 		return true
@@ -40,11 +76,14 @@ func CoderOutOfQueue(sessionSID, openAIBaseURL, gatewayURL string) bool {
 // SessionSID — единый вывод sid сессии кодера (общий для doctor и веба). Идёт
 // вверх по цепочке родителей кодера (pid):
 //   - попадается панель из paneSID → PANE: возвращает sid панели;
-//   - попадается процесс runpilot exec → EXEC: возвращает coderRunpilotSID
-//     (RUNPILOT_SID самого кодера из /proc environ — ставит координатор в env);
-//   - иначе (ручной запуск, завершённая сессия) → "".
-// parentOf/argsOf — доступ к таблице процессов узла/doctor (общий интерфейс).
-func SessionSID(pid int, paneSID map[int]string, coderRunpilotSID string, parentOf func(pid int) int, argsOf func(pid int) string) string {
+//   - попадается EXEC-корень из execRoots (PID) И время старта процесса
+//     совпадает (starttimeOf(cur) == root.Starttime) → EXEC: возвращает
+//     root.SID;
+//   - иначе (ручной запуск, завершённая/чужая сессия) → "".
+// Корни не выводятся по командной строке: EXEC-корень — только по сохранённому
+// PID + времени старта (защита от переиспользования PID).
+// parentOf/starttimeOf — доступ к таблице процессов (общий интерфейс).
+func SessionSID(pid int, paneSID map[int]string, execRoots map[int]ExecRoot, starttimeOf func(pid int) int64, parentOf func(pid int) int) string {
 	seen := map[int]bool{}
 	cur := pid
 	for cur != 0 && !seen[cur] {
@@ -52,31 +91,29 @@ func SessionSID(pid int, paneSID map[int]string, coderRunpilotSID string, parent
 		if s, ok := paneSID[cur]; ok {
 			return s
 		}
-		if execCmdRe.MatchString(argsOf(cur)) {
-			return coderRunpilotSID
+		if root, ok := execRoots[cur]; ok && starttimeOf(cur) == root.Starttime {
+			return root.SID
 		}
 		cur = parentOf(cur)
 	}
 	return ""
 }
 
-// ScanExternal — внешние кодеры (8.2 ТЗ): процессы, совпадающие с
+// ScanExternal — внешные кодеры (8.2 ТЗ): процессы, совпадающие с
 // cmdline_regex, вне очереди по единому правилу (SessionSID + CoderOutOfQueue).
-// panePIDToSID — панель → sid (PANE-корни). gatewayURL — gateway_url
-// координатора (условие (б)). openAIBaseURL(pid) — OPENAI_BASE_URL кодера из
-// /proc environ; по нему координатор выводит target. runpilotSID(pid) —
-// RUNPILOT_SID кодера (env) — sid для EXEC-корней. EXEC-корни (процессы
-// runpilot exec) выводятся из таблицы процессов локально (execCmdRe).
+// panePIDToSID — панель → sid (PANE-корни). execRoots — PID → EXEC-корень
+// (время старта + sid), присланный координатором (условие (а) для EXEC).
+// gatewayURL — gateway_url координатора (условие (б)). openAIBaseURL(pid) —
+// OPENAI_BASE_URL кодера из /proc environ; по нему координатор выводит target.
 // source — цепочка родителей до PID 1.
-func ScanExternal(t *procTable, panePIDToSID map[int]string, cmdlineRe *regexp.Regexp, gatewayURL string, openAIBaseURL func(pid int) string, runpilotSID func(pid int) string, cwd func(pid int) string) []proto.ExternalProc {
+func ScanExternal(t *procTable, panePIDToSID map[int]string, cmdlineRe *regexp.Regexp, gatewayURL string, openAIBaseURL func(pid int) string, execRoots map[int]ExecRoot, cwd func(pid int) string) []proto.ExternalProc {
 	var out []proto.ExternalProc
 	for pid, args := range t.args {
 		if !cmdlineRe.MatchString(args) {
 			continue
 		}
-		sessionSID := SessionSID(pid, panePIDToSID, runpilotSID(pid),
-			func(p int) int { return t.ppid[p] },
-			func(p int) string { return t.args[p] })
+		sessionSID := SessionSID(pid, panePIDToSID, execRoots, procStartTimeFn,
+			func(p int) int { return t.ppid[p] })
 		if !CoderOutOfQueue(sessionSID, openAIBaseURL(pid), gatewayURL) {
 			continue // кодер живой сессии с верным URL шлюза — управляемый
 		}
@@ -268,7 +305,3 @@ func readProcEnvValue(pid int, key string) string {
 // readOpenAIBaseURL — OPENAI_BASE_URL из /proc environ. macOS/отсутствие —
 // пустая строка (target = unknown на координаторе).
 func readOpenAIBaseURL(pid int) string { return readProcEnvValue(pid, openaiBaseURLKey) }
-
-// readRunpilotSID — RUNPILOT_SID из /proc environ (sid EXEC-сессии кодера).
-// Для EXEC-корней единого правила «кодер вне очереди».
-func readRunpilotSID(pid int) string { return readProcEnvValue(pid, runpilotSIDKey) }

@@ -113,6 +113,10 @@ func embeddedNode(ctx context.Context, srv *api.Server, hub *api.Hub,
 		}
 	}()
 
+	// EXEC-корни (KindExecRoots): при подключении встроенного узла — актуальный
+	// набор (правило «кодер вне очереди»).
+	srv.ExecRootsResend(host)
+
 	// GPU-телеметрия (раздел 10 ТЗ), если включена.
 	if n.GPUEnabled() {
 		go func() { _ = n.RunGPU(ctx, send) }()

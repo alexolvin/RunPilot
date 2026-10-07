@@ -212,7 +212,15 @@ func newServeCmd() *cobra.Command {
 			// сервера; переподключение узла → handleNodeWS: ResendHost.
 			statusPusher := api.NewStatusPusher(hub, sch, log)
 			srv.SetStatusPusher(statusPusher)
-			sch.SetOnStatus(statusPusher.PushAll)
+			// EXEC-корни (KindExecRoots): правило «кодер вне очереди». По тiku
+			// (безопасная сетка) + по событию create/finish (jobs.go) + при
+			// подключении узла (handleNodeWS/embedded → ExecRootsResend).
+			execRootsPusher := api.NewExecRootsPusher(hub, st, log)
+			srv.SetExecRootsPusher(execRootsPusher)
+			sch.SetOnStatus(func() {
+				statusPusher.PushAll()
+				execRootsPusher.PushAll()
+			})
 			srv.SetMonitor(mon)
 			srv.SetProfile(prof)
 			srv.SetServerReg(gw.Servers())

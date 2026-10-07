@@ -20,6 +20,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"runpilot/internal/node"
 	"runpilot/profiles"
 )
 
@@ -79,9 +80,11 @@ func runExec(o execOpts) (int, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 1) Регистрация (п.2). os.Getpid() — PID процесса runpilot exec: хранится
-	// в записи EXEC-сессии (exec_pid) и доступен узлу (авторитетная копия).
-	sid, err := api.create(ctx, o.name, o.prio, o.pin, o.prefer, os.Getpid())
+	// 1) Регистрация (п.2). os.Getpid() — PID процесса runpilot exec, а
+	// ProcStartTime(os.Getpid()) — время его старта (/proc/self/stat, поле 22):
+	// пара (PID, starttime) — EXEC-корень (exec_pid + exec_starttime), доступен
+	// узлу; сверка времени старта защищает от переиспользования PID.
+	sid, err := api.create(ctx, o.name, o.prio, o.pin, o.prefer, os.Getpid(), node.ProcStartTime(os.Getpid()))
 	if err != nil {
 		return jobExitCode(err), err
 	}

@@ -38,7 +38,6 @@ const (
 	procCwdName      = "cwd"
 	procEnvSep       = "\x00"
 	openaiBaseURLKey = "OPENAI_BASE_URL="
-	runpilotSIDKey   = "RUNPILOT_SID=" // sid EXEC-сессии в env кодера (8.1)
 	procUidField     = "Uid:"
 
 	// killStartTimeToleranceSec — допуск сверки start_time при kill (8.2):
@@ -47,6 +46,9 @@ const (
 	// decimalBase / int64Bits — основание и разрядность strconv.
 	decimalBase = 10
 	int64Bits   = 64
+	// statStarttimeIdx — 0-based индекс starttime в полях /proc/<pid>/stat после
+	// «comm )» (поле 22, 1-based; state=fields[0] → starttime=fields[19]).
+	statStarttimeIdx = 19
 	// mibInBytes — МБ в байтах (node_health disk_free_mb, 14.4).
 	mibInBytes = 1024 * 1024
 	// paneFieldCount — число tab-полей вывода list-panes.

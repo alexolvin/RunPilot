@@ -16,6 +16,11 @@ const (
 	// statusRedirectLow/High — диапазон HTTP-кодов редиректов [300, 400).
 	statusRedirectLow  = 300
 	statusRedirectHigh = 400
+	// client_coordinator: таймаут HTTP-проверки (сек) + диапазон статусов
+	// (2xx–4xx = сервер жив; 5xx = сервер бьёт).
+	clientCoordinatorTimeoutSec = 5
+	httpOKMin                   = 200
+	httpServerError             = 500
 	// Позиции полей формата checkCoderTimeoutEnv:
 	// "#{pane_dead}\t#{pane_pid}\t#{session_name}\t#{@runpilot_sid}".
 	paneFieldDead    = 0

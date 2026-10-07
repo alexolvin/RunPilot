@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,39 @@ import (
 
 func runAll(t *testing.T, cfg *config.Config, path string) []Result {
 	t.Helper()
+	// client_coordinator не ходит в реальный HTTP в тестах.
+	oldGet := httpGet
+	httpGet = func(url, token string) (int, error) { return 200, nil }
+	t.Cleanup(func() { httpGet = oldGet })
 	return Run(&Context{Cfg: cfg, CfgPath: path}, DefaultChecks())
+}
+
+// client_coordinator: отвечает (2xx) -> PASS; не отвечает (dial) -> FAIL с адресом.
+func TestClientCoordinator(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.Client.Coordinator = "http://127.0.0.1:18788"
+
+	t.Run("отвечает", func(t *testing.T) {
+		old := httpGet
+		httpGet = func(url, token string) (int, error) { return 200, nil }
+		defer func() { httpGet = old }()
+		r := checkClientCoordinator(&Context{Cfg: cfg})
+		if r.Level != PASS {
+			t.Fatalf("отвечает: %s", r)
+		}
+	})
+	t.Run("не отвечает", func(t *testing.T) {
+		old := httpGet
+		httpGet = func(url, token string) (int, error) { return 0, errors.New("connection refused") }
+		defer func() { httpGet = old }()
+		r := checkClientCoordinator(&Context{Cfg: cfg})
+		if r.Level != FAIL {
+			t.Fatalf("не отвечает: %s", r)
+		}
+		if !strings.Contains(r.Detail, "127.0.0.1:18788") {
+			t.Errorf("в FAIL должен быть адрес: %s", r.Detail)
+		}
+	})
 }
 
 func TestDefaultChecksValid(t *testing.T) {

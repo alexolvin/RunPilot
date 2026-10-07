@@ -40,17 +40,21 @@ type SessionRecord struct {
 	// LaunchCommand — буфер «команд для запуска»: заряд (текст + токены
 	// клавиш), воспроизводимый узлом при dispatch. Пусто = старое поведение.
 	LaunchCommand string
-	// ExecPID — PID процесса runpilot exec (JOB-сессия, 8.1): авторитетная
-	// копия для координатора (отчёт/управление). Правило «кодер вне очереди»
-	// выводит EXEC-корни локально (ps на узле), не читает это поле.
-	ExecPID int
+	// ExecPID + ExecStarttime — PID процесса runpilot exec (JOB-сессия, 8.1)
+	// и время его старта (/proc/<pid>/stat поле 22, clock ticks с boot).
+	// Корень EXEC-сессии для правила «кодер вне очереди»: кодер управляем,
+	// если потомок этого PID И время старта процесса совпадает с ExecStarttime
+	// (совпадение защищает от переиспользования PID). Хранятся в записи и
+	// доступны узлу (координатор шлёт EXEC-корни узлу; doctor читает из БД).
+	ExecPID       int
+	ExecStarttime int64
 }
 
 const sessionCols = `sid, name, host, host_ip, tmux_session, window, pane_id,
 profile, agent_version, kind, state, state_changed_at, hold_reason, class,
 constraint_kind, constraint_server, auto_enqueue, last_server,
 last_turn_end, last_migrated_from, attempts, created_at, launch_command,
-exec_pid`
+exec_pid, exec_starttime`
 
 func scanSession(row interface{ Scan(...any) error }) (SessionRecord, error) {
 	var r SessionRecord
@@ -61,7 +65,7 @@ func scanSession(row interface{ Scan(...any) error }) (SessionRecord, error) {
 		&r.PaneID, &r.Profile, &r.AgentVersion, &kind, &state, &changed, &hold,
 		&class, &ckind, &r.ConstraintServer, &auto, &r.LastServer,
 		&turnEnd, &r.LastMigratedFrom, &r.Attempts, &created, &r.LaunchCommand,
-		&r.ExecPID)
+		&r.ExecPID, &r.ExecStarttime)
 	if err == nil {
 		r.Class = model.QueueClass(class)
 	}
@@ -94,14 +98,14 @@ func (s *Store) CreateSession(r SessionRecord) error {
 			agent_version, kind, state, state_changed_at, hold_reason, class,
 			constraint_kind, constraint_server, auto_enqueue, last_server,
 			last_turn_end, last_migrated_from, attempts, created_at,
-			launch_command, exec_pid
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			launch_command, exec_pid, exec_starttime
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			r.SID, r.Name, r.Host, r.HostIP, r.TmuxSession, r.Window, r.PaneID,
 			r.Profile, r.AgentVersion, r.Kind, r.State, ts(r.StateChangedAt),
 			r.HoldReason, int(r.Class), r.ConstraintKind, r.ConstraintServer,
 			boolInt(r.AutoEnqueue), r.LastServer, ts(r.LastTurnEnd),
 			r.LastMigratedFrom, r.Attempts, ts(r.CreatedAt), r.LaunchCommand,
-			r.ExecPID)
+			r.ExecPID, r.ExecStarttime)
 		return err
 	})
 }
@@ -340,6 +344,37 @@ func (s *Store) ListSessions(includeGone bool) ([]SessionRecord, error) {
 	for rows.Next() {
 		r, err := scanSession(rows)
 		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// ExecRootRecord — живой EXEC-корень: (host, sid, exec_pid, exec_starttime).
+// Для правила «кодер вне очереди»: кодер управляем, если потомок exec_pid и
+// время старта процесса совпадает с exec_starttime.
+type ExecRootRecord struct {
+	Host      string
+	SID       string
+	PID       int
+	Starttime int64
+}
+
+// LiveExecRoots — живые EXEC-корни (JOB-сессии, не GONE, exec_pid > 0).
+// «Живость» самого процесса (PID не переиспользован) проверяет вызывающий
+// сверкой времени старта (node.ProcStartTime / doctor).
+func (s *Store) LiveExecRoots() ([]ExecRootRecord, error) {
+	rows, err := s.DB().Query(`SELECT host, sid, exec_pid, exec_starttime FROM session
+		WHERE kind = 'JOB' AND state <> 'GONE' AND exec_pid > 0`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ExecRootRecord
+	for rows.Next() {
+		var r ExecRootRecord
+		if err := rows.Scan(&r.Host, &r.SID, &r.PID, &r.Starttime); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

@@ -92,6 +92,7 @@ const (
 	KindUpdate      Kind = "update"
 	KindUninstall   Kind = "uninstall"
 	KindConfig      Kind = "config"
+	KindExecRoots   Kind = "exec_roots" // EXEC-корни (PID+время старта+sid) узлу
 	KindAdopt       Kind = "adopt"
 	KindQwenSettings Kind = "qwen_settings" // доп-3i: явная проверка/поправка settings.json
 
@@ -112,7 +113,7 @@ var AllKinds = map[Kind]bool{
 	KindSetStatus: true, KindSetSummary: true, KindDrain: true,
 	KindSpawn: true, KindRespawn: true, KindKillSession: true, KindReleasePane: true,
 	KindKillProcess: true, KindListDirs: true, KindUpdate: true, KindUninstall: true,
-	KindConfig: true, KindAdopt: true, KindQwenSettings: true,
+	KindConfig: true, KindExecRoots: true, KindAdopt: true, KindQwenSettings: true,
 	KindPtyOpen: true, KindPtyClose: true, KindPtyExit: true,
 }
 
@@ -136,6 +137,11 @@ type Msg struct {
 
 	// external_process (8.2): внешние кодеры вне tmux/runpilot.
 	Externals []ExternalProc `json:"externals,omitempty"`
+
+	// exec_roots: EXEC-корни сессий (PID+время старта+sid) координатор → узел
+	// (правило «кодер вне очереди»): кодер управляем, если потомок PID и время
+	// старта корневого процесса совпадает с сохранённым.
+	ExecRoots []ExecRoot `json:"exec_roots,omitempty"`
 
 	// unmanaged_panes (8.3 X1): панели с кодером без @runpilot_sid (полный список
 	// каждого цикла; пустой список тоже шлётся — координатор сверяет живое).
@@ -300,6 +306,16 @@ type ExternalProc struct {
 	Source        string   `json:"source"` // cron|systemd|sshd|tmux|other
 	OpenAIBaseURL string   `json:"openai_base_url,omitempty"`
 	CWD           string   `json:"cwd,omitempty"` // readlink /proc/<pid>/cwd (для команды перезапуска)
+}
+
+// ExecRoot — EXEC-корень сессии (PID процесса runpilot exec + время его
+// старта, поле 22 /proc/<pid>/stat + sid). Кодекс правила «кодер вне очереди»:
+// кодер управляем, если он потомок PID и время старта корневого процесса
+// совпадает с Starttime (защита от переиспользования PID).
+type ExecRoot struct {
+	PID       int    `json:"pid"`
+	Starttime int64  `json:"start_time"`
+	SID       string `json:"sid"`
 }
 
 // UnmanagedPane — панель с кодером, запущенным не через runpilot (8.3 X1):

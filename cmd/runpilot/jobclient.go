@@ -72,9 +72,11 @@ func (j *jobAPI) do(ctx context.Context, method, path string, body, out any) err
 }
 
 // create — POST /api/v1/jobs. pid — PID процесса runpilot exec (авторитетная
-// копия в записи EXEC-сессии, «доступен узлу»); попадает в поле exec_pid.
-func (j *jobAPI) create(ctx context.Context, name, prio, pin, prefer string, pid int) (string, error) {
-	body := map[string]any{"name": name, "prio": prio, "pin": pin, "prefer": prefer, "pid": pid}
+// копия в записи EXEC-сессии, «доступен узлу»); starttime — время старта
+// процесса (/proc/self/stat поле 22). Пара (pid, starttime) — EXEC-корень для
+// правила «кодер вне очереди» (попадает в exec_pid + exec_starttime).
+func (j *jobAPI) create(ctx context.Context, name, prio, pin, prefer string, pid int, starttime int64) (string, error) {
+	body := map[string]any{"name": name, "prio": prio, "pin": pin, "prefer": prefer, "pid": pid, "start_time": starttime}
 	var out struct {
 		SID string `json:"sid"`
 	}

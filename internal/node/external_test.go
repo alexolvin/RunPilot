@@ -51,7 +51,7 @@ func TestScanExternalCron(t *testing.T) {
 	envs := map[int]string{901: "http://127.0.0.1:9000/v1", 100: GatewayCoderURL(testExternalGateway, "sid100")}
 	cwds := map[int]string{901: "/home/user/project"}
 	ex := ScanExternal(table, panePIDToSID, re, testExternalGateway,
-		func(pid int) string { return envs[pid] }, func(pid int) string { return "" },
+		func(pid int) string { return envs[pid] }, map[int]ExecRoot{},
 		func(pid int) string { return cwds[pid] })
 	if len(ex) != 1 {
 		t.Fatalf("внешних: %d, хочу 1: %+v", len(ex), ex)
@@ -98,7 +98,7 @@ func TestScanExternalSystemd(t *testing.T) {
 	panePIDToSID := map[int]string{600: "sid600"}
 	envs := map[int]string{600: GatewayCoderURL(testExternalGateway, "sid600")}
 	ex := ScanExternal(table, panePIDToSID, re, testExternalGateway,
-		func(pid int) string { return envs[pid] }, func(pid int) string { return "" },
+		func(pid int) string { return envs[pid] }, map[int]ExecRoot{},
 		func(pid int) string { return "" })
 	if len(ex) != 1 {
 		t.Fatalf("внешних: %d, хочу 1 (systemd-qwen): %+v", len(ex), ex)
@@ -108,8 +108,11 @@ func TestScanExternalSystemd(t *testing.T) {
 	}
 }
 
-// TestScanExternalExecLive — кодер живой EXEC-сессии: qwen 501 под runpilot
-// exec 500, RUNPILOT_SID=sid501 + верный URL шлюза -> управляемый (не внешний).
+// TestScanExternalExecLive — кодер живой EXEC-сессии: qwen 501 под процессом
+// 500, который в EXEC-корнях (PID+время старта совпадает) + верный URL шлюза
+// -> управляемый (не внешний). cmdline 500 с глобальным флагом --config:
+// правило НЕ разбирает cmdline (корень по PID) — флаг на результат не влияет
+// («runpilot --config X exec …» и любые глобальные флаги -> управляемый).
 func TestScanExternalExecLive(t *testing.T) {
 	prof, err := profiles.LoadEmbeddedQwen()
 	if err != nil {
@@ -117,7 +120,7 @@ func TestScanExternalExecLive(t *testing.T) {
 	}
 	re := prof.Cmdline()
 	const psOut = `  1    0    0    0 /sbin/init
-500    1  1000  10 runpilot exec --name j1
+500    1  1000  10 /usr/local/bin/runpilot --config /x exec --name j1
 501  500  1000  10 /usr/local/bin/qwen --approval-mode default
 `
 	table, err := processTable(t.Context(), psExec(psOut))
@@ -125,19 +128,55 @@ func TestScanExternalExecLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	envs := map[int]string{501: GatewayCoderURL(testExternalGateway, "sid501")}
-	sids := map[int]string{501: "sid501"}
+	starts := map[int]int64{500: 123456}
+	old := procStartTimeFn
+	procStartTimeFn = func(pid int) int64 { return starts[pid] }
+	defer func() { procStartTimeFn = old }()
 	ex := ScanExternal(table, map[int]string{}, re, testExternalGateway,
 		func(pid int) string { return envs[pid] },
-		func(pid int) string { return sids[pid] },
+		map[int]ExecRoot{500: {Starttime: 123456, SID: "sid501"}},
 		func(pid int) string { return "" })
 	if len(ex) != 0 {
 		t.Fatalf("кодер живой EXEC-сессии управляемый, внешних хочу 0: %+v", ex)
 	}
 }
 
-// TestScanExternalExecFinished — EXEC-сессия завершена: exec-процесс умер,
-// qwen 501 репарентирован в init (родитель 1) -> не потомок живого корня ->
-// вне очереди (даже с «верным» URL — сессии больше нет).
+// TestScanExternalExecPIDReused — PID корня переиспользован другим процессом:
+// EXEC-корень {500, starttime=123456}, но процесс 500 — другой (starttime 999)
+// -> время старта не совпадает -> не потомок живого корня -> вне очереди
+// (даже с «верным» URL). Защита от переиспользования PID.
+func TestScanExternalExecPIDReused(t *testing.T) {
+	prof, err := profiles.LoadEmbeddedQwen()
+	if err != nil {
+		t.Fatal(err)
+	}
+	re := prof.Cmdline()
+	const psOut = `  1    0    0    0 /sbin/init
+500    1  1000  10 /usr/local/bin/other
+501  500  1000  10 /usr/local/bin/qwen --approval-mode default
+`
+	table, err := processTable(t.Context(), psExec(psOut))
+	if err != nil {
+		t.Fatal(err)
+	}
+	envs := map[int]string{501: GatewayCoderURL(testExternalGateway, "sid501")}
+	// PID 500 жив, но это ДРУГОЙ процесс (starttime 999 != сохранённому 123456).
+	starts := map[int]int64{500: 999}
+	old := procStartTimeFn
+	procStartTimeFn = func(pid int) int64 { return starts[pid] }
+	defer func() { procStartTimeFn = old }()
+	ex := ScanExternal(table, map[int]string{}, re, testExternalGateway,
+		func(pid int) string { return envs[pid] },
+		map[int]ExecRoot{500: {Starttime: 123456, SID: "sid501"}},
+		func(pid int) string { return "" })
+	if len(ex) != 1 || ex[0].PID != 501 {
+		t.Fatalf("PID переиспользован -> вне очереди: внешних=%d, хочу 1 (501): %+v", len(ex), ex)
+	}
+}
+
+// TestScanExternalExecFinished — EXEC-сессия завершена: exec-процесс умер
+// (нет в таблице), qwen 501 репарентирован в init (родитель 1), EXEC-корней
+// нет (GONE) -> не потомок живого корня -> вне очереди.
 func TestScanExternalExecFinished(t *testing.T) {
 	prof, err := profiles.LoadEmbeddedQwen()
 	if err != nil {
@@ -152,10 +191,9 @@ func TestScanExternalExecFinished(t *testing.T) {
 		t.Fatal(err)
 	}
 	envs := map[int]string{501: GatewayCoderURL(testExternalGateway, "sid501")}
-	sids := map[int]string{501: "sid501"}
 	ex := ScanExternal(table, map[int]string{}, re, testExternalGateway,
 		func(pid int) string { return envs[pid] },
-		func(pid int) string { return sids[pid] },
+		map[int]ExecRoot{},
 		func(pid int) string { return "" })
 	if len(ex) != 1 || ex[0].PID != 501 {
 		t.Fatalf("qwen завершённой EXEC-сессии вне очереди: внешних=%d, хочу 1 (501): %+v", len(ex), ex)

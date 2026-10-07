@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"runpilot/internal/config"
 	"runpilot/internal/node"
@@ -59,6 +62,13 @@ type Context struct {
 	// Cmdline — cmdline_regex профиля кодера (profiles.Qwen.Cmdline()); nil —
 	// профиль не загружен, проверки деградируют до pane_pid.
 	Cmdline *regexp.Regexp
+	// ExecRoots — EXEC-корни живых сессий (PID процесса runpilot exec →
+	// {время старта, sid}), из БД (store.LiveExecRoots). Для правила «кодер
+	// вне очереди»: кодер управляем, если потомок корня и время старта совпадает.
+	ExecRoots map[int]node.ExecRoot
+	// StartTimeFn — время старта процесса (node.ProcStartTime); nil — default.
+	// Подменяется в тестах.
+	StartTimeFn func(pid int) int64
 }
 
 // Check — одна проверка.
@@ -108,6 +118,7 @@ func DefaultChecks() []Check {
 		{Name: "config", Run: checkConfig},
 		{Name: "allow_cidrs", Run: checkAllowCIDRs},
 		{Name: "coordinator_bind", Run: checkBind},
+		{Name: "client_coordinator", Run: checkClientCoordinator},
 		{Name: "secrets_env", Run: checkSecretsEnv},
 		{Name: "tmux", Run: checkTmux},
 		{Name: "qwen_settings", Run: checkQwenSettings},
@@ -158,6 +169,48 @@ func checkAllowCIDRs(ctx *Context) Result {
 		return result("allow_cidrs", FAIL, "список пуст")
 	}
 	return result("allow_cidrs", PASS, fmt.Sprintf("%d CIDR", len(cidrs)))
+}
+
+// httpGet — HTTP-GET для проверок (client_coordinator): (status, error).
+// Подменяется в тестах (без реального HTTP).
+var httpGet = func(url string, token string) (int, error) {
+	client := &http.Client{Timeout: clientCoordinatorTimeoutSec * time.Second}
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return 0, err
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+	return resp.StatusCode, nil
+}
+
+// checkClientCoordinator — client.coordinator (адрес координатора, который
+// использует client: runpilot run/exec) отвечает. GET с операторским токеном:
+// любой HTTP-ответ (2xx-4xx) = сервер жив; dial-ошибка/таймаут = FAIL с адресом.
+func checkClientCoordinator(ctx *Context) Result {
+	const name = "client_coordinator"
+	if ctx.Cfg == nil {
+		return result(name, FAIL, "нет конфигурации")
+	}
+	addr := strings.TrimRight(ctx.Cfg.Client.Coordinator, "/")
+	if addr == "" {
+		return result(name, FAIL, "client.coordinator не задан")
+	}
+	status, err := httpGet(addr+"/api/v1/meta", os.Getenv(ctx.Cfg.Client.TokenEnv))
+	if err != nil {
+		return result(name, FAIL, "не отвечает "+addr+": "+err.Error())
+	}
+	if status >= httpOKMin && status < httpServerError {
+		return result(name, PASS, "отвечает "+addr)
+	}
+	return result(name, WARN, fmt.Sprintf("статус %d: %s", status, addr))
 }
 
 func checkBind(ctx *Context) Result {
@@ -589,16 +642,20 @@ func checkCoderOutOfQueue(ctx *Context) Result {
 		if !ctx.Cmdline.MatchString(args) {
 			continue
 		}
-		var openAIBaseURL, runpilotSID string
+		var openAIBaseURL string
 		if environ, err := readProcEnviron(strconv.Itoa(pid)); err == nil {
 			openAIBaseURL = procEnvValue(environ, "OPENAI_BASE_URL")
-			runpilotSID = procEnvValue(environ, "RUNPILOT_SID")
 		}
-		// Единый вывод sid (PANE-панель / EXEC-runpilot exec) + правило — тот же
-		// node.SessionSID + node.CoderOutOfQueue, что и веб (ScanExternal).
-		sid := node.SessionSID(pid, panePIDToSID, runpilotSID,
-			func(p int) int { return tree.ppid[p] },
-			func(p int) string { return tree.args[p] })
+		// Единый вывод sid (PANE-панель / EXEC-корень PID+время старта) + правило
+		// — тот же node.SessionSID + node.CoderOutOfQueue, что и веб (ScanExternal).
+		// EXEC-корни — из БД (ctx.ExecRoots); время старта — StartTimeFn (default
+		// node.ProcStartTime).
+		starttimeOf := ctx.StartTimeFn
+		if starttimeOf == nil {
+			starttimeOf = node.ProcStartTime
+		}
+		sid := node.SessionSID(pid, panePIDToSID, ctx.ExecRoots, starttimeOf,
+			func(p int) int { return tree.ppid[p] })
 		if !node.CoderOutOfQueue(sid, openAIBaseURL, gatewayURL) {
 			continue // кодер живой сессии с верным URL шлюза — управляемый
 		}

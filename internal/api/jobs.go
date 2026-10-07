@@ -74,6 +74,10 @@ type jobCreateRequest struct {
 	// PID — PID процесса runpilot exec (client присылает os.Getpid());
 	// хранится в записи EXEC-сессии (exec_pid), доступен узлу.
 	PID int `json:"pid"`
+	// StartTime — время старта процесса runpilot exec (/proc/self/stat поле 22,
+	// clock ticks с boot); хранится в записи (exec_starttime). Пара (PID,
+	// StartTime) — корень EXEC-сессии для правила «кодер вне очереди».
+	StartTime int64 `json:"start_time"`
 }
 
 // jobCreateResponse — ответ POST /api/v1/jobs.
@@ -124,7 +128,7 @@ func (s *Server) handleJobCreate(w http.ResponseWriter, r *http.Request) {
 		Profile: "qwen", Kind: model.KindJob,
 		State: model.SessionIdle, StateChangedAt: now,
 		Class: class, ConstraintKind: c.Kind, ConstraintServer: c.Server,
-		CreatedAt: now, ExecPID: req.PID,
+		CreatedAt: now, ExecPID: req.PID, ExecStarttime: req.StartTime,
 	}
 	if err := s.store.CreateSession(rec); err != nil {
 		s.log.Error("api: jobs: создание: " + err.Error())
@@ -141,6 +145,9 @@ func (s *Server) handleJobCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("api: jobs: задание зарегистрировано", "sid", newSID, "name", name, "host", host)
+	// EXEC-корень стал живым: разослать узлам (правило «кодер вне очереди») —
+	// до запуска кодера, чтобы узел увидел корень при первом скане.
+	s.ExecRootsPush()
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(jobCreateResponse{SID: newSID})
 }
@@ -274,6 +281,8 @@ func (s *Server) handleJobFinish(w http.ResponseWriter, r *http.Request) {
 	_ = sess.Name // имя для лога
 	s.log.Info("api: jobs: задание завершено", "sid", si, "outcome", outcome,
 		"exit_code", req.ExitCode, "signal", req.Signal)
+	// EXEC-корень больше не живой (GONE): разослать узлам (снимем корень).
+	s.ExecRootsPush()
 	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "outcome": outcome})
 }
 

@@ -435,6 +435,19 @@ func (h *Hub) PushPane(paneID string, m proto.Msg) error {
 	return node.Conn.WriteJSON(m)
 }
 
+// PushToHost — fire-and-forget сообщение узлу по host БЕЗ ожидания reply
+// (EXEC-корни, KindExecRoots) — по модели PushPane. Ошибка — узел недоступен.
+// Reply узла отбрасывается координатором (пустой CmdID).
+func (h *Hub) PushToHost(host string, m proto.Msg) error {
+	h.mu.Lock()
+	node, ok := h.nodes[host]
+	h.mu.Unlock()
+	if !ok || node.Conn == nil {
+		return fmt.Errorf("hub: узел %s недоступен", host)
+	}
+	return node.Conn.WriteJSON(m)
+}
+
 // PaneBySID — снимок панели сессии.
 func (h *Hub) PaneBySID(sid string) (*PaneInfo, bool) {
 	h.mu.Lock()

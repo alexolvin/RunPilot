@@ -3,6 +3,8 @@ package doctor
 import (
 	"strings"
 	"testing"
+
+	"runpilot/internal/node"
 )
 
 // testOOQGateway — gateway_url из coderTimeoutEnvCtx() (URL кодера сессии).
@@ -103,23 +105,64 @@ func TestCoderOutOfQueueVLLMDirect(t *testing.T) {
 	}
 }
 
-// Кодер живой EXEC-сессии: qwen 501 под runpilot exec 500, RUNPILOT_SID +
-// верный URL шлюза -> управляемый -> PASS.
+// Кодер живой EXEC-сессии: qwen 501 под процессом 500, который в EXEC-корнях
+// (PID+время старта совпадает) + верный URL шлюза -> управляемый -> PASS.
+// cmdline 500 с глобальным флагом --config: правило не разбирает cmdline.
 func TestCoderOutOfQueueExecManaged(t *testing.T) {
 	defer installFakeOOQ(
 		"", // нет tmux-панелей
-		"1 0 init\n500 1 runpilot exec --name j1\n501 500 qwen\n",
+		"1 0 init\n500 1 runpilot --config /x exec --name j1\n501 500 qwen\n",
 		func(pid string) ([]byte, error) {
 			if pid == "501" {
-				return []byte("OPENAI_BASE_URL=" + testOOQGateway + "/s/sid501/v1\x00RUNPILOT_SID=sid501\x00"), nil
+				return []byte("OPENAI_BASE_URL=" + testOOQGateway + "/s/sid501/v1\x00"), nil
 			}
 			return []byte("PATH=/usr/bin\x00"), nil
 		},
 		func(string) string { return "/home/user/project" },
 	)()
-	r := checkCoderOutOfQueue(coderTimeoutEnvCtx())
+	ctx := coderTimeoutEnvCtx()
+	// EXEC-корень 500 (PID + время старта 42) + время старта процесса 500 = 42.
+	ctx.ExecRoots = map[int]node.ExecRoot{500: {Starttime: 42, SID: "sid501"}}
+	ctx.StartTimeFn = func(pid int) int64 {
+		if pid == 500 {
+			return 42
+		}
+		return 0
+	}
+	r := checkCoderOutOfQueue(ctx)
 	if r.Level != PASS {
 		t.Fatalf("уровень=%s, хочу PASS (кодер живой EXEC-сессии); detail=%s", r.Level, r.Detail)
+	}
+}
+
+// PID корня переиспользован: EXEC-корень {500, starttime=42}, но процесс 500 —
+// другой (starttime 99) -> не совпадает -> вне очереди -> WARN.
+func TestCoderOutOfQueueExecPIDReused(t *testing.T) {
+	defer installFakeOOQ(
+		"",
+		"1 0 init\n500 1 other\n501 500 qwen\n",
+		func(pid string) ([]byte, error) {
+			if pid == "501" {
+				return []byte("OPENAI_BASE_URL=" + testOOQGateway + "/s/sid501/v1\x00"), nil
+			}
+			return []byte("PATH=/usr/bin\x00"), nil
+		},
+		func(string) string { return "/home/user/project" },
+	)()
+	ctx := coderTimeoutEnvCtx()
+	ctx.ExecRoots = map[int]node.ExecRoot{500: {Starttime: 42, SID: "sid501"}}
+	ctx.StartTimeFn = func(pid int) int64 {
+		if pid == 500 {
+			return 99 // другой процесс переиспользовал PID
+		}
+		return 0
+	}
+	r := checkCoderOutOfQueue(ctx)
+	if r.Level != WARN {
+		t.Fatalf("уровень=%s, хочу WARN (PID переиспользован); detail=%s", r.Level, r.Detail)
+	}
+	if !strings.Contains(r.Detail, "501") {
+		t.Errorf("WARN должен содержать PID 501: %s", r.Detail)
 	}
 }
 
