@@ -1,5 +1,88 @@
 # HANDOFF
-Обновлено: 2026-10-07 (W11 п.3 доп: правило «кодер вне очереди» расширено на EXEC + ExecPID в записи + make node-upgrade-line + выкат координатора c467ef4)
+Обновлено: 2026-10-07 (W11: исправлены 2 дефекта exec — промпт кодеру + освобождение слота (host/per-host/exec_root_dead) + doctor client_coordinator строгий + тест client.coordinator + выкат 5a0d9fc + приёмка exec на /mdisk/myhub/test)
+
+## W11 — исправление 2 дефектов exec + doctor client_coordinator + выкат 5a0d9fc + приёмка (2026-10-07) — ВЫПОЛНЕНО
+
+> Директива: «Приёмка п.4 принята. Не принято: два дефекта exec оставлены без
+> исправления. "Pre-existing" не основание: первый ломает exec целиком, второй
+> блокирует слот сервера. Исправить в этом цикле». 6 пунктов: 1 (exec prompt) →
+> 2 (утечка слота) → 3 (doctor client_coordinator) → 4 (client.coordinator из
+> bind+api_port) → 5 (node-upgrade-line) → 6 (приёмка на /mdisk/myhub/test →
+> ворота → выкат → HANDOFF).
+
+- **п.1 — exec передаёт промпт кодеру — ✅ DONE** (коммит `5a0d9fc`). Дефект:
+  `o.args` не заполнялось в RunE → `runpilot exec -- "…" промпт"` приходил к
+  qwen пустым (one-shot без промпта). Фикс: `o.args = args` в RunE;
+  `buildQwenCmd` кладёт промпт **позиционным** аргументом (qwen: «Defaults to
+  one-shot», stdin=/dev/null). Тест `TestBuildQwenCmdPrompt` (Args=[qwen …],
+  ENV шлюза проброшен). E2E (п.6 а): кодер ответил «Четыре» на «2+2?».
+- **п.2 — утекание слота (сессия застревает в RUNNING) — ✅ DONE** (коммит
+  `5a0d9fc`). Дефект: после смерти exec-процесса сессия не получала finish →
+  оставалась RUNNING + держала аренду (слот заблокирован навсегда). 4 пункта ТЗ:
+  - **(a) host в записи EXEC-сессии** = имя узла этой машины (`os.Hostname`, то
+    же, что узел шлёт в hello), НЕ «operator»: `jobclient.create` шлёт `host`,
+    `api/jobs.go handleJobCreate` пишет `rec.Host` (был жёстко «operator»).
+  - **(b) EXEC-root пуш только узлу-host** (`exec_roots_push.go` переписан:
+    `lastByHost map[string]string`, `rootsByHost()` группирует по `rec.Host`,
+    пуш только узлу данного host; было broadcast).
+  - **(c) нормальный выход → finish** → `handleJobFinish` уже делает
+    LeaseRelease(**TURN_DONE**)+QueueDelete+JobDelete+GONE (без изменений).
+  - **(d) смерть без finish (kill -9/crash) → узел докладывает о мёртвом корне**:
+    узел по scan-циклу (interval 2с, `reportDeadExecRoots` в конце `cycle`)
+    проверяет живость каждого EXEC-корня (PID + starttime из /proc); мёртв
+    (PID пропал → starttime 0, либо mismatch) → новый `proto.KindExecRootDead`
+    (SID+PID) → координатор `Server.onExecRootDead`: GONE +
+    LeaseRelease(**ReleaseCrash**)+QueueDelete+JobDelete+event(LOST). Идемпотент.
+  - Тесты: `TestReportDeadExecRoots` (жив/мёртв/PID-reuse/без-starttime),
+    `TestExecRootsPushPerHost`/`HostGone`, `TestExecRootDead`/`NotFound`,
+    `TestBuildQwenCmd*`. **Workaround «`POST /api/v1/jobs/{sid}/finish`
+    вручную» УБРАН** (фикс его заменяет) — отмечено здесь и в памяти.
+- **п.3 — doctor client_coordinator строгий — ✅ DONE** (коммит `5a0d9fc`).
+  `checkClientCoordinator`: **PASS только 2xx**; **401/403 → FAIL «токен
+  отклонён» (HTTP <code>)**; прочие коды → FAIL «HTTP <code>: <addr>»;
+  соединение/таймаут → FAIL «не отвечает <addr>: <err>». Константы в consts.go
+  (http2xxLow/High, httpUnauthorized/Forbidden). Тест `TestClientCoordinator`
+  (200/401/403/500/301/ошибка). Live: doctor `client_coordinator` → PASS
+  (отвечает http://100.124.155.106:8788).
+- **п.4 — client.coordinator из coordinator.bind + api_port — ✅ (реализовано в
+  W9, подтверждено + добавлен тест).** `requestBaseNoPath()` (`nodes.go:451`) =
+  `http://<bind>:<api_port>`; используется и установщиком (`enrollInstall`,
+  `COORD=`/конфиг узла), и шаблоном (`nodeEnrollFileSetup`,
+  `client.coordinator`). ТЗ-тест добавлен: `TestRequestBaseNoPathBindAPIPort` —
+  **bind=100.64.0.10 → http://100.64.0.10:8788**. (Оператор: «в отчёте его нет»
+  — зафиксировано здесь.)
+- **п.5 — строка обновления узла (make node-upgrade-line) — ✅ DONE.**
+  Сгенерирована после выката (новый SHA):
+  ```
+  scp 3p14-aaa:/mdisk/myhub/RunPilot/deploy/upgrade-node.sh /tmp/upgrade-node.sh \
+    && bash /tmp/upgrade-node.sh fcd64063d354c2c441da9a12f0b2490760056e392287bed1d5347750df18a867 3p14-aaa
+  ```
+  (SHA = `sha256sum /home/user/.local/bin/runpilot` после выката; vzu5-claw —
+  не запускали, машина OFF, строка только в отчёте.)
+- **п.6 — ворота → выкат 5a0d9fc → приёмка exec — ✅ DONE.**
+  - **Ворота:** `go test -race ./…` (0 FAIL) + `make staticcheck` (0) +
+    `make lint` (0).
+  - **Выкат 3p14-aaa из HEAD `5a0d9fc`:** бинарник из чистого HEAD
+    (`vcs.modified=false`, **SHA `fcd64063…`**) → атомарная установка (бэкап
+    `runpilot.bak-8cebdc4-20261007-155247` + `mv -f`) → `systemctl --user
+    restart runpilot.service` (MainPID 2667610 → **2887624**) → active →
+    `/proc/<pid>/exe` vcs=`5a0d9fc`, modified=false → doctor **exit 0** (PASS;
+    WARN `coder_out_of_queue` = 3 ручных qwen — MoxMate/SimBridge/RunPilot,
+    наблюдение).
+  - **Приёмка exec на `/mdisk/myhub/test/rp-accept`** (`.rp-client.yaml`,
+    bind=100.124.155.106, project_roots=/mdisk/myhub/test), пин 3p14 (1 слот):
+    - **(a) normal exit:** `runpilot exec -- "2+2?"` → outcome **OK** (кодер:
+      «Четыре»), сессия **GONE** (host=3p14-aaa), аренда **RELEASED (TURN_DONE)**.
+    - **(b) kill -9 mid-turn:** kill root (exec_pid) → сессия **GONE**, аренда
+      **RELEASED (CRASH)** за **0.16с** (best case; верхняя граница = scan 2с +
+      обработка ≤3с). Механизм в логе: `api: execroot: корень мёртв без finish →
+      GONE`.
+    - **(c) новый exec без вмешательства:** следующий exec (пин 3p14) получил
+      **тот же слот 3p14:1** (освобождённый по crash в (b)), outcome **OK**
+      (кодер: «Париж»), GONE + RELEASED (TURN_DONE).
+    - «Тот же PID на другом хосте не делает корень живым» — покрыто
+      `TestExecRootsPushPerHost` (root пушится ТОЛЬКО узлу-host) +
+      `TestReportDeadExecRoots` (mismatch starttime → мёртв).
 
 ## W11 (п.3, доп) — правило расширено на EXEC + ExecPID + строка узла + выкат c467ef4 (2026-10-07) — ВЫПОЛНЕНО
 
