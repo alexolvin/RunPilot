@@ -51,7 +51,8 @@ func TestScanExternalCron(t *testing.T) {
 	envs := map[int]string{901: "http://127.0.0.1:9000/v1", 100: GatewayCoderURL(testExternalGateway, "sid100")}
 	cwds := map[int]string{901: "/home/user/project"}
 	ex := ScanExternal(table, panePIDToSID, re, testExternalGateway,
-		func(pid int) string { return envs[pid] }, func(pid int) string { return cwds[pid] })
+		func(pid int) string { return envs[pid] }, func(pid int) string { return "" },
+		func(pid int) string { return cwds[pid] })
 	if len(ex) != 1 {
 		t.Fatalf("внешних: %d, хочу 1: %+v", len(ex), ex)
 	}
@@ -76,12 +77,9 @@ func TestScanExternalCron(t *testing.T) {
 	}
 }
 
-// TestScanExternalSystemdAndExec — единое правило: 801 (qwen под systemd, нет
-// панели) и 701 (qwen под runpilot exec — cron-задание, НЕ tmux-панель) -> вне
-// очереди; 601 (потомок панели sid600 с верным URL шлюза) -> управляемый.
-// Примечание: runpilot exec (foreground, не в tmux) теперь попадает «вне
-// очереди» — следствие правила «только потомок панели с sid + URL шлюза».
-func TestScanExternalSystemdAndExec(t *testing.T) {
+// TestScanExternalSystemd — 801 (qwen под systemd, нет панели/EXEC-корня) ->
+// вне очереди; 601 (процесс управляемой панели sid600, верный URL) -> управляемый.
+func TestScanExternalSystemd(t *testing.T) {
 	prof, err := profiles.LoadEmbeddedQwen()
 	if err != nil {
 		t.Fatal(err)
@@ -90,8 +88,6 @@ func TestScanExternalSystemdAndExec(t *testing.T) {
 	const psOut = `  1    0    0    0 /sbin/init
 800    1    0   10 /usr/lib/systemd/systemd
 801  800  1000  20 /usr/local/bin/qwen
-700    1  1000  10 runpilot exec --name j1
-701  700  1000  10 /usr/local/bin/qwen --approval-mode default
 600    1  1000  10 /usr/local/bin/qwen --approval-mode default
 601  600  1000  10 sleep 30
 `
@@ -99,25 +95,70 @@ func TestScanExternalSystemdAndExec(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 600 — управляемая панель (sid600), процесс панели — кодер с верным URL.
 	panePIDToSID := map[int]string{600: "sid600"}
 	envs := map[int]string{600: GatewayCoderURL(testExternalGateway, "sid600")}
 	ex := ScanExternal(table, panePIDToSID, re, testExternalGateway,
-		func(pid int) string { return envs[pid] }, func(pid int) string { return "" })
-	if len(ex) != 2 {
-		t.Fatalf("внешних: %d, хочу 2 (systemd-qwen + runpilot-exec): %+v", len(ex), ex)
+		func(pid int) string { return envs[pid] }, func(pid int) string { return "" },
+		func(pid int) string { return "" })
+	if len(ex) != 1 {
+		t.Fatalf("внешних: %d, хочу 1 (systemd-qwen): %+v", len(ex), ex)
 	}
-	// сортировка по PID: 701, 801.
-	if ex[0].PID != 701 || ex[1].PID != 801 {
-		t.Fatalf("pids=%d,%d, хочу 701,801", ex[0].PID, ex[1].PID)
+	if ex[0].PID != 801 || ex[0].Source != sourceSystemd {
+		t.Fatalf("ожидаю systemd-qwen 801: %+v", ex[0])
 	}
-	if ex[1].Source != sourceSystemd {
-		t.Fatalf("801 source=%q, хочу systemd", ex[1].Source)
+}
+
+// TestScanExternalExecLive — кодер живой EXEC-сессии: qwen 501 под runpilot
+// exec 500, RUNPILOT_SID=sid501 + верный URL шлюза -> управляемый (не внешний).
+func TestScanExternalExecLive(t *testing.T) {
+	prof, err := profiles.LoadEmbeddedQwen()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if ex[0].Source != sourceCron {
-		// runpilot exec запущен cron'ом: цепочка 701→700(runpilot)→1 → source other,
-		// но родоначальник cron не виден (700 — root-потомок). Фиксируем факт.
-		t.Logf("701 source=%q (runpilot exec не под cron в этом фиксированном ps)", ex[0].Source)
+	re := prof.Cmdline()
+	const psOut = `  1    0    0    0 /sbin/init
+500    1  1000  10 runpilot exec --name j1
+501  500  1000  10 /usr/local/bin/qwen --approval-mode default
+`
+	table, err := processTable(t.Context(), psExec(psOut))
+	if err != nil {
+		t.Fatal(err)
+	}
+	envs := map[int]string{501: GatewayCoderURL(testExternalGateway, "sid501")}
+	sids := map[int]string{501: "sid501"}
+	ex := ScanExternal(table, map[int]string{}, re, testExternalGateway,
+		func(pid int) string { return envs[pid] },
+		func(pid int) string { return sids[pid] },
+		func(pid int) string { return "" })
+	if len(ex) != 0 {
+		t.Fatalf("кодер живой EXEC-сессии управляемый, внешних хочу 0: %+v", ex)
+	}
+}
+
+// TestScanExternalExecFinished — EXEC-сессия завершена: exec-процесс умер,
+// qwen 501 репарентирован в init (родитель 1) -> не потомок живого корня ->
+// вне очереди (даже с «верным» URL — сессии больше нет).
+func TestScanExternalExecFinished(t *testing.T) {
+	prof, err := profiles.LoadEmbeddedQwen()
+	if err != nil {
+		t.Fatal(err)
+	}
+	re := prof.Cmdline()
+	const psOut = `  1    0    0    0 /sbin/init
+501    1  1000  10 /usr/local/bin/qwen --approval-mode default
+`
+	table, err := processTable(t.Context(), psExec(psOut))
+	if err != nil {
+		t.Fatal(err)
+	}
+	envs := map[int]string{501: GatewayCoderURL(testExternalGateway, "sid501")}
+	sids := map[int]string{501: "sid501"}
+	ex := ScanExternal(table, map[int]string{}, re, testExternalGateway,
+		func(pid int) string { return envs[pid] },
+		func(pid int) string { return sids[pid] },
+		func(pid int) string { return "" })
+	if len(ex) != 1 || ex[0].PID != 501 {
+		t.Fatalf("qwen завершённой EXEC-сессии вне очереди: внешних=%d, хочу 1 (501): %+v", len(ex), ex)
 	}
 }
 

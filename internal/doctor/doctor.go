@@ -491,11 +491,12 @@ func checkCoderTimeoutEnv(ctx *Context) Result {
 type procTree struct {
 	args     map[int]string
 	children map[int][]int
+	ppid     map[int]int // parent PID (для обхода ВВЕРХ — единое правило SessionSID)
 }
 
 // buildProcTree парсит вывод ps в дерево (args — всё после ppid, spaces схлопнуты).
 func buildProcTree(psOut []byte) *procTree {
-	t := &procTree{args: map[int]string{}, children: map[int][]int{}}
+	t := &procTree{args: map[int]string{}, children: map[int][]int{}, ppid: map[int]int{}}
 	for _, line := range strings.Split(strings.TrimSpace(string(psOut)), "\n") {
 		if line == "" {
 			continue
@@ -510,6 +511,7 @@ func buildProcTree(psOut []byte) *procTree {
 			continue
 		}
 		t.args[pid] = strings.Join(f[psFieldArgsStart:], " ")
+		t.ppid[pid] = ppid
 		t.children[ppid] = append(t.children[ppid], pid)
 	}
 	return t
@@ -557,8 +559,8 @@ func checkCoderOutOfQueue(ctx *Context) Result {
 		return result(name, PASS, "cmdline_regex не загружен — проверку пропускаем")
 	}
 	gatewayURL := ctx.Cfg.Coordinator.GatewayURL
-	// Панели живых сессий: pane_pid → sid (управляемые, не мёртвые).
-	panePIDToSID := map[string]string{}
+	// Панели живых сессий: pane_pid(int) → sid (PANE-корни).
+	panePIDToSID := map[int]string{}
 	for _, socket := range ctx.Cfg.Node.TmuxSockets {
 		out, err := tmuxListPanes(socket)
 		if err != nil {
@@ -572,44 +574,32 @@ func checkCoderOutOfQueue(ctx *Context) Result {
 			if len(f) < paneFieldCount || f[paneFieldSID] == "" || f[paneFieldDead] == paneDeadFlag {
 				continue // не управляемая (нет @runpilot_sid) или мёртвая панель
 			}
-			panePIDToSID[f[paneFieldPID]] = f[paneFieldSID]
+			pid, err := strconv.Atoi(f[paneFieldPID])
+			if err != nil {
+				continue
+			}
+			panePIDToSID[pid] = f[paneFieldSID]
 		}
 	}
 	psOut, _ := psOutput()
 	tree := buildProcTree(psOut)
-	// Потомок панели → sid этой сессии (BFS вниз по children от каждого pane_pid).
-	descendantSID := map[int]string{}
-	for panePIDStr, sid := range panePIDToSID {
-		pid, err := strconv.Atoi(panePIDStr)
-		if err != nil {
-			continue
-		}
-		seen := map[int]bool{pid: true}
-		queue := []int{pid}
-		for len(queue) > 0 {
-			p := queue[0]
-			queue = queue[1:]
-			for _, c := range tree.children[p] {
-				if seen[c] {
-					continue
-				}
-				seen[c] = true
-				queue = append(queue, c)
-				descendantSID[c] = sid
-			}
-		}
-	}
 	type ooq struct{ pid int; cwd string }
 	var found []ooq
 	for pid, args := range tree.args {
 		if !ctx.Cmdline.MatchString(args) {
 			continue
 		}
-		var openAIBaseURL string
+		var openAIBaseURL, runpilotSID string
 		if environ, err := readProcEnviron(strconv.Itoa(pid)); err == nil {
 			openAIBaseURL = procEnvValue(environ, "OPENAI_BASE_URL")
+			runpilotSID = procEnvValue(environ, "RUNPILOT_SID")
 		}
-		if !node.CoderOutOfQueue(descendantSID[pid], openAIBaseURL, gatewayURL) {
+		// Единый вывод sid (PANE-панель / EXEC-runpilot exec) + правило — тот же
+		// node.SessionSID + node.CoderOutOfQueue, что и веб (ScanExternal).
+		sid := node.SessionSID(pid, panePIDToSID, runpilotSID,
+			func(p int) int { return tree.ppid[p] },
+			func(p int) string { return tree.args[p] })
+		if !node.CoderOutOfQueue(sid, openAIBaseURL, gatewayURL) {
 			continue // кодер живой сессии с верным URL шлюза — управляемый
 		}
 		found = append(found, ooq{pid: pid, cwd: procCwd(strconv.Itoa(pid))})

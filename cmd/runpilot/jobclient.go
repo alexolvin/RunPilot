@@ -71,9 +71,10 @@ func (j *jobAPI) do(ctx context.Context, method, path string, body, out any) err
 	return nil
 }
 
-// create — POST /api/v1/jobs.
-func (j *jobAPI) create(ctx context.Context, name, prio, pin, prefer string) (string, error) {
-	body := map[string]any{"name": name, "prio": prio, "pin": pin, "prefer": prefer}
+// create — POST /api/v1/jobs. pid — PID процесса runpilot exec (авторитетная
+// копия в записи EXEC-сессии, «доступен узлу»); попадает в поле exec_pid.
+func (j *jobAPI) create(ctx context.Context, name, prio, pin, prefer string, pid int) (string, error) {
+	body := map[string]any{"name": name, "prio": prio, "pin": pin, "prefer": prefer, "pid": pid}
 	var out struct {
 		SID string `json:"sid"`
 	}

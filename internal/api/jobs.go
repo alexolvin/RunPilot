@@ -71,6 +71,9 @@ type jobCreateRequest struct {
 	Prio   string `json:"prio"`
 	Pin    string `json:"pin"`
 	Prefer string `json:"prefer"`
+	// PID — PID процесса runpilot exec (client присылает os.Getpid());
+	// хранится в записи EXEC-сессии (exec_pid), доступен узлу.
+	PID int `json:"pid"`
 }
 
 // jobCreateResponse — ответ POST /api/v1/jobs.
@@ -121,7 +124,7 @@ func (s *Server) handleJobCreate(w http.ResponseWriter, r *http.Request) {
 		Profile: "qwen", Kind: model.KindJob,
 		State: model.SessionIdle, StateChangedAt: now,
 		Class: class, ConstraintKind: c.Kind, ConstraintServer: c.Server,
-		CreatedAt: now,
+		CreatedAt: now, ExecPID: req.PID,
 	}
 	if err := s.store.CreateSession(rec); err != nil {
 		s.log.Error("api: jobs: создание: " + err.Error())

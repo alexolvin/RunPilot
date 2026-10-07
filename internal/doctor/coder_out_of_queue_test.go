@@ -103,6 +103,49 @@ func TestCoderOutOfQueueVLLMDirect(t *testing.T) {
 	}
 }
 
+// Кодер живой EXEC-сессии: qwen 501 под runpilot exec 500, RUNPILOT_SID +
+// верный URL шлюза -> управляемый -> PASS.
+func TestCoderOutOfQueueExecManaged(t *testing.T) {
+	defer installFakeOOQ(
+		"", // нет tmux-панелей
+		"1 0 init\n500 1 runpilot exec --name j1\n501 500 qwen\n",
+		func(pid string) ([]byte, error) {
+			if pid == "501" {
+				return []byte("OPENAI_BASE_URL=" + testOOQGateway + "/s/sid501/v1\x00RUNPILOT_SID=sid501\x00"), nil
+			}
+			return []byte("PATH=/usr/bin\x00"), nil
+		},
+		func(string) string { return "/home/user/project" },
+	)()
+	r := checkCoderOutOfQueue(coderTimeoutEnvCtx())
+	if r.Level != PASS {
+		t.Fatalf("уровень=%s, хочу PASS (кодер живой EXEC-сессии); detail=%s", r.Level, r.Detail)
+	}
+}
+
+// EXEC-сессия завершена: exec умер, qwen 501 репарентирован в init -> не
+// потомок живого корня -> вне очереди -> WARN (даже с верным URL).
+func TestCoderOutOfQueueExecFinished(t *testing.T) {
+	defer installFakeOOQ(
+		"",
+		"1 0 init\n501 1 qwen\n",
+		func(pid string) ([]byte, error) {
+			if pid == "501" {
+				return []byte("OPENAI_BASE_URL=" + testOOQGateway + "/s/sid501/v1\x00RUNPILOT_SID=sid501\x00"), nil
+			}
+			return []byte("PATH=/usr/bin\x00"), nil
+		},
+		func(string) string { return "/home/user/project" },
+	)()
+	r := checkCoderOutOfQueue(coderTimeoutEnvCtx())
+	if r.Level != WARN {
+		t.Fatalf("уровень=%s, хочу WARN (EXEC завершена); detail=%s", r.Level, r.Detail)
+	}
+	if !strings.Contains(r.Detail, "501") {
+		t.Errorf("WARN должен содержать PID 501: %s", r.Detail)
+	}
+}
+
 // Нет qwen-процессов -> PASS «кодеров вне очереди нет».
 func TestCoderOutOfQueueNone(t *testing.T) {
 	defer installFakeOOQ(

@@ -79,8 +79,9 @@ func runExec(o execOpts) (int, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 1) Регистрация (п.2).
-	sid, err := api.create(ctx, o.name, o.prio, o.pin, o.prefer)
+	// 1) Регистрация (п.2). os.Getpid() — PID процесса runpilot exec: хранится
+	// в записи EXEC-сессии (exec_pid) и доступен узлу (авторитетная копия).
+	sid, err := api.create(ctx, o.name, o.prio, o.pin, o.prefer, os.Getpid())
 	if err != nil {
 		return jobExitCode(err), err
 	}

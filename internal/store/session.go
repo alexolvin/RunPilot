@@ -40,12 +40,17 @@ type SessionRecord struct {
 	// LaunchCommand — буфер «команд для запуска»: заряд (текст + токены
 	// клавиш), воспроизводимый узлом при dispatch. Пусто = старое поведение.
 	LaunchCommand string
+	// ExecPID — PID процесса runpilot exec (JOB-сессия, 8.1): авторитетная
+	// копия для координатора (отчёт/управление). Правило «кодер вне очереди»
+	// выводит EXEC-корни локально (ps на узле), не читает это поле.
+	ExecPID int
 }
 
 const sessionCols = `sid, name, host, host_ip, tmux_session, window, pane_id,
 profile, agent_version, kind, state, state_changed_at, hold_reason, class,
 constraint_kind, constraint_server, auto_enqueue, last_server,
-last_turn_end, last_migrated_from, attempts, created_at, launch_command`
+last_turn_end, last_migrated_from, attempts, created_at, launch_command,
+exec_pid`
 
 func scanSession(row interface{ Scan(...any) error }) (SessionRecord, error) {
 	var r SessionRecord
@@ -55,7 +60,8 @@ func scanSession(row interface{ Scan(...any) error }) (SessionRecord, error) {
 	err := row.Scan(&r.SID, &r.Name, &r.Host, &r.HostIP, &r.TmuxSession, &r.Window,
 		&r.PaneID, &r.Profile, &r.AgentVersion, &kind, &state, &changed, &hold,
 		&class, &ckind, &r.ConstraintServer, &auto, &r.LastServer,
-		&turnEnd, &r.LastMigratedFrom, &r.Attempts, &created, &r.LaunchCommand)
+		&turnEnd, &r.LastMigratedFrom, &r.Attempts, &created, &r.LaunchCommand,
+		&r.ExecPID)
 	if err == nil {
 		r.Class = model.QueueClass(class)
 	}
@@ -88,13 +94,14 @@ func (s *Store) CreateSession(r SessionRecord) error {
 			agent_version, kind, state, state_changed_at, hold_reason, class,
 			constraint_kind, constraint_server, auto_enqueue, last_server,
 			last_turn_end, last_migrated_from, attempts, created_at,
-			launch_command
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			launch_command, exec_pid
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			r.SID, r.Name, r.Host, r.HostIP, r.TmuxSession, r.Window, r.PaneID,
 			r.Profile, r.AgentVersion, r.Kind, r.State, ts(r.StateChangedAt),
 			r.HoldReason, int(r.Class), r.ConstraintKind, r.ConstraintServer,
 			boolInt(r.AutoEnqueue), r.LastServer, ts(r.LastTurnEnd),
-			r.LastMigratedFrom, r.Attempts, ts(r.CreatedAt), r.LaunchCommand)
+			r.LastMigratedFrom, r.Attempts, ts(r.CreatedAt), r.LaunchCommand,
+			r.ExecPID)
 		return err
 	})
 }

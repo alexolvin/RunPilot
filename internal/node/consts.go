@@ -38,6 +38,7 @@ const (
 	procCwdName      = "cwd"
 	procEnvSep       = "\x00"
 	openaiBaseURLKey = "OPENAI_BASE_URL="
+	runpilotSIDKey   = "RUNPILOT_SID=" // sid EXEC-сессии в env кодера (8.1)
 	procUidField     = "Uid:"
 
 	// killStartTimeToleranceSec — допуск сверки start_time при kill (8.2):
