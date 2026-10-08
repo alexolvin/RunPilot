@@ -1,0 +1,26 @@
+{
+  "_comment": "Backup of vzu5 server config before accept change (2026-10-08). Changed Accept from [resume,normal,low] to [resume,high,normal,low] so held (High) requests can be granted on vzu5.",
+  "_source": "sqlite3 ~/.local/share/runpilot/runpilot.db \"SELECT data FROM server WHERE name='vzu5'\"",
+  "data": {
+    "Name": "vzu5",
+    "Priority": 5,
+    "Slots": 1,
+    "Accept": [
+      "resume",
+      "normal",
+      "low"
+    ],
+    "HealthURL": "http://100.126.222.23:8004/health",
+    "MetricsURL": "http://100.126.222.23:8004/metrics",
+    "MaxOutputTokens": 8192,
+    "FirstByteTimeoutSec": 0,
+    "RequireDirect": true,
+    "Upstreams": {
+      "OpenAI": {
+        "URL": "http://100.126.222.23:8004",
+        "Model": "qwen3.8-27b-fp8",
+        "KeyEnv": "RUNPILOT_VLLM_KEY"
+      }
+    }
+  }
+}
