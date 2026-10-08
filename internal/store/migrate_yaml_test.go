@@ -17,6 +17,7 @@ import (
 // сервер. Используются конкретные значения для проверки переноса.
 const v1Config = `coordinator:
   bind: 192.0.2.10
+  gateway_url: http://192.0.2.10:8787
   gateway_port: 8787
   api_port: 8788
   token_env: RUNPILOT_TOKEN

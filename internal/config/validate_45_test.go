@@ -90,6 +90,25 @@ func TestValidate45AcceptNonEmpty(t *testing.T) {
 	}
 }
 
+// 4.5: хост gateway_url = coordinator.bind (встроенный узел: host_ip = bind,
+// кодеры ходят в шлюз через хост gateway_url). Несовпадение → отклонение.
+func TestValidate45GatewayURLHostEqualsBind(t *testing.T) {
+	// Совпадение: bind = хост gateway_url → OK.
+	cfg := Defaults()
+	cfg.Coordinator.Bind = "192.0.2.1"
+	cfg.Coordinator.GatewayURL = "http://192.0.2.1:8787"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("bind == хост gateway_url: %v", err)
+	}
+	// Несовпадение: bind ≠ хост gateway_url → отклонение.
+	cfg = Defaults()
+	cfg.Coordinator.Bind = "192.0.2.1"
+	cfg.Coordinator.GatewayURL = "http://198.51.100.1:8787"
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "gateway_url") {
+		t.Fatalf("bind ≠ хост gateway_url должно отклоняться: %v", err)
+	}
+}
+
 // 4.5: turn.done_quiet_sec и turn.done_stable_sec < dispatch.start_confirm_sec.
 func TestValidate45DoneLessThanStartConfirm(t *testing.T) {
 	cfg := Defaults()

@@ -1,0 +1,23 @@
+=== W12-доп п.1: Снимок состояния 3p14 при блокировке ===
+Дата: 2026-10-08T14:48:07Z
+
+--- /api/v1/state: 3p14 ---
+slots_info: [{"slot": 1, "state": "external"}]
+ext: 1
+used: 0
+
+--- /api/v1/monitoring: 3p14 current ---
+running (history last): 1
+ext: 1
+missing: False
+
+--- vLLM 3p14 /metrics (прямой GET) ---
+vllm:num_requests_running{engine="0",model_name="qwen3.8-27b"} 0.0
+vllm:num_requests_waiting{engine="0",model_name="qwen3.8-27b"} 0.0
+vllm:num_requests_waiting_by_reason{engine="0",model_name="qwen3.8-27b",reason="capacity"} 0.0
+vllm:num_requests_waiting_by_reason{engine="0",model_name="qwen3.8-27b",reason="deferred"} 0.0
+
+=== ВЫВОД ===
+EXTERNAL вызван запросами LLM координатора (этого агента) к vLLM 3p14:
+агент работает на 3p14 напрямую и генерирует running=1 во время своих ходов.
+MoxMate (PID 815580) простаивает (не генерирует) — к EXTERNAL отношения не имеет.

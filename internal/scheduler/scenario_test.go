@@ -570,6 +570,36 @@ func TestS8bExternalFullLoad(t *testing.T) {
 	}
 }
 
+// S8c: простаивающий кодер вне очереди НЕ занимает слот (правило 4 ТЗ).
+// Источник EXTERNAL — только метрики vLLM (running+waiting−inflight). Простой
+// кодер (running=0, ext=0) → слот FREE, даже если процесс кодера присутствует.
+// Планировщик не знает о внешних кодерах (ScanExternal/external_process) —
+// они влияют только на web-отображение, не на выдачу слотов.
+func TestS8cIdleExternalCoderSlotFree(t *testing.T) {
+	h := newHarn(t, []ServerView{srv("s", 10, 1)})
+	// running=0 → ext=0: слот свободен.
+	h.sch.SetExternal("s", 0)
+	h.tick()
+	// Слот FREE в снимке серверов.
+	for _, row := range h.sch.ServersView() {
+		if row.Name != "s" {
+			continue
+		}
+		if len(row.SlotInfo) != 1 || row.SlotInfo[0].State != "free" {
+			t.Fatalf("S8c: slot = %q при ext=0, хочу free (простой кодер не занимает слот)", row.SlotInfo[0].State)
+		}
+	}
+	// Запись выдаётся на свободный слот.
+	h.addSession("F1", "F1", "host", model.SessionQueued, model.ClassNormal, model.NoConstraint)
+	h.idlePane("F1", "host")
+	h.enqueue("F1", model.ClassNormal, model.NoConstraint, model.QueueModeSubmit)
+	h.advance(3 * time.Second)
+	h.tick()
+	if _, ok := h.leaseOf("F1"); !ok {
+		t.Fatalf("S8c: F1 не выдана при ext=0 (reason=%q)", h.queueReason("F1"))
+	}
+}
+
 // --- S9 ---
 
 // S9: slots:2, три записи → две аренды, третья ждёт.

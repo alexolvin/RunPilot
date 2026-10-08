@@ -68,8 +68,12 @@ func embeddedNode(ctx context.Context, srv *api.Server, hub *api.Hub,
 	im := &memConn{cmds: make(chan proto.Msg, embeddedCmdChanLen), done: ctx.Done()}
 	info := &api.NodeInfo{
 		Host:        host,
-		HostIP:      loopbackIP,
-		RUNPILOTVersion:  version,
+		// host_ip встроенного узла = coordinator.bind: кодеры узла ходят в шлюз
+		// через хост gateway_url (= coordinator.bind, валидация конфига), и
+		// источником их соединений становится этот адрес — шлюз сверяет его
+		// с host_ip сессии (remoteIP == sess.HostIP).
+		HostIP:            cfg.Coordinator.Bind,
+		RUNPILOTVersion:   version,
 		TmuxVersion: node.TmuxVersion(ctx, ex),
 		OS:          node.OS(),
 		Sockets:     cfg.Node.TmuxSockets,

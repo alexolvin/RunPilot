@@ -493,6 +493,20 @@ func (c *Config) Validate() error {
 		problems = append(problems, "turn.done_stable_sec должен быть меньше dispatch.start_confirm_sec")
 	}
 
+	// Встроенный узел: хост gateway_url = coordinator.bind. Кодеры встроенного
+	// узла ходят в шлюз через хост gateway_url, и источником их соединений
+	// становится этот адрес; host_ip встроенного узла = coordinator.bind —
+	// шлюз сверяет источник с host_ip сессии (remoteIP == sess.HostIP).
+	if c.Coordinator.GatewayURL != "" && c.Coordinator.Bind != "" {
+		u, err := url.Parse(c.Coordinator.GatewayURL)
+		if err != nil {
+			problems = append(problems, "coordinator.gateway_url: "+err.Error())
+		} else if u.Hostname() != c.Coordinator.Bind {
+			problems = append(problems, fmt.Sprintf(
+				"coordinator.gateway_url хост(%s) != coordinator.bind(%s)", u.Hostname(), c.Coordinator.Bind))
+		}
+	}
+
 	maxFirstByte := 0
 	maxFirstByteName := ""
 	seen := map[string]bool{}
