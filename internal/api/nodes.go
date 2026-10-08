@@ -136,7 +136,10 @@ func (s *Server) tokenExists(token string) bool {
 // file_mode FAIL: «config.yaml=664»). Общий для install.sh (enrollInstall) и
 // теста TestNodeEnrollFileSetupUmask. cfgDir — каталог (в install.sh:
 // `$HOME/.config/runpilot`; в тесте — tmpdir).
-func nodeEnrollFileSetup(cfgDir, coordinator, nodeHost, token string) string {
+// node.host — ПУСТОЙ: узел определяет hostname сам (os.Hostname()), а не из
+// конфига (иначе install.sh, сгенерированный на координаторе, вписал бы
+// hostname координатора → «конфликт имени хоста» при claim по hostname узла).
+func nodeEnrollFileSetup(cfgDir, coordinator, token string) string {
 	cfg := cfgDir + "/config.yaml"
 	secrets := cfgDir + "/secrets.env"
 	return fmt.Sprintf(`cfg="%s"
@@ -146,12 +149,12 @@ client:
   coordinator: %s
   token_env: RUNPILOT_NODE_TOKEN
 node:
-  host: %s
+  host: ""
 YAML
 chmod 600 "$cfg"
 echo "RUNPILOT_NODE_TOKEN=%s" > "$secrets"
 chmod 600 "$secrets"
-`, cfg, secrets, coordinator, nodeHost, token)
+`, cfg, secrets, coordinator, token)
 }
 
 // enrollInstall — GET /enroll/<token>/install.sh.
@@ -255,7 +258,7 @@ else
 fi
 echo "runpilot: узел запущен (runpilot-node: ${STATUS:-unknown}) — «Узел $(hostname) подключён» появится в панели."
 `, base, token, host,
-		nodeEnrollFileSetup("$HOME/.config/runpilot", coord, host, token))
+		nodeEnrollFileSetup("$HOME/.config/runpilot", coord, token))
 	w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
 	_, _ = w.Write([]byte(script))
 }

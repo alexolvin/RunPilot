@@ -17,7 +17,7 @@ func TestNodeEnrollFileSetupUmask(t *testing.T) {
 		t.Skip("bash не найден")
 	}
 	dir := t.TempDir()
-	script := nodeEnrollFileSetup(dir, "https://3p14-aaa:8788", "node-host", "tok123")
+	script := nodeEnrollFileSetup(dir, "https://3p14-aaa:8788", "tok123")
 	cmd := exec.Command("bash", "-c", "set -euo pipefail\numask 0002\n"+script)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("file-setup shell не завершился: %v\n%s", err, out)
@@ -37,7 +37,8 @@ func TestNodeEnrollFileSetupUmask(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read config.yaml: %v", err)
 	}
-	for _, want := range []string{"coordinator: https://3p14-aaa:8788", "host: node-host"} {
+	// host: "" — узел определяет hostname сам (os.Hostname), не из конфига.
+	for _, want := range []string{"coordinator: https://3p14-aaa:8788", "host: \"\""} {
 		if !strings.Contains(string(cfg), want) {
 			t.Errorf("config.yaml не содержит %q", want)
 		}
