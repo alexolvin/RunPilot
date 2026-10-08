@@ -7,8 +7,9 @@
 //
 // Флаги:
 //
-//	-port N    порт (по умолчанию 8801), bind 127.0.0.1
-//	-model M   имя модели (по умолчанию fake-e6)
+//	-port N         порт (по умолчанию 8801), bind 127.0.0.1
+//	-model M        имя модели (по умолчанию fake-e6)
+//	-models-file F  тело /v1/models (снимок реального vLLM); пусто — стандартный
 package main
 
 import (
@@ -26,9 +27,17 @@ import (
 func main() {
 	port := flag.Int("port", defaultPort, "порт (bind 127.0.0.1)")
 	model := flag.String("model", "fake-e6", "имя модели")
+	modelsFile := flag.String("models-file", "", "файл с телом /v1/models (снимок реального vLLM); пусто — стандартный ответ")
 	flag.Parse()
 
 	f := fakellm.New(*model)
+	if *modelsFile != "" {
+		b, err := os.ReadFile(*modelsFile)
+		if err != nil {
+			log.Fatalf("runpilot-fakellm: models-file: %v", err)
+		}
+		f.SetModelsBody(b)
+	}
 	mux := http.NewServeMux()
 	// Контрольный эндпоинт стенда: /_set-metrics?running=N&waiting=N&kv=F.
 	mux.HandleFunc("/_set-metrics", func(w http.ResponseWriter, r *http.Request) {

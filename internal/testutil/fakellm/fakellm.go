@@ -22,6 +22,7 @@ type Server struct {
 	model string
 
 	mu             sync.Mutex
+	modelsBody     []byte // если задано — /v1/models отдаёт его как есть
 	failBeforeN    int
 	failBeforeMode string // "" | "502" | "503" | "504" | "conn" | "post"
 	firstByteDelay time.Duration
@@ -79,6 +80,14 @@ func Start(model string) *Server {
 func (s *Server) SetModel(m string) {
 	s.mu.Lock()
 	s.model = m
+	s.mu.Unlock()
+}
+
+// SetModelsBody — /v1/models отдаёт b как есть (снимок реального vLLM).
+// b = nil — стандартный одно-модельный ответ.
+func (s *Server) SetModelsBody(b []byte) {
+	s.mu.Lock()
+	s.modelsBody = b
 	s.mu.Unlock()
 }
 
@@ -209,9 +218,13 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	case r.URL.Path == "/v1/models":
 		s.mu.Lock()
-		model := s.model
+		model, body := s.model, s.modelsBody
 		s.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
+		if body != nil {
+			w.Write(body)
+			return
+		}
 		fmt.Fprintf(w, `{"object":"list","data":[{"id":%q,"object":"model"}]}`, model)
 
 	case r.URL.Path == "/metrics":
