@@ -4,6 +4,7 @@ package gateway
 // П.10 (self-grant пишет LEASE_GRANT).
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -138,5 +139,27 @@ func TestP5PreserveEnqueuedAt(t *testing.T) {
 	r := <-done
 	if r == nil || r.StatusCode != http.StatusOK {
 		t.Fatalf("после освобождения слота: %v, хочу 200", r)
+	}
+}
+
+// resultError: CancelSID → причина (не CLIENT_GONE); клиентский обрыв → CLIENT_GONE.
+func TestResultErrorCancelCause(t *testing.T) {
+	g := &Gateway{}
+	st := &attemptState{}
+	st.noteCopyErr(io.EOF)
+
+	// Внутренняя отмена (CancelSID): context.Cause = *internalCancel.
+	ctx1, cancel1 := context.WithCancelCause(context.Background())
+	cancel1(&internalCancel{reason: "CancelSID"})
+	if got := g.resultError(st, ctx1); got != "internal_cancel:CancelSID" {
+		t.Errorf("CancelSID: resultError=%q, хочу internal_cancel:CancelSID", got)
+	}
+
+	// Клиентский обрыв: parent (r.Context()) завершается первым, cause = context.Canceled.
+	parentCtx, cancelParent := context.WithCancel(context.Background())
+	ctx2, _ := context.WithCancelCause(parentCtx)
+	cancelParent() // parent done → ctx2 done, cause = parent's cause (context.Canceled)
+	if got := g.resultError(st, ctx2); got != "CLIENT_GONE" {
+		t.Errorf("клиентский обрыв: resultError=%q, хочу CLIENT_GONE", got)
 	}
 }

@@ -63,11 +63,11 @@ func TestReleaseOnGone(t *testing.T) {
 // TestCancelSID — отмена только запросов данной сессии, чужие не трогает.
 func TestCancelSID(t *testing.T) {
 	g := &Gateway{
-		inflightCtx: map[int]context.CancelFunc{},
+		inflightCtx: map[int]context.CancelCauseFunc{},
 		inflightSID: map[int]string{},
 	}
-	ctxA, cancelA := context.WithCancel(context.Background())
-	ctxB, cancelB := context.WithCancel(context.Background())
+	ctxA, cancelA := context.WithCancelCause(context.Background())
+	ctxB, cancelB := context.WithCancelCause(context.Background())
 	idA := g.registerInflight("sidA", cancelA)
 	idB := g.registerInflight("sidB", cancelB)
 	defer func() {

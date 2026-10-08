@@ -73,7 +73,7 @@ type Gateway struct {
 	// W7 (6.2): контексты идущих генерирующих запросов — аварийная
 	// остановка отменяет все (CancelAll): vLLM прекращает генерацию.
 	ic          sync.Mutex
-	inflightCtx map[int]context.CancelFunc
+	inflightCtx map[int]context.CancelCauseFunc
 	inflightSID map[int]string // id → sid (отмена запросов конкретной сессии при GONE)
 	icSeq       int64
 
@@ -153,7 +153,7 @@ func NewGateway(cfg *config.Config, st *store.Store, clk clock.Clock, log *slog.
 		bySID:       map[string]int{},
 		byServer:    map[string]int{},
 		pendingGone: map[string]string{},
-		inflightCtx: map[int]context.CancelFunc{},
+		inflightCtx: map[int]context.CancelCauseFunc{},
 		inflightSID: map[int]string{},
 		lastEnd:     map[int64]time.Time{},
 	}
@@ -245,8 +245,10 @@ func (g *Gateway) handleGenerative(w http.ResponseWriter, r *http.Request, sess 
 
 	// W7 (6.2): контекст запроса регистрируется — аварийная остановка
 	// отменяет все идущие (CancelAll), а GONE сессии — CancelSID.
-	pctx, cancel := context.WithCancel(ctx)
-	id := g.registerInflight(sess.SID, cancel)
+	// WithCancelCause: внутренняя отмена передаёт причину (CancelSID/CancelAll),
+	// клиентский обрыв — parent (r.Context()) завершается первым.
+	pctx, cancelCause := context.WithCancelCause(ctx)
+	id := g.registerInflight(sess.SID, cancelCause)
 	defer g.unregisterInflight(id)
 	r = r.Clone(pctx)
 	ctx = pctx
@@ -346,7 +348,7 @@ func (g *Gateway) writeMode503(w http.ResponseWriter, code, message string) {
 }
 
 // registerInflight — зарегистрировать контекст идущего запроса (W7 6.2).
-func (g *Gateway) registerInflight(sid string, cancel context.CancelFunc) int {
+func (g *Gateway) registerInflight(sid string, cancel context.CancelCauseFunc) int {
 	id := atomic.AddInt64(&g.icSeq, 1)
 	g.ic.Lock()
 	g.inflightCtx[int(id)] = cancel
@@ -363,19 +365,26 @@ func (g *Gateway) unregisterInflight(id int) {
 	g.ic.Unlock()
 }
 
+// internalCancel — причина внутренней отмены запроса (CancelSID/CancelAll).
+// Дистинкт от клиентского обрыва (r.Context() завершается первым):
+// resultError проверяет context.Cause — *internalCancel → причина, иначе CLIENT_GONE.
+type internalCancel struct{ reason string }
+
+func (c *internalCancel) Error() string { return "internal_cancel:" + c.reason }
+
 // CancelAll — отменить все идущие генерирующие запросы (W7 6.2): апстримы
 // прекращают генерацию (время отмены — в пределах таймаутов транспорта).
 func (g *Gateway) CancelAll() {
 	g.ic.Lock()
-	cancels := make([]context.CancelFunc, 0, len(g.inflightCtx))
+	cancels := make([]context.CancelCauseFunc, 0, len(g.inflightCtx))
 	for _, c := range g.inflightCtx {
 		cancels = append(cancels, c)
 	}
-	g.inflightCtx = map[int]context.CancelFunc{}
+	g.inflightCtx = map[int]context.CancelCauseFunc{}
 	g.inflightSID = map[int]string{}
 	g.ic.Unlock()
 	for _, c := range cancels {
-		c()
+		c(&internalCancel{reason: "CancelAll"})
 	}
 }
 
@@ -384,7 +393,7 @@ func (g *Gateway) CancelAll() {
 // (unBumpInflight снимает аренду, когда inflight(sid) дойдёт до 0).
 func (g *Gateway) CancelSID(sid string) {
 	g.ic.Lock()
-	var cancels []context.CancelFunc
+	var cancels []context.CancelCauseFunc
 	for id, c := range g.inflightCtx {
 		if g.inflightSID[id] == sid {
 			cancels = append(cancels, c)
@@ -392,7 +401,7 @@ func (g *Gateway) CancelSID(sid string) {
 	}
 	g.ic.Unlock()
 	for _, c := range cancels {
-		c()
+		c(&internalCancel{reason: "CancelSID"})
 	}
 }
 

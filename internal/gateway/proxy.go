@@ -361,6 +361,8 @@ func (g *Gateway) finishAttempt(w http.ResponseWriter, st *attemptState) {
 }
 
 // resultError — код ошибки строки request (пусто = успех).
+// CLIENT_GONE — только если первым завершился r.Context() (обрыв клиента).
+// Внутренняя отмена (CancelSID/CancelAll) — причина из context.Cause.
 func (g *Gateway) resultError(st *attemptState, ctx context.Context) string {
 	if st.copyError() == nil {
 		return ""
@@ -369,6 +371,11 @@ func (g *Gateway) resultError(st *attemptState, ctx context.Context) string {
 		return "UPSTREAM_LOST"
 	}
 	if ctx.Err() != nil {
+		if cause := context.Cause(ctx); cause != nil {
+			if _, ok := cause.(*internalCancel); ok {
+				return cause.Error()
+			}
+		}
 		return "CLIENT_GONE"
 	}
 	return "UPSTREAM_FAILED"
