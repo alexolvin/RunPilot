@@ -1,0 +1,21 @@
+# W11 п.1 — doctor linger-тесты
+# Дата: 2026-10-08
+# Файл: internal/doctor/linger_test.go (новый) + код в internal/doctor/doctor.go (уже в HEAD)
+#
+# Команда:
+#   go test -race -v -run 'TestLinger|TestNodeRoleHasLinger' ./internal/doctor/
+#
+# Вывод:
+=== RUN   TestLingerPass
+--- PASS: TestLingerPass (0.00s)
+=== RUN   TestLingerFail
+--- PASS: TestLingerFail (0.00s)
+=== RUN   TestLingerLoginctlError
+--- PASS: TestLingerLoginctlError (0.00s)
+=== RUN   TestNodeRoleHasLinger
+--- PASS: TestNodeRoleHasLinger (0.00s)
+PASS
+ok      runpilot/internal/doctor        1.012s
+#
+# doctor --role node содержит проверку linger (RoleChecks(RoleNode) → {Name: "linger", Run: checkLinger}).
+# checkLinger: loginctl show-user <user> → Linger=yes → PASS; иначе FAIL с командой systemctl --enable-linger <user>.
