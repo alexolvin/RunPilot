@@ -1,0 +1,31 @@
+# W11 п.3 — обновление vzu5-claw строкой a64e05a1 + проверка
+# Дата: 2026-10-08 14:24 MSK
+#
+# Обновление (по SSH на vzu5-claw):
+#   scp 3p14-aaa:/mdisk/myhub/RunPilot/deploy/upgrade-node.sh /tmp/upgrade-node.sh
+#   bash /tmp/upgrade-node.sh a64e05a1020cd9b55f29cd8bca35f0c8506c7618ee5c849f4d7723f416e123b5 3p14-aaa
+#
+# upgrade-node.sh: ИТОГ PASS
+#   SHA256: a64e05a1... (совпал)
+#   doctor предпроверка: PASS
+#   бэкап: /home/user/.local/bin/runpilot.bak-20261008T122447Z
+#   рестарт runpilot-node: active
+#   doctor после рестарта: PASS
+#
+# === 3 проверки ===
+# 1. vzu5-claw online:      YES  ip=100.95.195.40  health_at=12:26:18Z
+# 2. версия = координатору: a1e201e-dirty == a1e201e-dirty  ✓
+# 3. doctor --role node:     без FAIL
+#
+# doctor --role node (vzu5-claw):
+#   PASS tmux — tmux 3.4
+#   PASS qwen_settings — modelProviders: 1 эндов без коллизии
+#   PASS qwen_timeout_guard — qwen 0.25.0
+#   PASS coder_timeout_env — нет живых управляемых сессий
+#   WARN coder_out_of_queue — кодер вне очереди: 182175, 205463 (не FAIL)
+#   PASS file_mode — 0600
+#   PASS node_coordinator — handshake принят
+#   PASS linger — linger включён для user
+#
+# Примечание: 401 «неверный токен узла» в логе координатора — с 100.126.222.23
+# = vzu5-big (другая машина), к vzu5-claw (100.95.195.40) отношения не имеет.
