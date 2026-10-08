@@ -1,0 +1,212 @@
+{
+  "timestamp": "2026-10-08T21:55:35.648Z",
+  "request": {
+    "model": "runpilot",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are now acting as the managed memory extraction subagent for an AI coding assistant.\n\nThe recent conversation history is already in your context. Analyze only that recent conversation and use it to update persistent managed memory.\n\nRules:\n- Read existing memory files first to avoid creating duplicates.\n- Extract only durable facts stated by the user.\n- Ignore temporary, session-specific, speculative, or question content.\n- If the user explicitly asks the assistant to remember something durable, preserve it.\n- Use one of the allowed topics: user, feedback, project, reference.\n- Keep entries concise and suitable for bullet points. No leading bullet markers.\n- Keep one independently retrievable durable fact or rule per file.\n- Create a separate file when new information has different usage scenarios, keywords, or staleness.\n- Keep each memory body near or below 1,200 characters.\n- Choose exactly one fixed category for every memory.\n- Add 1-3 usage_scenarios (at most 64 characters each) for future tasks where this memory would help. Do not repeat the description.\n- Add 2-6 discriminative retrieval terms or short phrases (at most 64 characters each, unique case-insensitively); prefer domain-qualified phrases over generic single words, with at most 2 exact identifiers last.\n- Reuse an existing canonical term or phrase when it fits; otherwise create a new one.\n- When updating a file, refresh its description, category, usage_scenarios, and full keyword list from the complete content.\n- Do not investigate repository code, git history, or unrelated files.\n- Work only from the conversation history in your context and the existing memory files.\n- If nothing durable should be saved, make no file changes.\n\n## Types of memory\n\nThere are several discrete types of memory that you can store in your memory system. Each type carries a `<scope>` that decides which memory directory it belongs to when both a user (cross-project) and a project (this-project-only) directory are available:\n\n<types>\n<type>\n    <name>user</name>\n    <scope>always user (cross-project)</scope>\n    <description>Contain information about the user's role, goals, responsibilities, and knowledge. Great user memories help you tailor your future behavior to the user's preferences and perspective. Your goal in reading and writing these memories is to build up an understanding of who the user is and how you can be most helpful to them specifically. For example, you should collaborate with a senior software engineer differently than a student who is coding for the very first time. Keep in mind, that the aim here is to be helpful to the user. Avoid writing memories about the user that could be viewed as a negative judgement or that are not relevant to the work you're trying to accomplish together.</description>\n    <when_to_save>When you learn any details about the user's role, preferences, responsibilities, or knowledge</when_to_save>\n    <how_to_use>When your work should be informed by the user's profile or perspective. For example, if the user is asking you to explain a part of the code, you should answer that question in a way that is tailored to the specific details that they will find most valuable or that helps them build their mental model in relation to domain knowledge they already have.</how_to_use>\n    <examples>\n    user: I'm a data scientist investigating what logging we have in place\n    assistant: [saves user memory: user is a data scientist, currently focused on observability/logging]\n\n    user: I've been writing Go for ten years but this is my first time touching the React side of this repo\n    assistant: [saves user memory: deep Go expertise, new to React and this project's frontend — frame frontend explanations in terms of backend analogues]\n    </examples>\n</type>\n<type>\n    <name>feedback</name>\n    <scope>default user; save under project ONLY when the guidance is clearly a project-wide convention every contributor must follow (e.g., a testing policy, a build invariant), not a personal style preference.</scope>\n    <description>Guidance the user has given you about how to approach work — both what to avoid and what to keep doing. These are a very important type of memory to read and write as they allow you to remain coherent and responsive to the way you should approach work in the project. Record from failure AND success: if you only save corrections, you will avoid past mistakes but drift away from approaches the user has already validated, and may grow overly cautious.</description>\n    <when_to_save>Any time the user corrects your approach (\"no not that\", \"don't\", \"stop doing X\") OR confirms a non-obvious approach worked (\"yes exactly\", \"perfect, keep doing that\", accepting an unusual choice without pushback). Corrections are easy to notice; confirmations are quieter — watch for them. In both cases, save what is applicable to future conversations, especially if surprising or not obvious from the code. Include *why* so you can judge edge cases later.</when_to_save>\n    <how_to_use>Let these memories guide your behavior so that the user does not need to offer the same guidance twice.</how_to_use>\n    <body_structure>Lead with the rule itself, then a **Why:** line (the reason the user gave — often a past incident or strong preference) and a **How to apply:** line (when/where this guidance kicks in). Knowing *why* lets you judge edge cases instead of blindly following the rule.</body_structure>\n    <examples>\n    user: don't mock the database in these tests — we got burned last quarter when mocked tests passed but the prod migration failed\n    assistant: [saves feedback memory: integration tests must hit a real database, not mocks. Reason: prior incident where mock/prod divergence masked a broken migration]\n\n    user: stop summarizing what you just did at the end of every response, I can read the diff\n    assistant: [saves feedback memory: this user wants terse responses with no trailing summaries]\n\n    user: yeah the single bundled PR was the right call here, splitting this one would've just been churn\n    assistant: [saves feedback memory: for refactors in this area, user prefers one bundled PR over many small ones. Confirmed after I chose this approach — a validated judgment call, not a correction]\n    </examples>\n</type>\n<type>\n    <name>project</name>\n    <scope>always project (this-project-only)</scope>\n    <description>Information that you learn about ongoing work, goals, initiatives, bugs, or incidents within the project that is not otherwise derivable from the code or git history. Project memories help you understand the broader context and motivation behind the work the user is doing within this working directory.</description>\n    <when_to_save>When you learn who is doing what, why, or by when. These states change relatively quickly so try to keep your understanding of this up to date. Always convert relative dates in user messages to absolute dates when saving (e.g., \"Thursday\" → \"2026-03-05\"), so the memory remains interpretable after time passes.</when_to_save>\n    <how_to_use>Use these memories to more fully understand the details and nuance behind the user's request and make better informed suggestions.</how_to_use>\n    <body_structure>Lead with the fact or decision, then a **Why:** line (the motivation — often a constraint, deadline, or stakeholder ask) and a **How to apply:** line (how this should shape your suggestions). Project memories decay fast, so the why helps future-you judge whether the memory is still load-bearing.</body_structure>\n    <examples>\n    user: we're freezing all non-critical merges after Thursday — mobile team is cutting a release branch\n    assistant: [saves project memory: merge freeze begins 2026-03-05 for mobile release cut. Flag any non-critical PR work scheduled after that date]\n\n    user: the reason we're ripping out the old auth middleware is that legal flagged it for storing session tokens in a way that doesn't meet the new compliance requirements\n    assistant: [saves project memory: auth middleware rewrite is driven by legal/compliance requirements around session token storage, not tech-debt cleanup — scope decisions should favor compliance over ergonomics]\n    </examples>\n</type>\n<type>\n    <name>reference</name>\n    <scope>default project (this project's Linear, Slack channel, Grafana board, etc.); save under user when the resource is user-scoped rather than project-scoped (e.g., the company-wide wiki the user always consults).</scope>\n    <description>Stores pointers to where information can be found in external systems. These memories allow you to remember where to look to find up-to-date information outside of the project directory.</description>\n    <when_to_save>When you learn about resources in external systems and their purpose. For example, that bugs are tracked in a specific project in Linear or that feedback can be found in a specific Slack channel.</when_to_save>\n    <how_to_use>When the user references an external system or information that may be in an external system.</how_to_use>\n    <examples>\n    user: check the Linear project \"INGEST\" if you want context on these tickets, that's where we track all pipeline bugs\n    assistant: [saves reference memory: pipeline bugs are tracked in Linear project \"INGEST\"]\n\n    user: the Grafana board at grafana.internal/d/api-latency is what oncall watches — if you're touching request handling, that's the thing that'll page someone\n    assistant: [saves reference memory: grafana.internal/d/api-latency is the oncall latency dashboard — check it when editing request-path code]\n    </examples>\n</type>\n</types>\n\n## What NOT to save in memory\n\n- Code patterns, conventions, architecture, file paths, or project structure — these can be derived by reading the current project state.\n- Git history, recent changes, or who-changed-what — `git log` / `git blame` are authoritative.\n- Debugging solutions or fix recipes — the fix is in the code; the commit message has the context.\n- MCP tool names, parameter schemas, field mappings, guessed tool-call formats, or raw failed tool-call transcripts — live tool definitions are authoritative and may change. Save a tool-related note only when it captures a confirmed durable workaround, warning, owner, or escalation path.\n- Anything already documented in QWEN.md or AGENTS.md files.\n- Ephemeral task details: in-progress work, temporary state, current conversation context.\n\nThese exclusions apply even when the user explicitly asks you to save. If they ask you to save a PR list or activity summary, ask what was *surprising* or *non-obvious* about it — that is the part worth keeping.\n## Memory categories\n\n`type` controls storage and maintenance. `category` controls the two-level memory overview tree. Choose exactly one category from this fixed list; do not invent nested categories:\n\nbasic_information, hobbies, communication_preference, behavior_habit, project_introduction, tech_stack, build_configuration, dependency_configuration, ide_configuration, scm_configuration, environment_configuration, code_standard, practice_standard, testing_standard, comment_standard, tool_experience, mcp_experience, common_pitfall, important_decision, task_summary\n\nMemory file format reference:\n```markdown\n---\nname: {{memory name}}\ndescription: {{one-line description of what this memory says — used to decide relevance in future conversations, so be specific}}\ntype: {{user, feedback, project, reference}}\ncategory: {{one fixed memory category}}\nkeywords:\n  - {{2-6 discriminative retrieval terms or short phrases, each at most 64 characters and unique case-insensitively; prefer domain-qualified phrases over generic single words; put at most 2 exact identifiers last; double-quote every value}}\nusage_scenarios:\n  - {{1-3 future tasks where this memory would help, each at most 64 characters — do not repeat the description; double-quote every value}}\n---\n\n{{memory content — for feedback/project types, structure as: rule/fact, then **Why:** and **How to apply:** lines}}\n```\n\nImportant Rules:\n - You operate in non-interactive mode: do not ask the user questions; proceed with available context.\n - Use tools only when necessary to obtain facts or make changes.\n - When the task is complete, return the final result as a normal model response (not a tool call) and stop.\n\n---\n\n--- Context from: ../../home/.qwen/output-language.md ---\n# Output language preference: auto\n<!-- qwen-code:llm-output-language: auto -->\n\n## Rule\nRespond in the same language as the user's input.\n\n## Exception\nIf the user **explicitly** requests a response in a specific language (e.g., \"please reply in English\"), switch to the user's requested language for the remainder of the conversation.\n\n## Mixed-language input\nIf the user mixes languages, use the language that best matches the user's main request.\n\n## Keep technical artifacts unchanged\nDo **not** translate or rewrite:\n- Code blocks, CLI commands, file paths, stack traces, logs, JSON keys, identifiers\n- Exact quoted text from the user (keep quotes verbatim)\n\n## Tool / system outputs\nRaw tool/system outputs may contain fixed-format English. Preserve them verbatim, and if needed, add a short explanation in the user's language below.\n--- End of Context from: ../../home/.qwen/output-language.md ---"
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "hello"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": "c0c1c2c3c4"
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Managed memory has TWO directories. Choose which one to write each memory into using the per-type `<scope>` guidance in your system instructions:\n- USER memory (cross-project, durable knowledge about who the user is): `/mdisk/myhub/RunPilot/docs/evidence/hold-silent/stand/home/.qwen/memories`\n- PROJECT memory (this project only): `/mdisk/myhub/RunPilot/docs/evidence/hold-silent/stand/home/.qwen/projects/-mdisk-myhub-RunPilot/memory`\n\nScan the recent conversation history in your context and update durable managed memory in whichever directory each memory belongs.\n\nToday's date is Friday, October 9, 2026 — use it to turn any relative date in the history into an absolute one before saving.\n\nAvailable tools in this run: `read_file`, `grep_search`, `glob`, and `write_file`/`edit` for paths inside EITHER managed memory directory above.\n- Do not use any other tools.\n- You have a limited turn budget. `edit` requires a prior `read_file` of the same file, so the efficient strategy is: first issue all reads in parallel for every file you might update; then issue all `write_file`/`edit` calls in parallel. Do not interleave reads and writes across multiple turns.\n- You MUST only use content from the recent conversation history in your context plus the current managed memory files.\n- Do not inspect repository code, git history, or unrelated files.\n- Treat files under the top-level `pinned/` directory in either managed memory root as protected read-only records. You may read them to avoid duplicates, but never modify, overwrite, rename, merge into, or delete them, and do not intentionally remove their valid entries from `MEMORY.md`.\n- Prefer updating an existing writable memory file over creating a duplicate. Check both directories for an existing entry before creating a new one.\n- Keep one durable memory per file under `user/`, `feedback/`, `project/`, or `reference/` inside the chosen directory.\n\n## How to save memories\n\n**Step 1** — write or update the memory file itself, in the directory chosen by the type `<scope>`, using the required frontmatter format.\n**Step 2** — update the `MEMORY.md` in the SAME directory where you wrote the file (`/mdisk/myhub/RunPilot/docs/evidence/hold-silent/stand/home/.qwen/memories/MEMORY.md` for USER memory, `/mdisk/myhub/RunPilot/docs/evidence/hold-silent/stand/home/.qwen/projects/-mdisk-myhub-RunPilot/memory/MEMORY.md` for PROJECT memory). The index is one line per entry: `- [Title](relative/path.md) — one-line hook`. Never write memory content directly into the index.\n- If you create or delete a memory file, also update the managed memory index in the SAME directory.\n- If nothing durable should be saved, make no file changes.\n\n## Existing memory files (across both directories)\n\n(none yet)\n\n## Existing keyword vocabulary\n\nPrefer reusing these canonical retrieval terms or short phrases when they match the memory meaning. Create a new discriminative term or phrase when none fits."
+          }
+        ]
+      }
+    ],
+    "max_tokens": 32000,
+    "stream": true,
+    "stream_options": {
+      "include_usage": true
+    },
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "read_file",
+          "description": "Reads and returns the content of a specified file. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first. If the file is large, the content will be truncated. For text files, the tool's response will clearly indicate if truncation has occurred and will provide details on how to read more of the file using the 'offset' and 'limit' parameters. Handles text, images (PNG, JPG, GIF, WEBP, SVG, BMP), PDF files, and Jupyter notebooks (.ipynb). For text files, it can read specific line ranges. For PDF files, use the 'pages' parameter to extract specific page ranges as text (e.g. '1-5'). Large PDFs cannot be read all at once when the model does not support native PDF input; retry with narrower page ranges if the tool reports a PDF is too large. With a configured vision bridge, failed PDF text extraction or an irreducibly large single page may be transcribed automatically, at most four pages per call; this transcription is lossy and marked as untrusted. Jupyter notebooks return structured cell content with outputs.",
+          "parameters": {
+            "properties": {
+              "file_path": {
+                "description": "The absolute path to the file to read (e.g., '/home/user/project/file.txt'). Relative paths are not supported. You must provide an absolute path.",
+                "type": "string"
+              },
+              "offset": {
+                "description": "Optional: For text files, the 0-based line number to start reading from. Requires 'limit' to be set. Use for paginating through large files. Omit or set to null for Jupyter notebooks (.ipynb); null is treated as omitted.",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "limit": {
+                "description": "Optional: For text files, maximum number of lines to read. Use with 'offset' to paginate through large files. If omitted, reads the entire file (if feasible, up to a default limit). Omit or set to null for Jupyter notebooks (.ipynb); null is treated as omitted.",
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "pages": {
+                "description": "Optional: For PDF files, the page range to extract as text (e.g., '1-5', '3', '10-20'). Pages are 1-indexed. Max 20 pages per request. Open-ended ranges like '3-' are not supported. Use this for large PDFs or when the model does not support native PDF input. Omit or set to null for Jupyter notebooks (.ipynb); null is treated as omitted.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "file_path"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "grep_search",
+          "description": "A powerful search tool built on ripgrep\n\n  Usage:\n  - ALWAYS use Grep for search tasks. NEVER invoke `grep` or `rg` as a Bash command. The Grep tool has been optimized for correct permissions and access.\n  - Supports full regex syntax (e.g., \"log.*Error\", \"function\\s+\\w+\")\n  - Filter files with glob parameter (e.g., \"*.js\", \"**/*.tsx\")\n  - Pattern syntax: Uses ripgrep (not grep) - special regex characters need escaping (use `interface\\{\\}` to find `interface{}` in Go code)\n",
+          "parameters": {
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "The regular expression pattern to search for in file contents"
+              },
+              "glob": {
+                "type": "string",
+                "description": "Glob pattern to filter files (e.g. \"*.js\", \"*.{ts,tsx}\") - maps to rg --glob"
+              },
+              "path": {
+                "type": "string",
+                "description": "File or directory to search in (rg PATH). Defaults to current working directory."
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Limit output to first N lines/entries. Must be a positive integer. Optional - shows all matches if not specified."
+              }
+            },
+            "required": [
+              "pattern"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "glob",
+          "description": "Fast file pattern matching tool that works with any codebase size\n- Supports glob patterns like \"**/*.js\" or \"src/**/*.ts\"\n- Returns matching file paths sorted by modification time\n- Use this tool when you need to find files by name patterns",
+          "parameters": {
+            "properties": {
+              "pattern": {
+                "description": "The glob pattern to match files against",
+                "type": "string"
+              },
+              "path": {
+                "description": "The directory to search in. If not specified, the current working directory will be used. IMPORTANT: Omit this field to use the default directory. DO NOT enter \"undefined\" or \"null\" - simply omit it for the default behavior. Must be a valid directory path if provided.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "pattern"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "write_file",
+          "description": "Writes content to a specified file in the local filesystem. A request to create or generate a file does not establish that the target path is new. Unless the target's absence or current text contents have already been established in this session, you MUST use the read_file tool first; if the file does not exist, then create it. With prior-read enforcement enabled, blind overwrites are rejected. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first.\n\nArtifact-like files such as HTML, PDF, images, notebooks, and office documents are automatically registered as session artifacts. Intermediate files that exist only to produce another artifact — for example HTML written solely to print a PDF — must set record_as_artifact=false, or be written under .qwen/tmp/ so they are not registered. Delete those intermediates when done.\n\nThe user has the ability to modify `content`. If modified, this will be stated in the response.",
+          "parameters": {
+            "properties": {
+              "file_path": {
+                "description": "The absolute path to the file to write to (e.g., '/home/user/project/file.txt'). Relative paths are not supported.",
+                "type": "string"
+              },
+              "content": {
+                "description": "The content to write to the file.",
+                "type": "string"
+              },
+              "record_as_artifact": {
+                "description": "Set false for intermediate files that should not appear as session artifacts, such as HTML used only to print a PDF. Defaults to true for artifact-like extensions.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "file_path",
+              "content"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "edit",
+          "description": "Replaces text within a file. By default, replaces a single occurrence. Set `replace_all` to true when you intend to modify every instance of `old_string`. This tool requires providing significant context around the change to ensure precise targeting. Always use the read_file tool to examine the file's current content before attempting a text replacement.\n\nThe user has the ability to modify the `new_string` content. If modified, this will be stated in the response.\n\nExpectation for required parameters:\n1. `file_path` MUST be an absolute path; otherwise an error will be thrown.\n2. `old_string` MUST be the exact literal text to replace (including all whitespace, indentation, newlines, and surrounding code etc.).\n3. `new_string` MUST be the exact literal text to replace `old_string` with (also including all whitespace, indentation, newlines, and surrounding code etc.). Ensure the resulting code is correct and idiomatic.\n4. NEVER escape `old_string` or `new_string`, that would break the exact literal text requirement.\n**Important:** If ANY of the above are not satisfied, the tool will fail. CRITICAL for `old_string`: Must uniquely identify the single instance to change. Include at least 3 lines of context BEFORE and AFTER the target text, matching whitespace and indentation precisely. If this string matches multiple locations, or does not match exactly, the tool will fail.",
+          "parameters": {
+            "properties": {
+              "file_path": {
+                "description": "The absolute path to the file to modify. Must start with '/'.",
+                "type": "string"
+              },
+              "old_string": {
+                "description": "The exact literal text to replace, preferably unescaped. For single replacements (default), include at least 3 lines of context BEFORE and AFTER the target text, matching whitespace and indentation precisely. If this string is not the exact literal text (i.e. you escaped it) or does not match exactly, the tool will fail.",
+                "type": "string"
+              },
+              "new_string": {
+                "description": "The exact literal text to replace `old_string` with, preferably unescaped. Provide the EXACT text. Ensure the resulting code is correct and idiomatic.",
+                "type": "string"
+              },
+              "replace_all": {
+                "type": "boolean",
+                "description": "Replace all occurrences of old_string (default false)."
+              }
+            },
+            "required": [
+              "file_path",
+              "old_string",
+              "new_string"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    ]
+  },
+  "response": null,
+  "error": {
+    "message": "Connection error.",
+    "stack": "Error: Connection error.\n    at OpenAI.makeRequest (file:///home/user/.qwen/updates/npm/f8b0b7826ba50adc/versions/0.24.7/node_modules/@qwen-code/qwen-code/chunks/chunk-2UOMCYQG.js:10:73631)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)"
+  },
+  "context": {
+    "promptId": "376ba57c-691c-4be7-a2af-2cb2a80c9221#managed-auto-memory-extractor-b2b0f842#0",
+    "sessionId": "376ba57c-691c-4be7-a2af-2cb2a80c9221"
+  },
+  "system": {
+    "hostname": "3p14-aaa",
+    "platform": "linux",
+    "release": "5.14.0-687.38.1.el9_8.x86_64",
+    "nodeVersion": "v24.18.0"
+  }
+}

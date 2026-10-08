@@ -1,0 +1,118 @@
+=== 23:23:18 (t+1x5s) ===
+2026-10-08T20:22:59.950303304Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:59.449830742Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:50.179629112Z|SESSION_STATE|{"from":"","to":"IDLE"}
+--- requests ---
+
+--- state ---
+IDLE
+
+=== 23:23:23 (t+2x5s) ===
+2026-10-08T20:22:59.950303304Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:59.449830742Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:50.179629112Z|SESSION_STATE|{"from":"","to":"IDLE"}
+--- requests ---
+
+--- state ---
+IDLE
+
+=== 23:23:28 (t+3x5s) ===
+2026-10-08T20:22:59.950303304Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:59.449830742Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:50.179629112Z|SESSION_STATE|{"from":"","to":"IDLE"}
+--- requests ---
+
+--- state ---
+IDLE
+
+=== 23:23:33 (t+4x5s) ===
+2026-10-08T20:23:29.262275411Z|QUEUE_DEQUEUE|{"reason":"client_gone"}
+2026-10-08T20:22:59.950303304Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:59.449830742Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+--- requests ---
+213|2026-10-08T20:23:29.262275821Z||0|CLIENT_GONE|0
+
+--- state ---
+IDLE
+
+=== 23:23:38 (t+5x5s) ===
+2026-10-08T20:23:29.262275411Z|QUEUE_DEQUEUE|{"reason":"client_gone"}
+2026-10-08T20:22:59.950303304Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:59.449830742Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+--- requests ---
+213|2026-10-08T20:23:29.262275821Z||0|CLIENT_GONE|0
+
+--- state ---
+IDLE
+
+=== 23:23:43 (t+6x5s) ===
+2026-10-08T20:23:29.262275411Z|QUEUE_DEQUEUE|{"reason":"client_gone"}
+2026-10-08T20:22:59.950303304Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:59.449830742Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+--- requests ---
+213|2026-10-08T20:23:29.262275821Z||0|CLIENT_GONE|0
+
+--- state ---
+IDLE
+
+=== 23:23:48 (t+7x5s) ===
+2026-10-08T20:23:29.262275411Z|QUEUE_DEQUEUE|{"reason":"client_gone"}
+2026-10-08T20:22:59.950303304Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:59.449830742Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+--- requests ---
+213|2026-10-08T20:23:29.262275821Z||0|CLIENT_GONE|0
+
+--- state ---
+IDLE
+
+=== 23:23:53 (t+8x5s) ===
+2026-10-08T20:23:29.262275411Z|QUEUE_DEQUEUE|{"reason":"client_gone"}
+2026-10-08T20:22:59.950303304Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:59.449830742Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+--- requests ---
+213|2026-10-08T20:23:29.262275821Z||0|CLIENT_GONE|0
+
+--- state ---
+IDLE
+
+=== 23:23:58 (t+9x5s) ===
+2026-10-08T20:23:29.262275411Z|QUEUE_DEQUEUE|{"reason":"client_gone"}
+2026-10-08T20:22:59.950303304Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:59.449830742Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+--- requests ---
+213|2026-10-08T20:23:29.262275821Z||0|CLIENT_GONE|0
+
+--- state ---
+IDLE
+
+=== 23:24:03 (t+10x5s) ===
+2026-10-08T20:23:29.262275411Z|QUEUE_DEQUEUE|{"reason":"client_gone"}
+2026-10-08T20:22:59.950303304Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:59.449830742Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+--- requests ---
+213|2026-10-08T20:23:29.262275821Z||0|CLIENT_GONE|0
+
+--- state ---
+IDLE
+
+=== 23:24:08 (t+11x5s) ===
+2026-10-08T20:23:29.262275411Z|QUEUE_DEQUEUE|{"reason":"client_gone"}
+2026-10-08T20:22:59.950303304Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:59.449830742Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+--- requests ---
+213|2026-10-08T20:23:29.262275821Z||0|CLIENT_GONE|0
+
+--- state ---
+IDLE
+
+=== 23:24:13 (t+12x5s) ===
+2026-10-08T20:23:29.262275411Z|QUEUE_DEQUEUE|{"reason":"client_gone"}
+2026-10-08T20:22:59.950303304Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:22:59.449830742Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+--- requests ---
+213|2026-10-08T20:23:29.262275821Z||0|CLIENT_GONE|0
+
+--- state ---
+IDLE
+
+мониторинг завершён

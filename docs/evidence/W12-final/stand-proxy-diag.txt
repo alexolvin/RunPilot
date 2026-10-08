@@ -1,0 +1,84 @@
+=== t+10s ===
+
+--- ss -tnpe (dport :18787) ---
+State Recv-Q Send-Q   Local Address:Port     Peer Address:Port Process                                                                                                                                                     
+ESTAB 0      0      100.124.155.106:44168 100.124.155.106:18787 users:(("MainThread",pid=2849082,fd=24)) timer:(keepalive,15sec,0) uid:1000 ino:303028663 sk:1100e cgroup:/user.slice/user-1000.slice/session-569.scope <->
+ESTAB 0      0      100.124.155.106:46704 100.124.155.106:18787 users:(("MainThread",pid=2847951,fd=25)) timer:(keepalive,44sec,0) uid:1000 ino:303012841 sk:1100f cgroup:/user.slice/user-1000.slice/session-569.scope <->
+
+--- /proc/2849082/environ | grep -i proxy ---
+(нет proxy в environ)
+
+--- settings.json qwen (user) proxy ---
+"(\u043d\u0435\u0442)"
+
+--- settings.json qwen (project) proxy ---
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/mdisk/myhub/RunPilot/docs/evidence/hold-silent/stand/work/.qwen/settings.json'
+(нет проектного settings.json)
+
+--- События B (последние 3) ---
+2026-10-08T20:48:30.710729734Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:48:10.988272141Z|SESSION_STATE|{"from":"","to":"IDLE"}
+
+--- Запросы B (последние 3) ---
+
+=== t+25s ===
+
+--- ss -tnpe (dport :18787) ---
+State Recv-Q Send-Q   Local Address:Port     Peer Address:Port Process                                                                                                                                                     
+ESTAB 0      0      100.124.155.106:44168 100.124.155.106:18787 users:(("MainThread",pid=2849082,fd=24)) timer:(keepalive,394ms,0) uid:1000 ino:303028663 sk:1100e cgroup:/user.slice/user-1000.slice/session-569.scope <->
+ESTAB 0      0      100.124.155.106:46704 100.124.155.106:18787 users:(("MainThread",pid=2847951,fd=25)) timer:(keepalive,29sec,0) uid:1000 ino:303012841 sk:1100f cgroup:/user.slice/user-1000.slice/session-569.scope <->
+
+--- /proc/2849082/environ | grep -i proxy ---
+(нет proxy в environ)
+
+--- settings.json qwen (user) proxy ---
+"(\u043d\u0435\u0442)"
+
+--- settings.json qwen (project) proxy ---
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: '/mdisk/myhub/RunPilot/docs/evidence/hold-silent/stand/work/.qwen/settings.json'
+(нет проектного settings.json)
+
+--- События B (последние 3) ---
+2026-10-08T20:48:30.710729734Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+2026-10-08T20:48:10.988272141Z|SESSION_STATE|{"from":"","to":"IDLE"}
+
+--- Запросы B (последние 3) ---
+
+=== t+35s ===
+
+--- capture-pane B ---
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │ >_ Qwen Code (v0.24.7)                                                   │
+  │                                                                          │
+  │ API Key | runpilot (RunPilot) (/model to change)                         │
+  │ /mdisk/myhub/RunPilot/docs/evidence/hold-silent/stand/work               │
+  └──────────────────────────────────────────────────────────────────────────┘
+  Tips: Try /insight to generate personalized insights from your chat history.
+  ●︎ Update successful! The new version will be used on your next run.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  > hello
+
+  .. Are you not entertained? (Working on it!) (1m 9s · esc to cancel)
+────────────────────────────────────────────────────────────────────────────────
+>   Type your message or @path/to/file
+────────────────────────────────────────────────────────────────────────────────
+  ➜ work · git:(main) · runpilot
+  Enter to steer · Ctrl+Q to queue · Auto mode (shift + tab to cycle)
+
+
+
+
+
+
+--- События B (все) ---
+2026-10-08T20:48:10.988272141Z|SESSION_STATE|{"from":"","to":"IDLE"}
+2026-10-08T20:48:30.710729734Z|QUEUE_SKIP|{"prev":"","reason":"pin_mismatch"}
+
+--- Запросы B (все) ---
+
+мониторинг завершён
