@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -115,5 +116,94 @@ func TestWSClientSelfUpdateExits(t *testing.T) {
 
 	if got, _ := os.ReadFile(bin); string(got) != "NEW-BIN" {
 		t.Errorf("бинарник не заменён: %q", got)
+	}
+}
+
+// TestWSClientBackoffResetOnHello — задержка переподключения сбрасывается к
+// 1 с после успешного hello: 6 отказов dial (backoff 1→2→4→8→16→30 с),
+// затем успешная сессия (hello) + обрыв → 8-е подключение через 1 с (не 30).
+// Без сброса 8-е подключение потребовало бы 30 с вирт. времени.
+func TestWSClientBackoffResetOnHello(t *testing.T) {
+	clk := clock.NewVirtual(time.Unix(0, 0).UTC())
+	var connCount int32
+	connEvents := make(chan int32, 32)
+	up := websocket.Upgrader{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&connCount, 1)
+		connEvents <- n
+		if n <= 6 {
+			// отказ dial (координатор «не поднят»)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		c, err := up.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		// hello + panes, потом обрыв (defer c.Close) — рестарт координатора.
+		if _, _, err := c.ReadMessage(); err != nil {
+			return
+		}
+		if _, _, err := c.ReadMessage(); err != nil {
+			return
+		}
+	}))
+	defer srv.Close()
+
+	withSelftest(t, func(_ context.Context, _ string, _ time.Duration) error { return nil })
+	ex := &fakeExec{}
+	n := newTestNode(t, ex)
+	ws := NewWSClient("ws"+srv.URL[len("http"):], "tok", "old", clk, wsTestLog, n)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = ws.Run(ctx) }()
+
+	// advanceUntil — сдвигать вирт. часы (шаги 100 мс), пока не придёт
+	// соединение `want` или не исчерпан `maxV` вирт. времени. Устойчиво к
+	// гонке: таймер ставится горутиной асинхронно, цикл ловит его на любом шаге.
+	advanceUntil := func(want int32, maxV time.Duration) time.Time {
+		t.Helper()
+		start := clk.Now()
+		realDeadline := time.Now().Add(5 * time.Second)
+		for clk.Now().Sub(start) < maxV && time.Now().Before(realDeadline) {
+			select {
+			case nn := <-connEvents:
+				if nn == want {
+					return clk.Now()
+				}
+			default:
+			}
+			clk.Advance(100 * time.Millisecond)
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatalf("подключение %d не произошло за %s вирт. времени", want, maxV)
+		return time.Time{}
+	}
+
+	// 6 отказов dial: backoff 1→2→4→8→16→30 с. maxV — backoff + запас.
+	maxV := []time.Duration{2, 4, 6, 10, 18, 35}
+	for i := 1; i <= 6; i++ {
+		advanceUntil(int32(i), maxV[i-1]*time.Second)
+	}
+	// 7-е: успешная сессия (hello прошёл), обрыв.
+	t7 := advanceUntil(7, 35*time.Second)
+	// backoff сброшен к 1 с: 8-е подключение в пределах 2 с вирт. времени от
+	// 7-го. Без сброса потребовалось бы 30 с.
+	got8 := false
+	realDeadline := time.Now().Add(5 * time.Second)
+	for clk.Now().Sub(t7) < 2*time.Second && time.Now().Before(realDeadline) {
+		select {
+		case nn := <-connEvents:
+			if nn == 8 {
+				got8 = true
+			}
+		default:
+		}
+		clk.Advance(100 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !got8 {
+		t.Fatal("8-е подключение не произошло за 2 с вирт. времени — backoff не сброшен к 1 с")
 	}
 }

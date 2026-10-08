@@ -51,11 +51,13 @@ func NewWSClient(coordURL, token, runpilotVersion string, clk clock.Clock, log *
 }
 
 // Run — цикл: dial → hello → panes → read/write; переподключение
-// с экспоненциальной задержкой 1 → 30 с. Возвращает ошибку ctx.
+// с экспоненциальной задержкой 1 → 30 с. Задержка сбрасывается к 1 с после
+// успешного hello (узел был зарегистрирован — следующий обрыв перекрывается
+// быстрой первой попыткой, а не накопленными 30 с). Возвращает ошибку ctx.
 func (w *WSClient) Run(ctx context.Context) error {
 	backoff := wsBackoffBase
 	for {
-		err := w.session(ctx)
+		established, err := w.session(ctx)
 		if errors.Is(err, ErrUpdated) {
 			return ErrUpdated // 14.2: переподключение не нужно — узел завершится кодом 75
 		}
@@ -65,10 +67,13 @@ func (w *WSClient) Run(ctx context.Context) error {
 		if err != nil {
 			w.log.Warn("node: канал: " + err.Error())
 		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(backoff):
+		if established {
+			// Успешный hello — узел был зарегистрирован; сбрасываем задержку
+			// к начальной (1 с), чтобы рестарт координатора не копился в 30 с.
+			backoff = wsBackoffBase
+		}
+		if err := w.waitBackoff(ctx, backoff); err != nil {
+			return err
 		}
 		backoff *= wsBackoffFactor
 		if backoff > wsBackoffMax {
@@ -77,8 +82,21 @@ func (w *WSClient) Run(ctx context.Context) error {
 	}
 }
 
-// session — одно соединение.
-func (w *WSClient) session(ctx context.Context) error {
+// waitBackoff — ждать d (или отмену ctx) по часам узла (виртуальные — тесты).
+func (w *WSClient) waitBackoff(ctx context.Context, d time.Duration) error {
+	done := make(chan struct{})
+	w.clk.AfterFunc(d, func() { close(done) })
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-done:
+		return nil
+	}
+}
+
+// session — одно соединение; (true, err) — hello прошёл (узел зарегистрирован).
+func (w *WSClient) session(ctx context.Context) (bool, error) {
+	established := false
 	dialer := websocket.Dialer{}
 	hdr := http.Header{}
 	if w.token != "" {
@@ -86,7 +104,7 @@ func (w *WSClient) session(ctx context.Context) error {
 	}
 	conn, _, err := dialer.Dial(w.url, hdr)
 	if err != nil {
-		return fmt.Errorf("dial: %w", err)
+		return false, fmt.Errorf("dial: %w", err)
 	}
 	defer conn.Close()
 
@@ -102,8 +120,9 @@ func (w *WSClient) session(ctx context.Context) error {
 
 	// После подключения — hello и полный список панелей (раздел 13 ТЗ).
 	if err := w.hello(ctx, conn); err != nil {
-		return err
+		return false, err
 	}
+	established = true
 
 	// Цикл снимков и горутина записи живут только пока живо соединение:
 	// connCtx отменяется при любой ошибке чтения/записи, чтобы readErr мог
@@ -185,14 +204,14 @@ func (w *WSClient) session(ctx context.Context) error {
 		gpuDone = ch
 	}
 
-	readErr := func(err error) error {
+	readErr := func(err error) (bool, error) {
 		cancelConn()
 		<-nodeDone
 		if gpuDone != nil {
 			<-gpuDone
 		}
 		<-writerDone
-		return err
+		return established, err
 	}
 	for {
 		// Ограничение на молчание канала: мёртвое соединение (FIN потерян,
@@ -220,7 +239,7 @@ func (w *WSClient) session(ctx context.Context) error {
 		// ЗАПИСИ ответа UPDATED в сокет и завершиться (процесс — кодом 75).
 		if reply != nil && m.Type == proto.KindUpdate && reply.Result == proto.ResUpdated {
 			w.awaitReplyWritten(flushReq, out)
-			return ErrUpdated
+			return true, ErrUpdated
 		}
 		select {
 		case err := <-writeErr:
