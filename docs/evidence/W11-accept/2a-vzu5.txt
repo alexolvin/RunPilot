@@ -1,0 +1,20 @@
+=== 2a на vzu5: скорость освобождения слота vLLM после отмены ===
+Дата: 2026-10-08
+Скрипт: cancel-speed-vzu5.sh (прямой curl, без кодера)
+
+Параметры:
+- vzu5 vLLM: http://100.126.222.23:8004
+- model: qwen3.8-27b-fp8 (принимает и qwen3.8-27b)
+- key: $RUNPILOT_VLLM_KEY
+- max_tokens 4000, ignore_eos, stream
+- kill -9 curl через 3с, замер num_requests_running каждые 100мс
+
+Результат: 3/3 PASS
+  rep 1: kill->drop=0.242s
+  rep 2: kill->drop=0.244s
+  rep 3: kill->drop=0.242s
+
+Вывод: vLLM vzu5 освобождает слот через ~0.24s после отмены (kill -9). ≤1s — PASS.
+
+Замечание: model в конфиге vzu5 = "qwen3.8-27b-fp8", а /v1/models отдаёт id "qwen3.8-27b".
+vzu5 принимает оба имени (проверено curl'ом) — model НЕ причина сбоев exec.

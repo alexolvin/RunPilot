@@ -265,6 +265,9 @@ func runHere(prof *profiles.Qwen, sid string, env map[string]string, args []stri
 		envPrefix = strings.Join(pairs, " ") + " "
 	}
 	cmdline := envPrefix + prof.Command
+	if coderArgs := node.CoderArgsFromEnv(env); len(coderArgs) > 0 {
+		cmdline += " " + strings.Join(coderArgs, " ")
+	}
 	if len(args) > 0 {
 		cmdline += " " + strings.Join(args, " ")
 	}
@@ -289,6 +292,7 @@ func runNewSession(o runOpts, prof *profiles.Qwen, sid string, env map[string]st
 		args = append(args, "-e", k+"="+env[k])
 	}
 	args = append(args, prof.Command)
+	args = append(args, node.CoderArgsFromEnv(env)...)
 	args = append(args, o.args...)
 	tmuxMust(args...)
 	pane := tmuxFirstPane(o.name)

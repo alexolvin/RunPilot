@@ -1,0 +1,25 @@
+=== 2b на vzu5: 10× kill -9 exec в RUNNING ===
+Дата: 2026-10-08
+Скрипт: accept-vzu5-v2.sh
+
+Результат: 10/10 PASS (10 засчитано из 10)
+
+Критерии (все PASS):
+  - conn запроса (локальный порт из DEBUG conn шлюза) закрыт ≤3с: 0.389–1.823s
+  - t_end ≤3с + request.error = CLIENT_GONE: 0.310–1.724s
+  - LEASE_RELEASE ≤3с: 0.310–1.724s
+  - LEASE_GRANT next (того же слота vzu5) > t_end: PASS
+
+sid повторов: SJP3B1N426, Z18B39FWFW, 9D8MZJSTF3, 307Q8B4XR3, ZSG75JYZS4,
+F74BRDKDBH, T53DW5WR52, 4T5DZSKKJ2, NNKJGX66EE, VBE133DNB8
+
+---
+Контекст (причины и фиксы):
+1. «Кодер не стартует» было из-за того, что vzu5 был недоступен (Недоступен).
+   Теперь vzu5 жив — кодер стартует.
+2. Обход шлюза: model.name в ~/.qwen/settings.json = "qwen3.8-27b" совпадал
+   с id записей modelProviders → sealed-слой → прямой baseUrl (в обход шлюза).
+   Фикс: model.name → "qwen3.8-27b-fp8" (шлюзовый alias, не совпадает с id).
+   После фикса: request-строки и DEBUG-логи шлюза пишутся, кодер идёт через шлюз.
+3. Grant-критерий: следующий grant того же СЛОТА (vzu5) после убитой аренды
+   должен быть > t_end (не того же sid — каждый повтор новый sid).

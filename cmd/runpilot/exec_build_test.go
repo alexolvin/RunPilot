@@ -4,16 +4,26 @@ import "testing"
 
 // buildQwenCmd — промпт передаётся КОДЕРУ позиционным аргументом (qwen:
 // «Defaults to one-shot»), stdin = /dev/null. runpilot exec -- "Сделай X" →
-// qwen "Сделай X" (задача T1: exec обязан передать промпт).
+// qwen --model <alias> --openai-base-url <gateway> "Сделай X" (явные
+// аргументы гарантируют, что запросы идут через шлюз, даже если
+// settings.model.name совпадает с id modelProviders).
 func TestBuildQwenCmdPrompt(t *testing.T) {
 	cmd, err := buildQwenCmd("qwen", []string{"Сделай X"}, map[string]string{
 		"OPENAI_BASE_URL": "http://127.0.0.1:8787/s/SID/v1",
+		"OPENAI_MODEL":    "qwen3.8-27b",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cmd.Args) != 2 || cmd.Args[0] != "qwen" || cmd.Args[1] != "Сделай X" {
-		t.Fatalf("Args=%v, хочу [qwen Сделай X]", cmd.Args)
+	// [qwen --model qwen3.8-27b --openai-base-url http://127.0.0.1:8787/s/SID/v1 Сделай X]
+	want := []string{"qwen", "--model", "qwen3.8-27b", "--openai-base-url", "http://127.0.0.1:8787/s/SID/v1", "Сделай X"}
+	if len(cmd.Args) != len(want) {
+		t.Fatalf("Args=%v (len %d), хочу %v (len %d)", cmd.Args, len(cmd.Args), want, len(want))
+	}
+	for i, w := range want {
+		if cmd.Args[i] != w {
+			t.Fatalf("Args[%d]=%q, хочу %q (полный %v)", i, cmd.Args[i], w, cmd.Args)
+		}
 	}
 	envFound := false
 	for _, kv := range cmd.Env {

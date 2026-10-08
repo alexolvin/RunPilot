@@ -282,7 +282,7 @@ func (g *Gateway) serveAttempt(w http.ResponseWriter, r *http.Request, ctx conte
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	prefail, st := g.doAttempt(w, r, ctx, rest, body, decision)
+	prefail, st := g.doAttempt(w, r, ctx, rest, body, decision, sess.SID)
 	if !prefail {
 		g.recordRequest(sess, decision, rest, st, t0, ctx)
 		return
@@ -306,7 +306,7 @@ func (g *Gateway) serveAttempt(w http.ResponseWriter, r *http.Request, ctx conte
 		http.Error(w, "bad gateway", http.StatusBadGateway)
 		return
 	}
-	prefail2, st2 := g.doAttempt(w, r, ctx, rest, body2, next)
+	prefail2, st2 := g.doAttempt(w, r, ctx, rest, body2, next, sess.SID)
 	if prefail2 {
 		// Повторный отказ до первого байта: повторный повтор ТЗ не
 		// описывает — состояние второго сервера по проверке /health,
@@ -327,7 +327,7 @@ func (g *Gateway) serveAttempt(w http.ResponseWriter, r *http.Request, ctx conte
 
 // doAttempt — одна попытка; (true, st) = отказ до первого байта.
 func (g *Gateway) doAttempt(w http.ResponseWriter, r *http.Request, ctx context.Context,
-	rest string, body []byte, decision *leaseDecision) (bool, *attemptState) {
+	rest string, body []byte, decision *leaseDecision, sid string) (bool, *attemptState) {
 	st := newAttemptState()
 	req := withState(r, st)
 	req.URL.Path = rest

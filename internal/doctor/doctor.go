@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -113,6 +114,18 @@ var (
 		}
 		return b
 	}
+	// loginctlShowUser — вывод `loginctl show-user <user>`; для checkLinger.
+	loginctlShowUser = func(u string) ([]byte, error) {
+		return exec.Command("loginctl", "show-user", u).Output()
+	}
+	// currentUser — имя текущего пользователя; для checkLinger.
+	currentUser = func() (string, error) {
+		u, err := user.Current()
+		if err != nil {
+			return "", err
+		}
+		return u.Username, nil
+	}
 )
 
 // Role — роль doctor: подмножество проверок, релевантное машине.
@@ -149,6 +162,7 @@ func RoleChecks(r Role) []Check {
 			{Name: "coder_out_of_queue", Run: checkCoderOutOfQueue},
 			{Name: "file_mode", Run: checkFileMode},
 			{Name: "node_coordinator", Run: checkNodeCoordinator},
+			{Name: "linger", Run: checkLinger},
 		}
 	}
 	return nil
@@ -357,6 +371,26 @@ func checkNodeCoordinator(ctx *Context) Result {
 	return result(name, PASS, "handshake принят "+addr)
 }
 
+// checkLinger — узел работает как systemd user-сервис; без linger user@UID
+// останавливается при logout и сервис узла умирает. `loginctl show-user
+// <user>` → Linger=yes, иначе FAIL с командой включения.
+func checkLinger(ctx *Context) Result {
+	const name = "linger"
+	user, err := currentUser()
+	if err != nil {
+		return result(name, WARN, "пользователь не определён")
+	}
+	out, err := loginctlShowUser(user)
+	if err != nil {
+		return result(name, FAIL, "loginctl show-user "+user+": "+err.Error())
+	}
+	if !strings.Contains(string(out), "Linger=yes") {
+		return result(name, FAIL,
+			"linger не включён для "+user+" (systemctl --enable-linger "+user+")")
+	}
+	return result(name, PASS, "linger включён для "+user)
+}
+
 func checkBind(ctx *Context) Result {
 	if ctx.Cfg == nil {
 		return result("coordinator_bind", FAIL, "нет конфигурации")
@@ -443,25 +477,29 @@ func parseTmuxVersion(out string) (int, int, bool) {
 
 // checkQwenSettings — клиентская проверка (раздел 7 ТЗ): в
 // ~/.qwen/settings.json задано security.auth.selectedType = "openai" и
-// modelProviders пуст (кодер обязан ходить через шлюз). Любая запись
-// modelProviders несёт прямой baseUrl и уводит сессию мимо координатора —
-// FAIL с путём файла и ключом.
+// modelProviders не содержит id == model_alias (иначе кодер пойдёт на прямой
+// baseUrl в обход шлюза). Проверяются пользовательский (~/.qwen/settings.json)
+// И проектный (<cwd>/.qwen/settings.json) файлы.
 func checkQwenSettings(ctx *Context) Result {
+	alias := ""
+	if ctx.Cfg != nil {
+		alias = ctx.Cfg.Profiles.Qwen.ModelAlias
+	}
 	home, err := homeDir()
 	if err != nil {
 		return result("qwen_settings", WARN, "HOME не определён")
 	}
-	path := filepath.Join(home, ".qwen", "settings.json")
-	data, err := os.ReadFile(path)
+	userPath := filepath.Join(home, ".qwen", "settings.json")
+	data, err := os.ReadFile(userPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return result("qwen_settings", WARN, "нет "+path+" (не клиентская машина?)")
+			return result("qwen_settings", WARN, "нет "+userPath+" (не клиентская машина?)")
 		}
-		return result("qwen_settings", FAIL, path+": "+err.Error())
+		return result("qwen_settings", FAIL, userPath+": "+err.Error())
 	}
 	var d map[string]any
 	if err := json.Unmarshal(data, &d); err != nil {
-		return result("qwen_settings", FAIL, path+": не JSON: "+err.Error())
+		return result("qwen_settings", FAIL, userPath+": не JSON: "+err.Error())
 	}
 	// security.auth.selectedType
 	var sel any
@@ -472,51 +510,67 @@ func checkQwenSettings(ctx *Context) Result {
 	}
 	if sel != "openai" {
 		return result("qwen_settings", FAIL,
-			path+": security.auth.selectedType = "+fmt.Sprintf("%v", sel)+" (нужно openai)")
+			userPath+": security.auth.selectedType = "+fmt.Sprintf("%v", sel)+" (нужно openai)")
 	}
 	// modelProviders (политика 2026-10-02): записи оператора остаются
 	// живыми — в /model кодера доступны; шлюз по умолчанию (model_alias из
 	// env — Runtime Model, baseUrl из OPENAI_BASE_URL). Опасна только
 	// коллизия: id записи == model_alias превращает текущую модель в
 	// Provider Model — прямой baseUrl в обход шлюза.
-	collisions := 0
-	providers := 0
-	if mp, ok := d["modelProviders"].(map[string]any); ok {
-		alias := ""
-		if ctx.Cfg != nil {
-			alias = ctx.Cfg.Profiles.Qwen.ModelAlias
-		}
-		for _, modelsAny := range mp {
-			models, ok := modelsAny.([]any)
-			if !ok {
-				continue
-			}
-			for _, entryAny := range models {
-				entry, ok := entryAny.(map[string]any)
-				if !ok {
-					continue
-				}
-				id, _ := entry["id"].(string)
-				if id == "" {
-					continue
-				}
-				providers++
-				if alias != "" && id == alias {
-					collisions++
-				}
-			}
-		}
-	}
+	collisions, providers := settingsCollision(d, alias)
 	if collisions > 0 {
 		return result("qwen_settings", FAIL,
 			fmt.Sprintf("%s: в modelProviders %d записей с id == model_alias — кодер пойдёт на прямой baseUrl (в обход шлюза); смените model_alias или id записей",
-				path, collisions))
+				userPath, collisions))
+	}
+	// Проектный settings.json (<cwd>/.qwen/settings.json): коллизия id ==
+	// model_alias уводит кодера на прямой baseUrl в обход шлюза.
+	projPath := filepath.Join(".qwen", "settings.json")
+	if pData, perr := os.ReadFile(projPath); perr == nil {
+		var pd map[string]any
+		if err := json.Unmarshal(pData, &pd); err == nil {
+			if pcollisions, _ := settingsCollision(pd, alias); pcollisions > 0 {
+				return result("qwen_settings", FAIL,
+					fmt.Sprintf("%s: в modelProviders %d записей с id == model_alias — кодер пойдёт на прямой baseUrl (в обход шлюза); смените model_alias или id записей",
+						projPath, pcollisions))
+			}
+		}
 	}
 	if providers > 0 {
 		return result("qwen_settings", PASS,
 			fmt.Sprintf("selectedType=openai, modelProviders: %d эндов без коллизии (шлюз по умолчанию, переключение в /model)", providers))
 	}
 	return result("qwen_settings", PASS, "selectedType=openai, modelProviders пуст (кодер через шлюз)")
+}
+
+// settingsCollision — считает коллизии (id == alias) и общее число записей
+// modelProviders в одном settings.json-документе.
+func settingsCollision(doc map[string]any, alias string) (collisions, providers int) {
+	mp, ok := doc["modelProviders"].(map[string]any)
+	if !ok {
+		return 0, 0
+	}
+	for _, modelsAny := range mp {
+		models, ok := modelsAny.([]any)
+		if !ok {
+			continue
+		}
+		for _, entryAny := range models {
+			entry, ok := entryAny.(map[string]any)
+			if !ok {
+				continue
+			}
+			id, _ := entry["id"].(string)
+			if id == "" {
+				continue
+			}
+			providers++
+			if alias != "" && id == alias {
+				collisions++
+			}
+		}
+	}
+	return collisions, providers
 }
 
 // errStopWalk — маркер раннего выхода из qwenPkgContains.

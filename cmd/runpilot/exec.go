@@ -50,7 +50,10 @@ func newExecCmd() *cobra.Command {
 			o.args = args
 			code, err := runExec(o)
 			if code != 0 {
-				// Кода выхода не 0 — печатаем причину в stderr и выходим кодом.
+				// Кодер завершился с ненулевым кодом: печатаем код выхода
+				// (stderr кодера уже унаследован). finish с исходом ERROR
+				// уже вызван в runExec; CRASH — только для смерти exec.
+				fmt.Fprintf(cmd.ErrOrStderr(), "runpilot exec: кодер завершился с кодом %d\n", code)
 				if err != nil {
 					fmt.Fprintln(cmd.ErrOrStderr(), "runpilot exec:", err)
 				}
@@ -260,13 +263,17 @@ func jobExitCode(err error) int {
 	}
 }
 
-// buildQwenCmd — процесс qwen с окружением шлюза (п.4).
+// buildQwenCmd — процесс qwen с окружением шлюза (п.4). Явные аргументы
+// --model/--openai-base-url (CoderArgsFromEnv) гарантируют, что запросы
+// идут через шлюз, даже если settings.model.name совпадает с id
+// modelProviders (обход шлюза).
 func buildQwenCmd(command string, args []string, env map[string]string) (*exec.Cmd, error) {
 	absDir, err := os.Getwd()
 	if err != nil {
 		absDir = ""
 	}
-	cmd := exec.Command(command, args...)
+	cmdArgs := append(node.CoderArgsFromEnv(env), args...)
+	cmd := exec.Command(command, cmdArgs...)
 	cmd.Dir = absDir
 	inherit := os.Environ()
 	for k, v := range env {

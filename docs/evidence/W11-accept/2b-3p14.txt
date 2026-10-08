@@ -1,0 +1,21 @@
+=== 2b на 3p14: 10× kill -9 exec в RUNNING ===
+Дата: 2026-10-08
+Скрипт: accept-3p14.sh
+
+Результат: 10/10 PASS (10 засчитано из 10)
+
+Критерии (все PASS):
+  - conn запроса (локальный порт из DEBUG conn шлюза) закрыт ≤3с: 0.028–0.030s
+  - t_end ≤3с + request.error = CLIENT_GONE: 0.262–1.922s
+  - LEASE_RELEASE ≤3с: 0.262–1.922s
+  - LEASE_GRANT next (того же слота 3p14) > t_end: PASS
+
+sid повторов: 740YAPR0JA, P00XY7QYVH, FWBEC00A5K, J77ZYHYF5Y, EKF8W0658K,
+HHKCFSXBDV, CM8JMDNYSH, 3C97HNCD1B, Q10JB74DGE, NYAVMJXZ37
+
+2a на 3p14: 3/3 PASS (kill→drop 0.016–0.131s). Артефакт: 2a-3p14 (cancel-speed-3p14.sh).
+
+Замечание: model.name в ~/.qwen/settings.json при переключении модели оператором
+вернулся на "qwen3.8-27b" (коллизия с id записей modelProviders → обход шлюза).
+Исправлено на "qwen3.8-27b-fp8" (шлюзовый alias). После фикса request-строки и
+DEBUG-логи шлюза пишутся.

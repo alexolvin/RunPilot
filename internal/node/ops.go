@@ -146,6 +146,7 @@ func (n *Node) spawn(ctx context.Context, m proto.Msg) (*Reply, error) {
 		args = append(args, "-e", k+"="+m.Env[k])
 	}
 	args = append(args, n.prof.Command)
+	args = append(args, CoderArgsFromEnv(m.Env)...)
 	args = append(args, m.Args...)
 	if _, err := n.ex.Output(ctx, "tmux", tmuxArgs(socket, args...)...); err != nil {
 		return &Reply{CmdID: m.CmdID, Result: "SPAWN_FAILED", Detail: err.Error()}, nil
@@ -224,6 +225,7 @@ func (n *Node) respawn(ctx context.Context, socket string, m proto.Msg) (*Reply,
 		args = append(args, "-e", k+"="+m.Env[k])
 	}
 	args = append(args, n.prof.Command)
+	args = append(args, CoderArgsFromEnv(m.Env)...)
 	args = append(args, m.Args...)
 	if _, err := n.ex.Output(ctx, "tmux", tmuxArgs(socket, args...)...); err != nil {
 		return &Reply{CmdID: m.CmdID, Result: ResPaneGone}, nil
