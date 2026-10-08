@@ -141,12 +141,13 @@ func (n *Node) spawn(ctx context.Context, m proto.Msg) (*Reply, error) {
 			}
 		}
 	}
+	env := n.coderEnv(m.Env)
 	args := []string{"new-session", "-d", "-s", m.Name, "-c", m.Dir}
-	for _, k := range sortedEnvKeys(m.Env) {
-		args = append(args, "-e", k+"="+m.Env[k])
+	for _, k := range sortedEnvKeys(env) {
+		args = append(args, "-e", k+"="+env[k])
 	}
-	args = append(args, n.prof.Command)
-	args = append(args, CoderArgsFromEnv(m.Env)...)
+	args = append(args, n.coderCommand())
+	args = append(args, CoderArgsFromEnv(env)...)
 	args = append(args, m.Args...)
 	if _, err := n.ex.Output(ctx, "tmux", tmuxArgs(socket, args...)...); err != nil {
 		return &Reply{CmdID: m.CmdID, Result: "SPAWN_FAILED", Detail: err.Error()}, nil
@@ -220,12 +221,13 @@ func (n *Node) listDirs(ctx context.Context, m proto.Msg) (*Reply, error) {
 // --- панельные операции (respawn / kill_session / release_pane / kill_process) ---
 
 func (n *Node) respawn(ctx context.Context, socket string, m proto.Msg) (*Reply, error) {
+	env := n.coderEnv(m.Env)
 	args := []string{"respawn-pane", "-k", "-t", m.PaneID}
-	for _, k := range sortedEnvKeys(m.Env) {
-		args = append(args, "-e", k+"="+m.Env[k])
+	for _, k := range sortedEnvKeys(env) {
+		args = append(args, "-e", k+"="+env[k])
 	}
-	args = append(args, n.prof.Command)
-	args = append(args, CoderArgsFromEnv(m.Env)...)
+	args = append(args, n.coderCommand())
+	args = append(args, CoderArgsFromEnv(env)...)
 	args = append(args, m.Args...)
 	if _, err := n.ex.Output(ctx, "tmux", tmuxArgs(socket, args...)...); err != nil {
 		return &Reply{CmdID: m.CmdID, Result: ResPaneGone}, nil

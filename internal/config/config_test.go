@@ -101,7 +101,7 @@ var configKeys = []string{
 	"servers.first_byte_timeout_sec", "servers.require_direct", "servers.upstreams",
 	"servers.upstreams.openai", "servers.upstreams.openai.url", "servers.upstreams.openai.model",
 	"servers.upstreams.openai.key_env",
-	"profiles", "profiles.qwen", "profiles.qwen.model_alias", "profiles.qwen.client_timeout_sec",
+	"profiles", "profiles.qwen", "profiles.qwen.model_alias", "profiles.qwen.command", "profiles.qwen.client_timeout_sec",
 	"notify", "notify.telegram", "notify.telegram.bot_token_env", "notify.telegram.chat_ids",
 	"notify.telegram.min_turn_sec", "notify.telegram.coalesce_sec", "notify.telegram.kinds",
 	"notify.alerts", "notify.alerts.queue_wait_min", "notify.alerts.wait_ui_sec",

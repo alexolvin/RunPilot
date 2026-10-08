@@ -207,6 +207,11 @@ type Profiles struct {
 // ProfileQwen — профиль агента qwen (единственный в этой редакции).
 type ProfileQwen struct {
 	ModelAlias string `yaml:"model_alias"`
+	// Command — абсолютный путь к кодеру (qwen). Пусто — command профиля
+	// (profiles/qwen.yaml). Узел запускает кодера с PATH, в начало которого
+	// добавлен каталог Command (там же node из nvm). install.sh находит путь
+	// через `command -v qwen` в login-оболочке и пишет сюда.
+	Command string `yaml:"command"`
 	// ClientTimeoutSec — таймаут генерирующего запроса кодера (сек).
 	// runpilot run выставляет QWEN_CODE_API_TIMEOUT_MS = ClientTimeoutSec×1000
 	// в env кодера (перекрывает встроенный/override-профиль и env оператора);

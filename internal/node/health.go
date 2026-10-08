@@ -44,11 +44,24 @@ func whichPath(ctx context.Context, ex Execer, bin string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// coderHealthPath — путь кодера для node_health (N9): абсолютный путь из
+// конфига (profiles.qwen.command), иначе which(command). Пусто — no_qwen.
+func (n *Node) coderHealthPath(ctx context.Context) string {
+	cmd := n.coderCommand()
+	if filepath.IsAbs(cmd) {
+		if _, err := os.Stat(cmd); err == nil {
+			return cmd
+		}
+		return ""
+	}
+	return whichPath(ctx, n.ex, cmd)
+}
+
 // healthMsg — снимок node_health узла (14.4).
 func (n *Node) healthMsg(ctx context.Context) proto.Msg {
 	m := proto.New(proto.KindNodeHealth)
 	m.TmuxVersion = TmuxVersion(ctx, n.ex)
-	m.QwenPath = whichPath(ctx, n.ex, n.prof.Command)
+	m.QwenPath = n.coderHealthPath(ctx)
 	m.QwenVersion = n.agentVer
 	m.DiskFreeMB = diskFreeMB(n.diskPath)
 	m.NodeTimeMS = n.clk.Now().UnixMilli()

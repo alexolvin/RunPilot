@@ -139,6 +139,10 @@ func (s *Server) tokenExists(token string) bool {
 // node.host — ПУСТОЙ: узел определяет hostname сам (os.Hostname()), а не из
 // конфига (иначе install.sh, сгенерированный на координаторе, вписал бы
 // hostname координатора → «конфликт имени хоста» при claim по hostname узла).
+// profiles.qwen.command — абсолютный путь к кодеру (command -v в login-шелле):
+// узел запускает кодера с PATH, в начало которого добавлен каталог кодера
+// (там же node из nvm). Симлинков в ~/.local/bin НЕТ (правка окружения
+// оператора запрещена).
 func nodeEnrollFileSetup(cfgDir, coordinator, token string) string {
 	cfg := cfgDir + "/config.yaml"
 	secrets := cfgDir + "/secrets.env"
@@ -151,6 +155,10 @@ client:
 node:
   host: ""
 YAML
+QWEN_PATH="$(command -v qwen || true)"
+if [ -n "$QWEN_PATH" ]; then
+  printf 'profiles:\n  qwen:\n    command: %%s\n' "$QWEN_PATH" >> "$cfg"
+fi
 chmod 600 "$cfg"
 echo "RUNPILOT_NODE_TOKEN=%s" > "$secrets"
 chmod 600 "$secrets"
@@ -225,20 +233,10 @@ if ! timeout 15 qwen --version >/dev/null 2>&1; then
   echo "runpilot: qwen не исполним (проверьте доступность node в PATH)"
   exit 2
 fi
-# qwen в PATH интерактивной шеллы, но в PATH сервиса узла (~/.local/bin:…)
-# может отсутствовать (nvm грузится только в login-шелле). Симлинки в
-# ~/.local/bin — иначе node-сервис видит no_qwen и не запускает кодеров.
-QWEN_BIN="$(command -v qwen)"
-QWEN_DIR="$(dirname "$QWEN_BIN")"
-mkdir -p "$HOME/.local/bin"
-if [ "$QWEN_DIR" != "$HOME/.local/bin" ]; then
-  ln -sf "$QWEN_BIN" "$HOME/.local/bin/qwen"
-  echo "runpilot: $HOME/.local/bin/qwen → $QWEN_BIN (qwen в PATH сервиса)"
-  if [ -x "$QWEN_DIR/node" ]; then
-    ln -sf "$QWEN_DIR/node" "$HOME/.local/bin/node"
-    echo "runpilot: $HOME/.local/bin/node → $QWEN_DIR/node (node для qwen в PATH сервиса)"
-  fi
-fi
+# Путь к кодеру уже записан в config.yaml (profiles.qwen.command, см.
+# nodeEnrollFileSetup). Узел запускает кодера с PATH, в начало которого
+# добавлен каталог кодера (там же node из nvm). Симлинков НЕ создаём
+# (правка окружения оператора запрещена).
 # Служба + tmux-интеграция (14.1): узел под systemd, скрипт завершается
 # и не занимает терминал.
 echo "runpilot: устанавливаю службу узла…"

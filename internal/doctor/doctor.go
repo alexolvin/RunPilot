@@ -156,6 +156,7 @@ func RoleChecks(r Role) []Check {
 	case RoleNode:
 		return []Check{
 			{Name: "tmux", Run: checkTmux},
+			{Name: "qwen_command", Run: checkQwenCommand},
 			{Name: "qwen_settings", Run: checkQwenSettings},
 			{Name: "qwen_timeout_guard", Run: checkQwenTimeoutGuard},
 			{Name: "coder_timeout_env", Run: checkCoderTimeoutEnv},
@@ -541,6 +542,32 @@ func checkQwenSettings(ctx *Context) Result {
 			fmt.Sprintf("selectedType=openai, modelProviders: %d эндов без коллизии (шлюз по умолчанию, переключение в /model)", providers))
 	}
 	return result("qwen_settings", PASS, "selectedType=openai, modelProviders пуст (кодер через шлюз)")
+}
+
+// checkQwenCommand — путь к кодеру (profiles.qwen.command): пусто — command
+// профиля (PASS); задан — файл существует и `<command> --version` выполняется
+// в окружении службы (PATH = каталог кодера + текущий). Файл отсутствует →
+// FAIL с путём.
+func checkQwenCommand(ctx *Context) Result {
+	const check = "qwen_command"
+	cmd := ""
+	if ctx.Cfg != nil {
+		cmd = ctx.Cfg.Profiles.Qwen.Command
+	}
+	if cmd == "" {
+		return result(check, PASS, "profiles.qwen.command пуст (command профиля)")
+	}
+	if _, err := os.Stat(cmd); err != nil {
+		return result(check, FAIL, cmd+": нет файла")
+	}
+	// PATH = каталог кодера (там node из nvm) + текущий PATH.
+	c := exec.Command(cmd, "--version")
+	c.Env = append(os.Environ(), "PATH="+filepath.Dir(cmd)+":"+os.Getenv("PATH"))
+	out, err := c.Output()
+	if err != nil {
+		return result(check, FAIL, cmd+": "+err.Error())
+	}
+	return result(check, PASS, cmd+": "+strings.TrimSpace(string(out)))
 }
 
 // settingsCollision — считает коллизии (id == alias) и общее число записей

@@ -167,6 +167,26 @@ func TestQwenSettingsFailSelectedType(t *testing.T) {
 	t.Fatal("нет строки qwen_settings")
 }
 
+// checkQwenCommand: путь из конфига отсутствует → FAIL с путём; пусто → PASS.
+func TestQwenCommand(t *testing.T) {
+	t.Run("пусто — PASS (command профиля)", func(t *testing.T) {
+		cfg := config.Defaults()
+		r := checkQwenCommand(&Context{Cfg: cfg})
+		if r.Level != PASS {
+			t.Fatalf("пустой command: %s", r)
+		}
+	})
+	t.Run("путь отсутствует — FAIL с путём", func(t *testing.T) {
+		cfg := config.Defaults()
+		missing := filepath.Join(t.TempDir(), "no-such-qwen")
+		cfg.Profiles.Qwen.Command = missing
+		r := checkQwenCommand(&Context{Cfg: cfg})
+		if r.Level != FAIL || !strings.Contains(r.Detail, missing) {
+			t.Fatalf("нет файла: %s (жду FAIL с путём %s)", r, missing)
+		}
+	})
+}
+
 func TestQwenSettingsPassDirectProvider(t *testing.T) {
 	home := t.TempDir()
 	// Прямой провайдер с id, НЕ равным ModelAlias (qwen3.6-27b в defaults),

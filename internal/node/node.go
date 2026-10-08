@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -123,6 +124,37 @@ func New(cfg *config.Config, prof *profiles.Qwen, ex Execer, clk clock.Clock, lo
 
 // ctxBackground — фон для разовых вызовов вне цикла (version_cmd).
 func ctxBackground() context.Context { return context.Background() }
+
+// coderCommand — команда кодера: profiles.qwen.command из конфига узла
+// (абсолютный путь, пишет install.sh), иначе command профиля (qwen.yaml).
+func (n *Node) coderCommand() string {
+	if n.cfg.Profiles.Qwen.Command != "" {
+		return n.cfg.Profiles.Qwen.Command
+	}
+	return n.prof.Command
+}
+
+// coderPATH — PATH кодера: каталог кодера (там же node из nvm) в начало
+// текущего PATH. Только если команда — абсолютный путь; иначе "" (не менять).
+func (n *Node) coderPATH() string {
+	cmd := n.coderCommand()
+	if cmd == "" || !filepath.IsAbs(cmd) {
+		return ""
+	}
+	return filepath.Dir(cmd) + ":" + os.Getenv("PATH")
+}
+
+// coderEnv — env кодера: PATH = каталог кодера + текущий PATH. Без абсолютного
+// пути — env не меняется (кодер берёт PATH tmux-сервера как есть).
+func (n *Node) coderEnv(env map[string]string) map[string]string {
+	if p := n.coderPATH(); p != "" {
+		if env == nil {
+			env = map[string]string{}
+		}
+		env["PATH"] = p
+	}
+	return env
+}
 
 // gatewayURLValue — текущий gateway_url (для ScanExternal); чтение под gwMu.
 func (n *Node) gatewayURLValue() string {
