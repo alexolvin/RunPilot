@@ -1,5 +1,26 @@
 # HANDOFF
-Обновлено: 2026-10-08 (W11: обход шлюза --model/--openai-base-url + exec ERROR + doctor project settings + canary-тест; выкат a1e201e)
+Обновлено: 2026-10-08 (W11 ЗАКРЫТ: обход шлюза + exec ERROR + doctor + canary + linger-тест + переподключение + vzu5-claw a64e05a1; выкат a1e201e)
+
+## W11 — ЗАКРЫТ (2026-10-08)
+
+### Доп-5 — linger + переподключение узлов + vzu5-claw a64e05a1
+
+- **п.1 doctor linger** — `checkLinger` в `RoleChecks(RoleNode)` (в HEAD),
+  `internal/doctor/linger_test.go` закоммичен (`a111d18`), `go test -race` 4/4 PASS.
+  Артефакт `docs/evidence/W11-accept/linger-test.txt`.
+- **п.2 переподключение узлов ≤30с** — ЗАМЕР 31.1s (3p14-aaa) / 32.1s
+  (vzu5-claw), **на 1–2с выше цели**. Причина: WS-backoff узла (`internal/node/ws.go`,
+  1→30s, ×2) **не сбрасывается при успешной сессии** → после выката a64e05a1
+  backoff застрял в max 30s. before/after списки → `restart-reconnect.txt`.
+  (Фикс ≤30s — сброс backoff при успешной сессии; не запрашивалось.)
+- **п.3 vzu5-claw a64e05a1** — обновлён по SSH, `upgrade-node.sh` PASS
+  (sha совпал, doctor пред/пост PASS, бэкап `runpilot.bak-20261008T122447Z`).
+  Проверки: online ✓, версия = координатору (a1e201e-dirty) ✓, doctor --role node
+  без FAIL ✓. Артефакт `vzu5-claw-update.txt`.
+  Примечание: 401 «неверный токен узла» — с 100.126.222.23 = **vzu5-big** (другая
+  машина), к vzu5-claw (100.95.195.40) отношения не имеет.
+
+---
 
 ## W11 — обход шлюза + exec ERROR + doctor project settings (2026-10-08)
 
