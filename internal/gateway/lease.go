@@ -170,19 +170,22 @@ func (g *Gateway) holdPass(ctx context.Context, sess store.SessionRecord,
 		HeldRequest: true,
 		HeldSince:   now,
 	})
+	g.log.Info("gateway: удержание началось", "sid", sess.SID, "hold_max_sec", g.cfg.Gateway.HoldMaxSec)
 	wake := g.subscribeWake()
 	defer g.unsubscribeWake(wake)
 	timer := time.NewTimer(time.Duration(g.cfg.Gateway.HoldMaxSec) * time.Second)
 	defer timer.Stop()
 
+	heldMS := func() int64 { return g.clk.Now().Sub(now).Milliseconds() }
 	for {
 		// Аренду выдаёт ТОЛЬКО планировщик (LEASE_GRANT, «held»:true):
 		// действующая аренда (создана планировщиком) → сразу в работу.
 		if lease, err := g.st.LeaseGet(sess.SID); err == nil {
 			if srv := g.servers.ByName(lease.Server); srv != nil {
+				held := g.clk.Now().Sub(now).Milliseconds()
+				g.metrics.RecordHold(float64(held) / msToSec)
 				g.sessionGrantedEvents(sess)
-				return &leaseDecision{server: srv, lease: lease,
-					heldMS: g.clk.Now().Sub(now).Milliseconds()}, nil
+				return &leaseDecision{server: srv, lease: lease, heldMS: held}, nil
 			}
 		}
 		select {
@@ -190,10 +193,10 @@ func (g *Gateway) holdPass(ctx context.Context, sess store.SessionRecord,
 			// П.4: Esc/отмена во время удержания — запись очереди удалена,
 			// сессия IDLE, событие QUEUE_DEQUEUE (reason: client_gone),
 			// request.error = CLIENT_GONE.
-			g.clientGone(sess.SID)
+			g.clientGone(sess.SID, heldMS())
 			return nil, ctx.Err()
 		case <-timer.C:
-			g.heldToResume(sess.SID)
+			g.heldToResume(sess.SID, heldMS())
 			return nil, errHoldTimeout
 		case <-wake:
 			// Слот мог освободиться (LEASE_GRANT планировщика) — проверять заново.
@@ -204,12 +207,14 @@ func (g *Gateway) holdPass(ctx context.Context, sess store.SessionRecord,
 // clientGone — Esc/отмена во время удержания (П.4): запись очереди удалена,
 // сессия IDLE, событие QUEUE_DEQUEUE (reason: client_gone),
 // request.error = CLIENT_GONE.
-func (g *Gateway) clientGone(sid string) {
+func (g *Gateway) clientGone(sid string, heldMS int64) {
+	g.log.Info("gateway: client_gone во время удержания", "sid", sid, "held_ms", heldMS)
+	g.metrics.RecordHold(float64(heldMS) / msToSec)
 	_ = g.st.QueueDelete(sid)
 	payload, _ := json.Marshal(map[string]any{"reason": "client_gone"})
 	_ = g.st.EventRecord(model.Event{TS: g.clk.Now(), Kind: model.KindQueueDequeue, SID: sid, Payload: payload})
 	// П.4: request.error = CLIENT_GONE (запрос отменён клиентом до выдачи).
-	_ = g.st.RequestError(sid, "CLIENT_GONE", g.clk.Now())
+	_ = g.st.RequestError(sid, "CLIENT_GONE", g.clk.Now(), heldMS)
 	if sess, err := g.st.GetSession(sid); err == nil && sess.State == model.SessionQueued {
 		g.applySessionEvent(sess, model.EvDequeue)
 	}
@@ -262,8 +267,12 @@ func (g *Gateway) grant(class model.QueueClass, constraint model.Constraint,
 
 // heldToResume — удержание завершено без слота: запись остаётся в
 // очереди с held_request=false и mode=resume (раздел 6 ТЗ).
-func (g *Gateway) heldToResume(sid string) {
+// request.error = HOLD_TIMEOUT, held_ms = время удержания.
+func (g *Gateway) heldToResume(sid string, heldMS int64) {
+	g.log.Info("gateway: удержание истекло (hold_max_sec)", "sid", sid, "held_ms", heldMS)
+	g.metrics.RecordHold(float64(heldMS) / msToSec)
 	_ = g.st.QueueSetHeldRequest(sid, false, model.QueueModeResume)
+	_ = g.st.RequestError(sid, "HOLD_TIMEOUT", g.clk.Now(), heldMS)
 }
 
 // sessionGrantedEvents — переходы сессии при выдаче аренды

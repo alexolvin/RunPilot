@@ -1,4 +1,5 @@
-// Package gateway — константы (таблица R2): лимиты чтения тела отказа.
+// Package gateway — константы (таблица R2): лимиты чтения тела отказа,
+// метрики.
 package gateway
 
 const (
@@ -6,4 +7,23 @@ const (
 	// отказа (S4/S5/S6): шаблоны лежат в начале ошибки vLLM, весь стрим
 	// не буферизуется.
 	faultBodyLimit = 4096
+
+	// metricLabelParts — частей в ключе метрики "server|code".
+	metricLabelParts = 2
+	// msToSec — мс → с.
+	msToSec = 1000.0
+
+	// Бакеты histogram (раздел 14 ТЗ).
+	bucket001  = 0.01
+	bucket005  = 0.05
+	bucket01   = 0.1
+	bucket05   = 0.5
+	bucket1    = 1.0
+	bucket5    = 5.0
+	bucket10   = 10.0
+	bucket30   = 30.0
+	bucket60   = 60.0
+	bucket300  = 300.0
+	bucket600  = 600.0
+	bucket3600 = 3600.0
 )

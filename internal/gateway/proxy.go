@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 
@@ -399,11 +400,13 @@ func (g *Gateway) recordRequest(sess store.SessionRecord, decision *leaseDecisio
 	}
 	if first := st.firstByte(); !first.IsZero() {
 		req.TFirstByte = first
+		g.metrics.RecordOverhead(first.Sub(t0).Seconds())
 	}
 	if decision.lease != nil {
 		g.setLastRequestEnd(decision.lease.ID, tEnd)
 	}
 	_ = g.st.RequestRecord(req)
+	g.metrics.RecordRequest(req.Server, strconv.Itoa(req.Status))
 }
 
 // resetClientHeaders — после поглощённого ответа 502/503/504 заголовки

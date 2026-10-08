@@ -91,6 +91,9 @@ type Gateway struct {
 	// карантин). reportFault вызывается из modifyResponse (поток прокси).
 	fr            sync.Mutex
 	faultReporter FaultReporter
+
+	// Метрики шлюза (раздел 14 ТЗ).
+	metrics *Metrics
 }
 
 // FaultReporter — приём отказа класса OOM/ENGINE_DEAD (раздел 7.1 С4/С5):
@@ -156,6 +159,7 @@ func NewGateway(cfg *config.Config, st *store.Store, clk clock.Clock, log *slog.
 		inflightCtx: map[int]context.CancelCauseFunc{},
 		inflightSID: map[int]string{},
 		lastEnd:     map[int64]time.Time{},
+		metrics:     NewMetrics(),
 	}
 	return g, nil
 }
@@ -165,7 +169,13 @@ func (g *Gateway) Servers() *Servers { return g.servers }
 
 // Handler — HTTP-обработчик шлюза (gateway_port).
 func (g *Gateway) Handler() http.Handler {
-	return http.HandlerFunc(g.serveHTTP)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/metrics" {
+			g.metrics.Handler().ServeHTTP(w, r)
+			return
+		}
+		g.serveHTTP(w, r)
+	})
 }
 
 // serveHTTP — разбор пути /s/<sid>/..., доступ, маршрутизация.
@@ -226,11 +236,13 @@ func (g *Gateway) handleGenerative(w http.ResponseWriter, r *http.Request, sess 
 	// runpilot_safe_mode, идущие (с активной арендой) обслуживаются.
 	if m, _ := g.st.Mode(); m == string(model.ModeEmergency) {
 		g.writeMode503(w, "runpilot_emergency", "runpilot: аварийная остановка, генерация отменена")
+		g.metrics.RecordRequest("", "503")
 		return
 	}
 	if m, _ := g.st.Mode(); m == string(model.ModeSafeMode) {
 		if _, err := g.st.LeaseGet(sess.SID); err != nil {
 			g.writeMode503(w, "runpilot_safe_mode", "runpilot: безопасный режим, новых аренд нет")
+			g.metrics.RecordRequest("", "503")
 			return
 		}
 	}
@@ -239,6 +251,7 @@ func (g *Gateway) handleGenerative(w http.ResponseWriter, r *http.Request, sess 
 	// (раздел 6 ТЗ).
 	if g.tryBumpTotalInflight() {
 		g.writeNoSlot(w, g.queuePositionOrOne(sess.SID))
+		g.metrics.RecordRequest("", "503")
 		return
 	}
 	defer g.unBumpTotalInflight()
@@ -265,6 +278,7 @@ func (g *Gateway) handleGenerative(w http.ResponseWriter, r *http.Request, sess 
 			status = http.StatusRequestEntityTooLarge
 		}
 		http.Error(w, err.Error(), status)
+		g.metrics.RecordRequest("", strconv.Itoa(status))
 		return
 	}
 
@@ -273,13 +287,16 @@ func (g *Gateway) handleGenerative(w http.ResponseWriter, r *http.Request, sess 
 	if err != nil {
 		if errors.Is(err, errHoldTimeout) {
 			g.writeNoSlot(w, g.queuePositionOrOne(sess.SID))
+			g.metrics.RecordRequest("", "503")
 			return
 		}
 		if ctx.Err() != nil {
+			g.metrics.RecordRequest("", "0")
 			return
 		}
 		g.log.Error("gateway: разрешение аренды", "sid", sess.SID, "err", err)
 		http.Error(w, "bad gateway", http.StatusBadGateway)
+		g.metrics.RecordRequest("", "502")
 		return
 	}
 	srvName := decision.server.Cfg.Name

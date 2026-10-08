@@ -33,7 +33,7 @@ func TestP4ClientGone(t *testing.T) {
 		t.Fatal(err)
 	}
 	// clientGone: запись удалена, сессия IDLE, событие QUEUE_DEQUEUE.
-	gw.clientGone(s)
+	gw.clientGone(s, 29300)
 	// Запись очереди удалена.
 	if _, err := st.QueueGet(s); err == nil {
 		t.Fatal("запись очереди должна быть удалена после clientGone")
@@ -62,7 +62,7 @@ func TestP4ClientGone(t *testing.T) {
 	if sess.State != model.SessionIdle {
 		t.Fatalf("сессия: %s, хочу IDLE", sess.State)
 	}
-	// П.4: request.error = CLIENT_GONE (асинхронная запись, ждём).
+	// П.4: request.error = CLIENT_GONE, held_ms = 29300 (асинхронная запись, ждём).
 	reqFound := false
 	deadline2 := time.Now().Add(time.Second)
 	for time.Now().Before(deadline2) {
@@ -70,6 +70,9 @@ func TestP4ClientGone(t *testing.T) {
 		for _, r := range reqs {
 			if r.Error == "CLIENT_GONE" {
 				reqFound = true
+				if r.HeldMS != 29300 {
+					t.Fatalf("held_ms: %d, хочу 29300", r.HeldMS)
+				}
 				break
 			}
 		}

@@ -41,17 +41,17 @@ WHERE sid = ? AND state IN ('PENDING', 'ACTIVE')`, r.SID); err != nil {
 	})
 }
 
-// RequestError — строка request с ошибкой (П.4: client_gone — запрос отменён
-// клиентом во время удержания, до выдачи). status=0 (не завершён),
-// server/path/turn_id пустые, error = код (CLIENT_GONE).
-func (s *Store) RequestError(sid, code string, at time.Time) error {
+// RequestError — строка request с ошибкой. status=0 (не завершён),
+// server/path/turn_id пустые, error = код (CLIENT_GONE / HOLD_TIMEOUT),
+// held_ms = время удержания (мс).
+func (s *Store) RequestError(sid, code string, at time.Time, heldMS int64) error {
 	return s.QueueWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 INSERT INTO request (sid, turn_id, server, path, status, t_start,
 	t_first_byte, t_end, held_ms, error)
-VALUES (?, 0, '', '', 0, ?, '', ?, 0, ?)`,
+VALUES (?, 0, '', '', 0, ?, '', ?, ?, ?)`,
 			sid, at.UTC().Format(time.RFC3339Nano),
-			at.UTC().Format(time.RFC3339Nano), code)
+			at.UTC().Format(time.RFC3339Nano), heldMS, code)
 		return err
 	})
 }
