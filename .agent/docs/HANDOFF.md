@@ -1,5 +1,58 @@
 # HANDOFF
-Обновлено: 2026-10-08 (W11 доп-3: локализация abort ЗАМЕРОМ — звено = vLLM, не шлюз; логирование отказов 401/403; выкат cab05b7)
+Обновлено: 2026-10-08 (W11: обход шлюза --model/--openai-base-url + exec ERROR + doctor project settings + canary-тест; выкат a1e201e)
+
+## W11 — обход шлюза + exec ERROR + doctor project settings (2026-10-08)
+
+**Коммит/выкат:** `a1e201e` (vcs.modified=false), `/home/user/.local/bin/runpilot`
+sha256 `a64e05a1020cd9b55f29cd8bca35f0c8506c7618ee5c849f4d7723f416e123b5`,
+`runpilot.service` active. Бэкап `runpilot.bak-a64e05a1-<ts>`.
+
+### 1. Обход шлюза (задача 2a) — ВЫПОЛНЕНО
+
+Qwen Code резолвит модель: `--model > settings.model.name > env OPENAI_MODEL`.
+Коллизия `settings.model.name == id modelProviders` → прямой baseUrl (обход
+шлюза). **Фикс:** все пути запуска управляемого кодера передают явные
+аргументы `--model <model_alias>` и `--openai-base-url <gateway>/s/<sid>/v1`:
+
+- `internal/node/coder_args.go` — `CoderArgsFromEnv(env) []string`
+- `internal/node/ops.go` — spawn + respawn
+- `cmd/runpilot/run.go` — run + run --here
+- `cmd/runpilot/exec.go` — exec (buildQwenCmd)
+
+**Canary-тест** (`docs/evidence/W11-accept/canary-test.sh`): фейковый проект
+с коллизией в `.qwen/settings.json` (model.name = id провайдера, baseUrl =
+fakellm :8899) → 3 запроса в шлюзе, 0 на канареечный порт. **PASS.**
+
+### 2. doctor --role node (задача 2b) — ВЫПОЛНЕНО
+
+`internal/doctor/doctor.go` — `checkQwenSettings` проверяет коллизию
+model_alias с id modelProviders в **пользовательском** (~/.qwen/settings.json)
+И **проектном** (<cwd>/.qwen/settings.json) файлах. Хелпер `settingsCollision`.
+
+### 3. exec при сбое кодера (задача 3) — ВЫПОЛНЕНО
+
+`cmd/runpilot/exec.go` — при ненулевом коде кодера: печатает код выхода
+(stderr кодера унаследован), finish с исходом ERROR (не CRASH), exit non-zero.
+**Тест** (`docs/evidence/W11-accept/exec-failure-test.sh`): фейковый кодер
+(exit 1) → outcome=ERROR, release_reason=TURN_DONE, stderr в выводе. **PASS.**
+
+### 4. DEBUG-логи удалены
+
+`internal/gateway/proxy.go` + `gateway.go` — временные DEBUG-логи (conn,
+done, write, client-disconnect) удалены.
+
+### 5. Артефакты приёмки
+
+`docs/evidence/W11-accept/` — 2a/2b/canary/exec-failure скрипты + результаты.
+
+### Node upgrade line
+
+```
+scp 3p14-aaa:/mdisk/myhub/RunPilot/deploy/upgrade-node.sh /tmp/upgrade-node.sh \
+  && bash /tmp/upgrade-node.sh a64e05a1020cd9b55f29cd8bca35f0c8506c7618ee5c849f4d7723f416e123b5 3p14-aaa
+```
+
+---
 
 ## W11 доп-3 — локализация abort (замером) + лог 401/403 (2026-10-08)
 
@@ -21,31 +74,26 @@
 | kill→abort | **НЕ incremented** | **НЕ incremented** |
 | ss runpilot→:8004 ДО/ПОСЛЕ kill+100мс | — | fd=16 **закрыт** |
 
-**Вывод:**
-- **Шлюз корректен**: соединение runpilot→vLLM закрывается за ≤100 мс после
-  kill клиента (ReverseProxy/r.Context() cancel). Локализация
-  `internal/gateway/proxy.go` из прошлой приёмки **неверна**.
-- **Звено, где обрыв не доходит до отмены: сам vLLM.** Даже ПРЯМОЙ запрос (1a)
-  с kill -9 curl даёт stop+1, а не abort+1: vLLM догенерировывает ответ убитого
-  клиента. `finished_reason="abort"` = 0, строк об отмене в журнале контейнера
-  нет. API-сервер vLLM **не отменяет запрос при обрыве TCP-соединения**.
+**Вывод (КОРРЕКЦИЯ, см. localization-v2.md):**
+- **Шлюз корректен**: соединение runpilot→vLLM закрывается при обрыве клиента.
+  Локализация `internal/gateway/proxy.go` из прошлой приёмки **неверна** (удалена).
+- **ФАКТ (помехоустойчивый замер, localization-v2.md):** vLLM v0.30.0 (кастомный
+  билд `ced6857a`) **ПРЕРЫВАЕТ генерацию при обрыве TCP-соединения клиента**
+  (num_requests_running падает, запрос не завершается — length не растёт), **НО
+  `finished_reason="abort"` НЕ считает** (счётчик abort = 0, строк об отмене в
+  docker logs нет). Контроль ×3: length +1, abort 0. 1a/1b ×3: ни length, ни
+  abort.
 
-### 2. Звено вне репозитория: vLLM (Docker) — ОСТАНОВКА до решения оператора
+### 2. Критерий «abort +1 ≤ 3 с» ЗАМЕЩЕН (решение оператора 2026-10-08)
 
-- **Звено:** API-сервер vLLM, контейнер `vllm-qwen38-27b-dual-ultramax`
-  (vllm/vllm-openai:v0.30.0, кастомный билд `ced6857a`, buildkite
-  release-v2/7022; патчи FA2/dflash-spec/GDN).
-- **Конфиг:** `--max-num-seqs 2`, `--enable-prefix-caching`,
-  `--enable-chunked-prefill`, `--max-model-len 262144`, `--port 8000`
-  (host 8004).
-- **Предлагаемое изменение:** API-сервер vLLM обязан отменять запрос при обрыве
-  клиента (abort → `finished_reason="abort"`). В стандартном vLLM — отмена
-  async-генератора стрима при disconnect; в данном кастомном билде не
-  срабатывает. Варианты: (1) исправить билд (disconnect → abort_request),
-  (2) проверить regression патчей FA2/spec, (3) если билд не правится —
-  решение оператора.
-- **Рецепт vLLM не менять** (п.2 ТЗ). **Критерий приёмки (п.3: 10× kill -9
-  exec, abort +1 ≤ 3 с) не выполним, пока vLLM не отменяет запрос при обрыве.**
+- **(a) Скорость отмены в vLLM:** 3× прямой запрос (ignore_eos, max_tokens 4000),
+  kill -9 curl через 3 с, опрос `vllm:num_requests_running` каждые 100 мс — от
+  kill до падения на 1 **≤ 1 с** (повтор, замаскированный чужим запросом, не
+  засчитывается и повторяется).
+- **(b) Приёмка 10× kill -9 exec в RUNNING** (фейковый проект): соединение
+  runpilot→:8004 этой сессии закрыто **≤ 3 с**; LEASE_RELEASE **≤ 3 с**;
+  LEASE_GRANT следующего exec позже t_end убитой сессии.
+- **Рецепт vLLM не менять** (решение оператора).
 
 ### 4. Логирование отказов авторизации 401/403 (п.4) — ВЫПОЛНЕНО
 
@@ -117,12 +165,11 @@ scp 3p14-aaa:/mdisk/myhub/RunPilot/deploy/upgrade-node.sh /tmp/upgrade-node.sh \
   `ss 'dport = :8787'` после kill — 0 conn.
 - kill→LEASE_RELEASE: 0.086–1.951 с (макс **1.951 с**); t_end < LEASE_GRANT next —
   **PASS** (все 10).
-- **FINDING: abort-счётчик vLLM не incremented** (`finished_reason="abort"` = 0,
-  `stop` +23). Шлюз НЕ отменяет upstream vLLM при обрыве клиента: ReverseProxy не
-  закрывает upstream-соединение при cancel контекста → vLLM догенерировывает ответ
-  мёртвой сессии. Первоначальный дефект «vLLM keeps generating» **не закрыт
-  полностью** (слот освобождается, GPU генерирует). Локализация:
-  `internal/gateway/proxy.go`. **Требует отдельного задания.**
+- **FINDING (КОРРЕКЦИЯ, см. доп-3 / localization-v2.md):** abort-счётчик vLLM не
+  incremented — но **НЕ потому, что шлюз не отменяет upstream** (эта локализация
+  неверна и удалена). Факт: **vLLM v0.30.0 (кастомный билд) прерывает генерацию
+  при обрыве клиента, но `finished_reason="abort"` не считает.** Критерий
+  «abort +1 ≤ 3 с» замещён (решение оператора) — см. раздел доп-3.
 
 **node-upgrade-line (vzu5-claw → aaec90f):**
 ```
