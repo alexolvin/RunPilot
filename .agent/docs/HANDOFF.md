@@ -1,5 +1,61 @@
 # HANDOFF
-Обновлено: 2026-10-08 (W11 ЗАКРЫТ: обход шлюза + exec ERROR + doctor + canary + linger-тест + переподключение + vzu5-claw a64e05a1; выкат a1e201e)
+Обновлено: 2026-10-08 (W12 ЗАКРЫТ: WS-backoff reset + deploy-coordinator gate + vzu5-big re-enroll + процедура выката; выкат 3ba63ef)
+
+## W12 — ЗАКРЫТ (2026-10-08)
+
+5 пунктов оператора. Порядок: ворота → выкат координатора из чистого HEAD →
+обновление узлов → таблица узлов → HANDOFF.
+
+### п.1 — сброс задержки переподключения (WS-backoff) — `1c17e90`
+
+`internal/node/ws.go`: `session()` возвращает `(established, err)`; `Run()`
+сбрасывает `backoff = wsBackoffBase` (1s) при успешном hello. `waitBackoff` —
+`clk.AfterFunc` (тестируемо виртуальными часами). Тест `TestWSClientBackoffResetOnHello`
+(6 отказов, 7-й успех → 8-я попытка ≤2с). **Живой замер (п.5.4):** переподключение
+2с / self-update 9–15с (было 31–32с в W11). Корневая причина устранена.
+
+### п.2 — deploy-coordinator.sh: отказ при vcs.modified=true — `cce7b0e`
+
+`deploy/deploy-coordinator.sh`: `go version -m <bin>` → `vcs.modified=true` →
+FAIL (бинарник не трогается). Выкат только из чистого HEAD. Тест
+`deploy-coordinator.sandbox-test.sh` — 7/7 (отказ при dirty, PASS при clean).
+
+### п.3 — процедура выката — `deploy/README.md`
+
+Полный цикл (6 шагов): ворота → сборка из чистого HEAD → deploy-coordinator.sh →
+обновление online-узлов (upgrade-node.sh) → offline-узлы списком оператору →
+таблица узлов → HANDOFF. Задокументировано в `deploy/README.md` (раздел
+«Процедура выката») + `deploy-coordinator.sh`.
+
+### п.4 — vzu5-big (100.126.222.23): узел с неверным токеном — `0165518` + `3ba63ef`
+
+Было: `aqm-node.service` (aqm, v0.0.0-dev), токен `~/.config/aqm/env` → 401
+«неверный токен узла». Re-enroll стандартным /enroll → `runpilot-node.service`,
+`~/.config/runpilot/secrets.env`. Два найденных бага install.sh:
+- **host**: вписывал hostname координатора (3p14-aaa) вместо hostname узла
+  (vzu5-big) → «конфликт имени хоста». Фикс `node.host: ""` (`0165518`).
+- **no_qwen**: qwen через nvm, вне PATH сервиса (`~/.local/bin:…`) → node-сервис
+  no_qwen. Фикс: симлинки `~/.local/bin/{qwen,node}` → nvm bin (`3ba63ef`).
+Результат: doctor --role node — все 8 PASS, health без problems. Проекты и vLLM
+не тронуты. Артефакт `docs/evidence/W12-accept/vzu5-big.txt`.
+
+### п.5 — порядок: ворота → выкат → узлы → таблица → HANDOFF
+
+- **Ворота:** `go test -race ./…` + `make staticcheck` + `make lint` — 0.
+- **Выкат 3ba63ef** (vcs.modified=false): deploy-coordinator.sh, бэкап
+  `runpilot.bak-20261008T131237Z`.
+- **Узлы:** 3p14-aaa (embedded), vzu5-claw, vzu5-big — все на 3ba63ef
+  (self-update при рестарте).
+- **Таблица узлов** (п.5.4): переподключение ≤15с (все ≤30с).
+  Артефакт `docs/evidence/W12-accept/node-table.txt`.
+
+**node-upgrade-line (3ba63ef):**
+```
+scp 3p14-aaa:/mdisk/myhub/RunPilot/deploy/upgrade-node.sh /tmp/upgrade-node.sh \
+  && bash /tmp/upgrade-node.sh 02b4079000fe6c0334b247b1e31ecae1e69495b07631a76c0b7333684c914c12 3p14-aaa
+```
+
+---
 
 ## W11 — ЗАКРЫТ (2026-10-08)
 

@@ -1,0 +1,43 @@
+# W12 п.4 — vzu5-big (100.126.222.23): узел с неверным токеном
+# Дата: 2026-10-08 MSK
+#
+# === ИСХОДНОЕ СОСТОЯНИЕ (диагностика по SSH) ===
+#   Сервис:    aqm-node.service (старое имя, до rename aqm→runpilot)
+#   Бинарник:  /home/user/.local/bin/aqm  v0.0.0-dev
+#   Токен:     ~/.config/aqm/env  →  AQM_NODE_TOKEN
+#   Симптом:   401 «неверный или отозванный токен узла» — узел стучится
+#              в координатор с устаревшим aqm-токеном, координатор не знает.
+#
+# === ПРИЧИНА ===
+#   vzu5-big остался на старой версии (aqm, до rename aqm→runpilot) со своим
+#   токеном. Координатор после rename ожидает runpilot-токен узла — aqm-токен
+#   не проходит VerifyNodeToken → 401.
+#
+# === ИСПРАВЛЕНИЕ ===
+#   1. Re-enroll стандартным /enroll: POST /api/v1/nodes/enroll → token;
+#      на узле: curl install.sh | bash. Сервис: runpilot-node.service,
+#      бинарник /home/user/.local/bin/runpilot, токен ~/.config/runpilot/secrets.env
+#      → RUNPILOT_NODE_TOKEN.
+#   2. Баг install.sh (host): install.sh, сгенерированный на координаторе,
+#      вписывал node.host = hostname координатора (3p14-aaa), а claim привязывает
+#      токен к hostname узла (vzu5-big) → «конфликт имени хоста».
+#      Фикс: node.host: "" — узел определяет hostname сам (os.Hostname).
+#      (commit 0165518)
+#   3. no_qwen: qwen на vzu5-big через nvm (~/.nvm/.../bin), вне PATH сервиса
+#      (~/.local/bin:…). node-сервис видел no_qwen, кодеры не запускались.
+#      Фикс: симлинки ~/.local/bin/{qwen,node} → nvm bin.
+#      install.sh теперь сам создаёт симлинки (commit 3ba63ef).
+#
+# === РЕЗУЛЬТАТ ===
+#   Сервис:    runpilot-node.service (active)
+#   Версия:    3ba63ef (= координатор)
+#   Токен:     ~/.config/runpilot/secrets.env → RUNPILOT_NODE_TOKEN
+#   doctor --role node: все 8 PASS
+#     PASS tmux / qwen_settings / qwen_timeout_guard / coder_timeout_env /
+#     coder_out_of_queue / file_mode / node_coordinator / linger
+#   health:    qwen 0.24.6, no problems (no_qwen устранён)
+#   В списке узлов: да (3p14-aaa, vzu5-claw, vzu5-big)
+#
+# === НЕ ТРОНУТО ===
+#   Проекты и vLLM на vzu5-big не затрагивались (только runpilot-сервис,
+#   конфиг, симлинки qwen/node в ~/.local/bin).
