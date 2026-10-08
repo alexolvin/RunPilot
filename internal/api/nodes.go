@@ -222,20 +222,21 @@ if ! command -v qwen >/dev/null 2>&1; then
   exit 2
 fi
 if ! timeout 15 qwen --version >/dev/null 2>&1; then
-  # qwen не исполним: типичная причина — node (nvm) вне PATH непрямых
-  # оболочек. Создаём symlink в ~/.local/bin (в PATH сервиса узла).
-  QWEN_REAL="$(readlink -f "$(command -v qwen)" 2>/dev/null || command -v qwen)"
-  if head -n 1 "$QWEN_REAL" 2>/dev/null | grep -q 'env node'; then
-    NODE_BIN="$(ls -d "$HOME"/.nvm/versions/node/*/bin/node 2>/dev/null | sort -V | tail -n 1 || true)"
-    if [ -n "$NODE_BIN" ]; then
-      mkdir -p "$HOME/.local/bin"
-      ln -sf "$NODE_BIN" "$HOME/.local/bin/node"
-      echo "runpilot: создан $HOME/.local/bin/node → $NODE_BIN (node для qwen вне интерактивной шеллы)"
-    fi
-  fi
-  if ! timeout 15 qwen --version >/dev/null 2>&1; then
-    echo "runpilot: qwen не исполним (проверьте доступность node в PATH)"
-    exit 2
+  echo "runpilot: qwen не исполним (проверьте доступность node в PATH)"
+  exit 2
+fi
+# qwen в PATH интерактивной шеллы, но в PATH сервиса узла (~/.local/bin:…)
+# может отсутствовать (nvm грузится только в login-шелле). Симлинки в
+# ~/.local/bin — иначе node-сервис видит no_qwen и не запускает кодеров.
+QWEN_BIN="$(command -v qwen)"
+QWEN_DIR="$(dirname "$QWEN_BIN")"
+mkdir -p "$HOME/.local/bin"
+if [ "$QWEN_DIR" != "$HOME/.local/bin" ]; then
+  ln -sf "$QWEN_BIN" "$HOME/.local/bin/qwen"
+  echo "runpilot: $HOME/.local/bin/qwen → $QWEN_BIN (qwen в PATH сервиса)"
+  if [ -x "$QWEN_DIR/node" ]; then
+    ln -sf "$QWEN_DIR/node" "$HOME/.local/bin/node"
+    echo "runpilot: $HOME/.local/bin/node → $QWEN_DIR/node (node для qwen в PATH сервиса)"
   fi
 fi
 # Служба + tmux-интеграция (14.1): узел под systemd, скрипт завершается
