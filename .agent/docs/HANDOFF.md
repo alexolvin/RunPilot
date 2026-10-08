@@ -1,5 +1,33 @@
 # HANDOFF
-Обновлено: 2026-10-08 (W12-доп: profiles.qwen.command + aqm-удаление + deploy d96bf26; приёмка п.3 заблокирована — слот 3p14 занят MoxMate)
+Обновлено: 2026-10-08 (W12-доп п.5: фикс 403 self-node + валидация gateway_url, deploy 6075487; приёмка п.6 ждёт освобождения vzu5 оператором)
+
+## W12-доп п.5 — фикс 403 self-node (2026-10-08) — `6075487`
+
+Приёмка silent-hold (п.6) заблокирована 403: запрос сессии B на встроенном узле
+3p14-aaa отклонялся шлюзом. Причина: host_ip встроенного узла был захардкожен
+`127.0.0.1` (loopbackIP, embedded.go), а кодер ходит в шлюз через хост
+gateway_url (= coordinator.bind, 100.124.155.106) → `remoteIP != sess.HostIP`
+(gateway.go:184) → 403.
+
+Оператор: «Вариант 1 по сути» — 6 пунктов. Реализовано:
+
+1. **host_ip встроенного узла = coordinator.bind** — `embedded.go`:
+   `HostIP: cfg.Coordinator.Bind` (литерал 127.0.0.1 из логике удалён —
+   дефект правила 2).
+2. **Валидация конфига** — `config.Validate()`: хост `coordinator.gateway_url`
+   = `coordinator.bind`, иначе exit 2 (кодеры идут через хост gateway_url,
+   источник = этот адрес).
+3. **Таблица путей регистрации сессии с источником host_ip** —
+   `docs/evidence/W12-final/hostip-paths.md` (удалённый узел / встроенный узел
+   / exec / runpilot run).
+4. **Тесты** — `internal/gateway/hostip_test.go` (встроенный узел не 403;
+   чужой адрес → 403), `validate_45_test.go` (gateway_url == bind).
+5. **Ворота → выкат 6075487 → узлы** — все 0; deploy-coordinator.sh (бэкап
+   `runpilot.bak-20261008T154820Z`); узлы: 3p14-aaa + vzu5-claw на 6075487,
+   vzu5-big на d96bf26 (оператор использует до приёмки — строка обновления
+   передана).
+6. **Приёмка п.6** — ждёт освобождения vzu5 оператором (num_requests_running=0
+   60с), затем A+B с пином на vzu5, B — веб-spawn на встроенном узле.
 
 ## W12-доп — 4 пункта оператора (2026-10-08)
 
