@@ -1,0 +1,23 @@
+=== W12 п.2: aqm-службы удалены, 0 отказов авторизации за 10 мин ===
+Дата: 2026-10-08T14:21:50Z
+
+=== 3p14-aaa: aqm-node.service ===
+Unit aqm-node.service could not be found.
+
+=== vzu5-claw: aqm-node.service ===
+Unit aqm-node.service could not be found.
+
+=== vzu5-big: aqm-node.service ===
+Unit aqm-node.service could not be found.
+
+=== ~/.config/aqm: использование службами ===
+3p14-aaa:
+  нет ссылок
+vzu5-claw:
+  нет ссылок
+vzu5-big:
+  нет ссылок
+
+=== Журнал отказов авторизации (13:59:08Z - 14:09:08Z UTC) ===
+0
+(0 записей = PASS)

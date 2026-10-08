@@ -1,5 +1,41 @@
 # HANDOFF
-Обновлено: 2026-10-08 (W12 ЗАКРЫТ: WS-backoff reset + deploy-coordinator gate + vzu5-big re-enroll + процедура выката; выкат 3ba63ef)
+Обновлено: 2026-10-08 (W12-доп: profiles.qwen.command + aqm-удаление + deploy d96bf26; приёмка п.3 заблокирована — слот 3p14 занят MoxMate)
+
+## W12-доп — 4 пункта оператора (2026-10-08)
+
+Оператор отклонил п.1-2 W12 (симлинки запрещены) и выдал новый 4-пунктный список.
+
+### п.1 — симлинки → profiles.qwen.command — `d96bf26`
+
+Симлинки `~/.local/bin/{qwen,node}` запрещены (правка окружения оператора).
+Фикс: `profiles.qwen.command` в конфиге узла = абсолютный путь к qwen.
+- `config.go`: поле `Command` в `ProfileQwen`.
+- `node.go`: `coderCommand()`, `coderPATH()`, `coderEnv()` — PATH prepend.
+- `ops.go`: spawn/respawn используют `coderCommand()` + `coderEnv()`.
+- `health.go`: `coderHealthPath()` — путь из конфига, иначе which.
+- `nodes.go`: install.sh — `command -v qwen` в login-оболочке → конфиг.
+- `doctor.go`: `qwen_command` — `<command> --version` в env службы.
+- Симлинки удалены на vzu5-big; конфиг vzu5-big обновлён.
+
+### п.2 — aqm-службы удалены, 0 отказов авторизации
+
+aqm-node.service остановлена, отключена и удалена на всех 3 узлах.
+~/.config/aqm не используется ни одной службой.
+0 отказов авторизации за 10 минут (13:59:08Z - 14:09:08Z UTC).
+Артефакт: `docs/evidence/W12-final/aqm-removal.txt`.
+
+### п.3 — приёмка silent-hold — БЛОКИРОВАН
+
+Слот 3p14 занят внешним кодером MoxMate (PID 815580, idle).
+Ожидание освобождения слота.
+
+### п.4 — ворота → выкат d96bf26 → HANDOFF
+
+- **Ворота:** `go test -race ./…` + `make staticcheck` + `make lint` — 0.
+- **Выкат d96bf26** (vcs.modified=false): deploy-coordinator.sh, бэкап
+  `runpilot.bak-20261008T140945Z`.
+- **Узлы:** 3p14-aaa (embedded), vzu5-claw, vzu5-big — все на d96bf26.
+- **Dist:** `~/.local/share/runpilot/dist/runpilot` — d96bf26.
 
 ## W12 — ЗАКРЫТ (2026-10-08)
 
