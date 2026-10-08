@@ -1,0 +1,35 @@
+# W11 п.2 — переподключение узлов после рестарта координатора
+# Дата: 2026-10-08 14:52 MSK
+# Выкат: a64e05a1020cd9b55f29cd8bca35f0c8506c7618ee5c849f4d7723f416e123b5
+#
+# Метод: systemctl --user restart runpilot.service; поллинг /api/v1/state
+# до появления обоих BEFORE-узлов; фиксируем время с момента рестарта.
+#
+# === BEFORE (до рестарта) ===
+# mode NORMAL, sessions: none
+#   node 3p14-aaa   ip=127.0.0.1      ver=a1e201e-dirty  health_at=11:51:11Z
+#   node vzu5-claw  ip=100.95.195.40  ver=a1e201e-dirty  health_at=11:51:23Z
+#
+# === ЗАМЕР переподключения ===
+#   [14:52:16] restart runpilot.service
+#   [14:52:47] node 3p14-aaa reconnect after 31.1s
+#   [14:52:48] node vzu5-claw reconnect after 32.1s
+#
+# === AFTER (после рестарта) ===
+# mode NORMAL
+#   node 3p14-aaa   ip=127.0.0.1      ver=a1e201e-dirty  health_at=11:52:46Z
+#   node vzu5-claw  ip=100.95.195.40  ver=a1e201e-dirty  health_at=11:52:47Z
+#
+# === СТАТУС: ≤30с — НЕ ВЫПОЛНЕНО (31.1s / 32.1s, на ~1–2с выше цели) ===
+#
+# Причина (локализация по коду, internal/node/ws.go + consts.go):
+#   WSClient.Run: backoff := wsBackoffBase (1s) инициализируется ТОЛЬКО в
+#   начале Run(); внутри цикла backoff *= wsBackoffFactor (2) до
+#   wsBackoffMax (30s). При успешной сессии backoff НЕ сбрасывается.
+#   Последовательность: 1→2→4→8→16→30s. После ПЕРВОГО рестарта координатора
+#   (выкат a64e05a1) backoff узлов достиг max 30s и там ОСТАЛСЯ — каждый
+#   последующий рестарт даёт ~30s + запуск координатора (1–2s) = 31–32s.
+#
+# Фикс (если нужен ≤30s): сбрасывать backoff = wsBackoffBase после успешной
+# сессии (w.session(ctx) без ошибки). Не запрашивалось оператором — только
+# статус.
