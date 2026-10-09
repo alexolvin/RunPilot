@@ -1,5 +1,5 @@
 # HANDOFF
-Обновлено: 2026-10-10 (W13: этапы 7–9 — маршрут кодера через аргументы, предпроверка 409, X-RunPilot-SID, диалог с авто-именем, project_dir_match, pin/prefer, имена моделей; deploy 1fbe60a; все узлы на 1fbe60a)
+Обновлено: 2026-10-10 (W13: этапы 7–9 — маршрут кодера через аргументы, предпроверка 409, X-RunPilot-SID (direct), диалог с авто-именем, project_dir_match, pin/prefer, имена моделей; deploy dfed163; все узлы на dfed163)
 
 ## W13 — планирование и отображение (2026-10-10) — `9015c96` + `50d3d16`
 
@@ -70,10 +70,11 @@
 - `servers[].upstreams.openai.model = "qwen3.8-27b"` (3p14, vzu5).
 - `profiles.qwen.model_alias = "qwen3.8-27b (RunPilot)"`.
 
-**Ворота → выкат 1fbe60a → узлы:**
+**Ворота → выкат dfed163 → узлы:**
 - `go test -race ./...` + `make staticcheck` + `make lint` — 0.
-- deploy-coordinator.sh (бэкап `runpilot.bak-20261009T233200Z`).
-- Узлы: 3p14-aaa (embedded), vzu5-claw, vzu5-big — все на 1fbe60a.
+- deploy-coordinator.sh (бэкап `runpilot.bak-20261009T233758Z`).
+- Узлы: 3p14-aaa (embedded), vzu5-claw, vzu5-big — все на dfed163.
+- X-RunPilot-SID в `direct` (Rewrite hook) — покрывает generative + passthrough.
 - Сессии на перезапуск (без нового алиаса в cmdline): PhoneBroker, NextLife.
 
 ## W12-доп п.5 — фикс 403 self-node (2026-10-08) — `6075487`
