@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -526,6 +527,8 @@ type RunRequest struct {
 	Pin          string `json:"pin"`
 	Prefer       string `json:"prefer"`
 	AutoEnqueue  bool   `json:"auto_enqueue"`
+	Test         bool   `json:"test"`
+	Dir          string `json:"dir"`
 }
 
 // RunResponse — результат регистрации.
@@ -567,6 +570,12 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("имя занято GONE-записью %s (снимется через retention)", gone.SID))
 			return
 		}
+	}
+	// Тестовая сессия (test=true) — только /mdisk/myhub/test.
+	if req.Test && req.Dir != "" && !strings.HasPrefix(req.Dir, testDirPrefix) {
+		httpError(w, http.StatusBadRequest, "DIR_FORBIDDEN",
+			"тестовая сессия: каталог вне "+testDirPrefix)
+		return
 	}
 
 	prio := req.Prio

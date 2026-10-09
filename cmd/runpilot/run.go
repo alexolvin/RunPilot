@@ -49,6 +49,7 @@ func newRunCmd() *cobra.Command {
 		autoEnqueue bool
 		detach      bool
 		here        bool
+		test        bool
 	)
 	cmd := &cobra.Command{
 		Use:   "run [--agent qwen] [--name N] [--dir PATH] [--prio C] [--pin S|--prefer S] [--auto-enqueue] [--detach] [--here] [-- ARGS]",
@@ -65,7 +66,7 @@ func newRunCmd() *cobra.Command {
 			}
 			return runAgent(cmd, runOpts{
 				name: name, dir: dir, prio: prio, pin: pin, prefer: prefer,
-				autoEnqueue: autoEnqueue, detach: detach, here: here, args: args,
+				autoEnqueue: autoEnqueue, detach: detach, here: here, test: test, args: args,
 			})
 		},
 	}
@@ -78,6 +79,7 @@ func newRunCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&autoEnqueue, "auto-enqueue", false, "автопостановка в очередь")
 	cmd.Flags().BoolVar(&detach, "detach", false, "не присоединяться к панели")
 	cmd.Flags().BoolVar(&here, "here", false, "текущая панель (exec агента)")
+	cmd.Flags().BoolVar(&test, "test", false, "тестовая сессия (только /mdisk/myhub/test)")
 	return cmd
 }
 
@@ -90,6 +92,7 @@ type runOpts struct {
 	autoEnqueue bool
 	detach      bool
 	here        bool
+	test        bool
 	args        []string
 }
 
@@ -173,6 +176,7 @@ func registerRun(o runOpts) (string, int, error) {
 		"profile": "qwen",
 		"prio":    o.prio, "pin": o.pin, "prefer": o.prefer,
 		"auto_enqueue": o.autoEnqueue,
+		"test": o.test, "dir": o.dir,
 	}
 	var out struct {
 		SID             string `json:"sid"`
