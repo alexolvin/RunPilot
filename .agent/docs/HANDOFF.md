@@ -1,5 +1,54 @@
 # HANDOFF
-Обновлено: 2026-10-08 (W12-доп п.5: фикс 403 self-node + валидация gateway_url, deploy 6075487; приёмка п.6 ждёт освобождения vzu5 оператором)
+Обновлено: 2026-10-10 (W13: правило аренды + причины по серверам + закрытие bypass + пульс не-Busy + GPU-конфиг узла, deploy 50d3d16; все узлы на 50d3d16)
+
+## W13 — планирование и отображение (2026-10-10) — `9015c96` + `50d3d16`
+
+6 этапов оператора. Ответ на «был ли выбор vzu5 ошибкой»: **НЕТ ошибки
+планировщика** — все 7 grant'ов vzu5 были `pin:vzu5` (правило 1 TZ §5), 3p14
+был СВОБОДЕН. «PhoneBroker выполнялся на vzu5» — реально по вычислениям через
+**обход шлюза** (коллизия modelProviders id `qwen3.8-27b-fp8` == model_alias →
+прямое соединение 100.126.222.23:8004, 0 запросов в шлюзе).
+
+### Этап 2 — правило аренды + причины по серверам — `9015c96`
+- `lease.rule` (pin|prefer|warm_cache|priority|lru) в БД (миграция 019),
+  LEASE_GRANT с rule+candidates.
+- state view отдаёт `server`+`rule`; веб «В работе» — сервер+правило; очередь —
+  причины по серверам (`server_reasons`); карточка сервера «Свободно X из N» +
+  состояние слотов.
+- Тесты: `lease_rule_test.go`, `server_reasons_test.go`.
+
+### Этап 3 — закрытие gateway bypass — `9015c96` + `50d3d16`
+- `node.safeModelAlias`: при коллизии id modelProviders с model_alias узел
+  подменяет `OPENAI_MODEL` на `runpilot` (операторские modelProviders не
+  трогаем). Тесты `qwen_settings_test.go`.
+- `doctor gateway_bypass` → FAIL с sid+PID (процессное дерево, вкл. субагенты,
+  `ss -tnp`). Тесты `gateway_bypass_test.go`.
+- **`50d3d16`:** doctor грузит серверы из БД (после v2-миграции upstream-порты
+  не в config.yaml) — иначе gateway_bypass пропускался.
+
+### Этап 4 — пульс не-Busy + инвариант — `9015c96`
+- heartbeat не-Busy панелей каждый scan-цикл (устраняет stale_snapshot);
+  пульс Busy из конфига `node.pulse_interval_sec` (default 3).
+- инвариант `Validate()`: scan/pulse < `snapshot_max_age_sec` → exit 2.
+- Тест `TestSnapshotHeartbeatNonBusy` (виртуальные часы).
+- Данные (24ч): 87 QUEUE_SKIP stale_snapshot; RunPilot 1QZW8QSGER — 57
+  (19:46–19:56), PhoneBroker RFRBBP7K2R — 19 (19:41–19:44).
+
+### Этап 5 — GPU-конфиг узла — `9015c96`
+- `install.sh --gpu/--gpu-server` → `node.gpu`+`node.gpu_server`.
+- `doctor gpu` → WARN если GPU есть но node.gpu=none / нет gpu_server / вендор
+  не совпадает. Тесты `gpu_test.go`, `TestNodeEnrollFileSetupGPU`.
+- **vzu5-big:** config `node.gpu=nvidia, node.gpu_server=vzu5`, restart,
+  doctor `PASS gpu`. vzu5 power = 51W (было «—»).
+
+### Этап 6 — ворота → выкат → узлы
+- **Ворота:** `go test -race ./...` + `make staticcheck` + `make lint` — 0.
+- **Выкат 50d3d16** (vcs.modified=false): deploy-coordinator.sh, бэкапы
+  `runpilot.bak-20261009T215657Z` + `runpilot.bak-20261009T220513Z`.
+- **Узлы:** 3p14-aaa (embedded), vzu5-big, vzu5-claw — все на 50d3d16
+  (self-update через API).
+- **Bypass:** новый кодер ходит через шлюз; старый кодер RunPilot (pid 1917139,
+  out-of-queue) держит прямое 127.0.0.1:8004 до рестарта сессии.
 
 ## W12-доп п.5 — фикс 403 self-node (2026-10-08) — `6075487`
 
