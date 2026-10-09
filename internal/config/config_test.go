@@ -223,3 +223,45 @@ func TestValidateServers(t *testing.T) {
 		t.Fatal("неизвестный класс в accept должен отклоняться")
 	}
 }
+
+// Раздел 13 ТЗ: конфиг без секции gateway → все ключи из defaults.go.
+func TestGatewayDefaultsWhenAbsent(t *testing.T) {
+	cfg, err := Load(filepath.Join(t.TempDir(), "nope.yaml"))
+	if err != nil {
+		t.Fatalf("нет файла — должны работать defaults: %v", err)
+	}
+	if cfg.Gateway.HoldMaxSec != 3600 {
+		t.Errorf("hold_max_sec = %d, хочу 3600", cfg.Gateway.HoldMaxSec)
+	}
+	if cfg.Gateway.MaxBodyMB != 32 {
+		t.Errorf("max_body_mb = %d, хочу 32", cfg.Gateway.MaxBodyMB)
+	}
+	if cfg.Gateway.RetryAfterSec != 30 {
+		t.Errorf("retry_after_sec = %d, хочу 30", cfg.Gateway.RetryAfterSec)
+	}
+	if cfg.Gateway.MaxInflight != 256 {
+		t.Errorf("max_inflight = %d, хочу 256", cfg.Gateway.MaxInflight)
+	}
+}
+
+// Раздел 13 ТЗ: конфиг с частичной секцией gateway → отсутствующие ключи из defaults.
+func TestGatewayPartialSection(t *testing.T) {
+	p := writeTmp(t, "partial.yaml", "gateway:\n  hold_max_sec: 7200\n")
+	cfg, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Gateway.HoldMaxSec != 7200 {
+		t.Errorf("hold_max_sec = %d, хочу 7200", cfg.Gateway.HoldMaxSec)
+	}
+	// Остальные ключи — из defaults.
+	if cfg.Gateway.MaxBodyMB != 32 {
+		t.Errorf("max_body_mb = %d, хочу 32", cfg.Gateway.MaxBodyMB)
+	}
+	if cfg.Gateway.RetryAfterSec != 30 {
+		t.Errorf("retry_after_sec = %d, хочу 30", cfg.Gateway.RetryAfterSec)
+	}
+	if cfg.Gateway.MaxInflight != 256 {
+		t.Errorf("max_inflight = %d, хочу 256", cfg.Gateway.MaxInflight)
+	}
+}

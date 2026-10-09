@@ -170,6 +170,8 @@ func (g *Gateway) holdPass(ctx context.Context, sess store.SessionRecord,
 		HeldRequest: true,
 		HeldSince:   now,
 	})
+	// П.2: инкремент счётчика удерживаемых запросов по sid.
+	g.heldCountAdd(sess.SID)
 	g.log.Info("gateway: удержание началось", "sid", sess.SID, "hold_max_sec", g.cfg.Gateway.HoldMaxSec)
 	wake := g.subscribeWake()
 	defer g.unsubscribeWake(wake)
@@ -184,6 +186,7 @@ func (g *Gateway) holdPass(ctx context.Context, sess store.SessionRecord,
 			if srv := g.servers.ByName(lease.Server); srv != nil {
 				held := g.clk.Now().Sub(now).Milliseconds()
 				g.metrics.RecordHold(float64(held) / msToSec)
+				g.heldCountDec(sess.SID) // П.2: запрос получил аренду — декремент
 				g.sessionGrantedEvents(sess)
 				return &leaseDecision{server: srv, lease: lease, heldMS: held}, nil
 			}
@@ -204,21 +207,47 @@ func (g *Gateway) holdPass(ctx context.Context, sess store.SessionRecord,
 	}
 }
 
+// heldCountAdd — инкремент счётчика удерживаемых запросов по sid.
+func (g *Gateway) heldCountAdd(sid string) {
+	g.hm2.Lock()
+	g.heldCount[sid]++
+	g.hm2.Unlock()
+}
+
+// heldCountDec — декремент счётчика; возвращает true, если это был
+// последний удерживаемый запрос (счётчик стал 0).
+func (g *Gateway) heldCountDec(sid string) bool {
+	g.hm2.Lock()
+	g.heldCount[sid]--
+	last := g.heldCount[sid] <= 0
+	if last {
+		delete(g.heldCount, sid)
+	}
+	g.hm2.Unlock()
+	return last
+}
+
 // clientGone — Esc/отмена во время удержания (П.4): запись очереди удалена,
 // сессия IDLE, событие QUEUE_DEQUEUE (reason: client_gone),
 // request.error = CLIENT_GONE.
+// П.2: запись очереди удаляется, только когда обрывается последний
+// удерживаемый запрос этой sid (два параллельных запроса одной сессии).
 func (g *Gateway) clientGone(sid string, heldMS int64) {
 	g.log.Info("gateway: client_gone во время удержания", "sid", sid, "held_ms", heldMS)
 	g.metrics.RecordHold(float64(heldMS) / msToSec)
-	_ = g.st.QueueDelete(sid)
-	payload, _ := json.Marshal(map[string]any{"reason": "client_gone"})
-	_ = g.st.EventRecord(model.Event{TS: g.clk.Now(), Kind: model.KindQueueDequeue, SID: sid, Payload: payload})
-	// П.4: request.error = CLIENT_GONE (запрос отменён клиентом до выдачи).
-	_ = g.st.RequestError(sid, "CLIENT_GONE", g.clk.Now(), heldMS)
-	if sess, err := g.st.GetSession(sid); err == nil && sess.State == model.SessionQueued {
-		g.applySessionEvent(sess, model.EvDequeue)
+	last := g.heldCountDec(sid)
+	if last {
+		_ = g.st.QueueDelete(sid)
+		payload, _ := json.Marshal(map[string]any{"reason": "client_gone"})
+		_ = g.st.EventRecord(model.Event{TS: g.clk.Now(), Kind: model.KindQueueDequeue, SID: sid, Payload: payload})
+		if sess, err := g.st.GetSession(sid); err == nil && sess.State == model.SessionQueued {
+			g.applySessionEvent(sess, model.EvDequeue)
+		}
+		g.wake()
 	}
-	g.wake()
+	// П.4: request.error = CLIENT_GONE (запрос отменён клиентом до выдачи) —
+	// всегда, для каждого оборванного запроса.
+	_ = g.st.RequestError(sid, "CLIENT_GONE", g.clk.Now(), heldMS)
 }
 
 // grant — выбрать сервер (pin/prefer/accept/свободный слот) и создать
@@ -268,9 +297,11 @@ func (g *Gateway) grant(class model.QueueClass, constraint model.Constraint,
 // heldToResume — удержание завершено без слота: запись остаётся в
 // очереди с held_request=false и mode=resume (раздел 6 ТЗ).
 // request.error = HOLD_TIMEOUT, held_ms = время удержания.
+// П.2: декремент счётчика (запрос завершил удержание).
 func (g *Gateway) heldToResume(sid string, heldMS int64) {
 	g.log.Info("gateway: удержание истекло (hold_max_sec)", "sid", sid, "held_ms", heldMS)
 	g.metrics.RecordHold(float64(heldMS) / msToSec)
+	g.heldCountDec(sid)
 	_ = g.st.QueueSetHeldRequest(sid, false, model.QueueModeResume)
 	_ = g.st.RequestError(sid, "HOLD_TIMEOUT", g.clk.Now(), heldMS)
 }

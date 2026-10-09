@@ -40,4 +40,6 @@ const (
 	psFieldPPID      = 1
 	psFieldArgsStart = 2
 	psMinFields      = 3
+	// quoteLen — длина кавычки для снятия у строковых значений (effective_config).
+	quoteLen = 2
 )

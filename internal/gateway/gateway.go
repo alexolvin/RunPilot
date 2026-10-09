@@ -14,6 +14,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -94,6 +95,12 @@ type Gateway struct {
 
 	// Метрики шлюза (раздел 14 ТЗ).
 	metrics *Metrics
+
+	// Счётчик удерживаемых запросов по sid (п.2: два параллельных запроса
+	// одной сессии). При client_gone запись очереди удаляется, только когда
+	// обрывается последний удерживаемый запрос этой sid.
+	hm2       sync.Mutex
+	heldCount map[string]int
 }
 
 // FaultReporter — приём отказа класса OOM/ENGINE_DEAD (раздел 7.1 С4/С5):
@@ -160,6 +167,7 @@ func NewGateway(cfg *config.Config, st *store.Store, clk clock.Clock, log *slog.
 		inflightSID: map[int]string{},
 		lastEnd:     map[int64]time.Time{},
 		metrics:     NewMetrics(),
+		heldCount:   map[string]int{},
 	}
 	return g, nil
 }
@@ -279,6 +287,9 @@ func (g *Gateway) handleGenerative(w http.ResponseWriter, r *http.Request, sess 
 		return
 	}
 
+	// П.3: debug-лог параметров запроса (без содержимого, правило 7).
+	g.logRequestParams(sess.SID, raw)
+
 	// Разрешение аренды (раздел 6 ТЗ, правила 1–4).
 	decision, err := g.resolvePass(ctx, sess)
 	if err != nil {
@@ -359,6 +370,28 @@ func (g *Gateway) writeMode503(w http.ResponseWriter, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusServiceUnavailable)
 	fmt.Fprintf(w, `{"error":{"message":"%s","type":"server_error","code":"%s"}}`, message, code)
+}
+
+// logRequestParams — П.3: debug-лог параметров запроса (без содержимого,
+// правило 7): stream, max_tokens, число tools и число messages.
+func (g *Gateway) logRequestParams(sid string, body []byte) {
+	var req struct {
+		Stream    bool `json:"stream"`
+		MaxTokens int  `json:"max_tokens"`
+		Tools     []any `json:"tools"`
+		Messages  []any `json:"messages"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		g.log.Debug("gateway: разбор параметров запроса", "sid", sid, "err", err)
+		return
+	}
+	g.log.Debug("gateway: параметры запроса",
+		"sid", sid,
+		"stream", req.Stream,
+		"max_tokens", req.MaxTokens,
+		"tools", len(req.Tools),
+		"messages", len(req.Messages),
+	)
 }
 
 // registerInflight — зарегистрировать контекст идущего запроса (W7 6.2).

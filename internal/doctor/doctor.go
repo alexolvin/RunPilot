@@ -149,6 +149,7 @@ func RoleChecks(r Role) []Check {
 			{Name: "metrics", Run: checkMetrics},
 			{Name: "require_direct", Run: checkRequireDirect},
 			{Name: "log_rotation", Run: checkLogRotation},
+			{Name: "effective_config", Run: checkEffectiveConfig},
 		}
 	case RoleClient:
 		return []Check{
@@ -929,4 +930,33 @@ func checkLogRotation(ctx *Context) Result {
 		detail += ", path=stderr"
 	}
 	return result("log_rotation", PASS, detail)
+}
+
+// checkEffectiveConfig — эффективный конфиг работающего процесса: все рабочие
+// ключи с текущими значениями (defaults → YAML → БД). Секреты (token_env,
+// bot_token_env, key_env) не содержат значений — только имена переменных.
+func checkEffectiveConfig(ctx *Context) Result {
+	if ctx.Cfg == nil {
+		return result("effective_config", FAIL, "конфигурация не загружена")
+	}
+	snap, err := ctx.Cfg.WorkingSnapshot()
+	if err != nil {
+		return result("effective_config", FAIL, "снимок: "+err.Error())
+	}
+	// Сортируем ключи для стабильного вывода.
+	keys := make([]string, 0, len(snap))
+	for k := range snap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		v := string(snap[k])
+		// Убираем кавычки у строковых значений для читаемости.
+		if len(v) >= quoteLen && v[0] == '"' && v[len(v)-1] == '"' {
+			v = v[1 : len(v)-1]
+		}
+		b.WriteString(k + "=" + v + "  ")
+	}
+	return result("effective_config", PASS, b.String())
 }

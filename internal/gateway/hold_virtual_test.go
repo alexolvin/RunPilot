@@ -270,3 +270,152 @@ const (
 	cfgDoneStableSec      = 5
 	cfgCooldownSec        = 2
 )
+
+// --- П.2: два параллельных запроса одной сессии ---
+
+// П.2: два удержанных запроса, первый оборвался → запись на месте,
+// второй получает аренду; оба оборвались → запись удалена, сессия IDLE.
+func TestP2TwoParallelHeldRequests(t *testing.T) {
+	a := fakellm.Start("srv-model")
+	defer a.Close()
+	t.Setenv("VC_KEY", "k")
+	st, gw, sch, clk, _ := vclockEnv(t, []config.Server{srvCfg("s", 10, 1, a.URL, "VC_KEY")})
+
+	// Слот занят: ждущие не выдаются.
+	holder := vcSession(t, st, model.SessionRunning)
+	occupy(t, st, clk, holder, "s", 1)
+
+	// Два параллельных запроса одной сессии (как qwen: служебный + основной).
+	s := vcSession(t, st, model.SessionIdle)
+	now := clk.Now()
+	_ = st.QueueUpsert(model.QueueEntry{
+		SID: s, Class: model.ClassNormal, EnqueuedAt: now, NotBefore: now,
+		Constraint: model.NoConstraint, Mode: model.QueueModeSubmit, HeldRequest: true,
+	})
+
+	// Запускаем два удержанных запроса (оба входят в holdPass).
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel1()
+	defer cancel2()
+
+	done1 := make(chan error, 1)
+	done2 := make(chan error, 1)
+	go func() {
+		_, err := gw.holdPass(ctx1, store.SessionRecord{SID: s, State: model.SessionIdle},
+			model.ClassNormal, model.NoConstraint, nil)
+		done1 <- err
+	}()
+	go func() {
+		_, err := gw.holdPass(ctx2, store.SessionRecord{SID: s, State: model.SessionIdle},
+			model.ClassNormal, model.NoConstraint, nil)
+		done2 <- err
+	}()
+
+	// Даём обоим запросам войти в удержание.
+	clk.Advance(100 * time.Millisecond)
+
+	// Запись очереди на месте (оба запроса удержаны).
+	if _, err := st.QueueGet(s); err != nil {
+		t.Fatalf("запись очереди должна быть на месте: %v", err)
+	}
+
+	// Первый запрос оборвался (client_gone).
+	cancel1()
+	select {
+	case <-done1:
+	case <-time.After(2 * time.Second):
+		t.Fatal("первый запрос не завершён")
+	}
+
+	// Запись очереди ЕЩЁ на месте (второй запрос ещё удержан).
+	if _, err := st.QueueGet(s); err != nil {
+		t.Fatalf("запись очереди должна остаться после первого client_gone: %v", err)
+	}
+
+	// Освобождаем слот: планировщик выдаёт аренду второму запросу.
+	_ = st.LeaseRelease(holder, "TURN_DONE", clk.Now())
+	sch.Tick() // tickGrant: выдать ждущему
+	clk.Advance(100 * time.Millisecond)
+	select {
+	case err := <-done2:
+		if err != nil {
+			t.Fatalf("второй запрос: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("второй запрос не получил аренду")
+	}
+
+	// Аренда выдана второму запросу.
+	if l, err := st.LeaseGet(s); err != nil || l.Server != "s" {
+		t.Fatalf("аренда не выдана: %v %v", l, err)
+	}
+}
+
+// П.2: оба запроса оборвались → запись удалена, сессия IDLE.
+func TestP2BothRequestsGone(t *testing.T) {
+	a := fakellm.Start("srv-model")
+	defer a.Close()
+	t.Setenv("VC_KEY", "k")
+	st, gw, _, clk, _ := vclockEnv(t, []config.Server{srvCfg("s", 10, 1, a.URL, "VC_KEY")})
+
+	// Слот занят.
+	holder := vcSession(t, st, model.SessionRunning)
+	occupy(t, st, clk, holder, "s", 1)
+
+	// Два параллельных запроса одной сессии.
+	s := vcSession(t, st, model.SessionIdle)
+	now := clk.Now()
+	_ = st.QueueUpsert(model.QueueEntry{
+		SID: s, Class: model.ClassNormal, EnqueuedAt: now, NotBefore: now,
+		Constraint: model.NoConstraint, Mode: model.QueueModeSubmit, HeldRequest: true,
+	})
+
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel1()
+	defer cancel2()
+
+	done1 := make(chan error, 1)
+	done2 := make(chan error, 1)
+	go func() {
+		_, err := gw.holdPass(ctx1, store.SessionRecord{SID: s, State: model.SessionIdle},
+			model.ClassNormal, model.NoConstraint, nil)
+		done1 <- err
+	}()
+	go func() {
+		_, err := gw.holdPass(ctx2, store.SessionRecord{SID: s, State: model.SessionIdle},
+			model.ClassNormal, model.NoConstraint, nil)
+		done2 <- err
+	}()
+
+	clk.Advance(100 * time.Millisecond)
+
+	// Оба запроса оборвались.
+	cancel1()
+	cancel2()
+	select {
+	case <-done1:
+	case <-time.After(2 * time.Second):
+		t.Fatal("первый запрос не завершён")
+	}
+	select {
+	case <-done2:
+	case <-time.After(2 * time.Second):
+		t.Fatal("второй запрос не завершён")
+	}
+
+	// Запись очереди удалена (оба запроса оборвались).
+	if _, err := st.QueueGet(s); err == nil {
+		t.Fatal("запись очереди должна быть удалена после обоих client_gone")
+	}
+
+	// Сессия IDLE.
+	sess, err := st.GetSession(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.State != model.SessionIdle {
+		t.Fatalf("сессия = %s, хочу IDLE", sess.State)
+	}
+}
