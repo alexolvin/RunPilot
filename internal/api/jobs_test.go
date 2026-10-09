@@ -253,3 +253,30 @@ func TestJobFinish(t *testing.T) {
 		t.Fatalf("finish: сессия=%+v err=%v, хочу GONE", rec, err)
 	}
 }
+
+// test=true и каталог вне /mdisk/myhub/test → 400 DIR_FORBIDDEN (exec).
+func TestJobCreateTestDirForbidden(t *testing.T) {
+	ts, st, _ := jobTestServer(t, "")
+	// test=true, dir вне /mdisk/myhub/test → 400.
+	status, out := jobReq(t, ts, "", http.MethodPost, "/api/v1/jobs",
+		map[string]any{"name": "test-exec", "dir": "/mdisk/myhub/RunPilot", "test": true})
+	if status != http.StatusBadRequest || out["code"] != "DIR_FORBIDDEN" {
+		t.Fatalf("exec test=true dir=/mdisk/myhub/RunPilot = %d %v, хочу 400 DIR_FORBIDDEN", status, out)
+	}
+	// Сессия не должна быть создана.
+	if live, err := st.FindLiveByName("test-exec"); err == nil && live.SID != "" {
+		t.Error("test-exec: сессия не должна быть создана")
+	}
+	// test=true, dir=/mdisk/myhub/test → 201.
+	status, out = jobReq(t, ts, "", http.MethodPost, "/api/v1/jobs",
+		map[string]any{"name": "test-exec-ok", "dir": "/mdisk/myhub/test", "test": true})
+	if status != http.StatusCreated {
+		t.Fatalf("exec test=true dir=/mdisk/myhub/test = %d, хочу 201", status)
+	}
+	// test=false, dir=/mdisk/myhub/RunPilot → 201 (обычная сессия).
+	status, out = jobReq(t, ts, "", http.MethodPost, "/api/v1/jobs",
+		map[string]any{"name": "normal-exec", "dir": "/mdisk/myhub/RunPilot"})
+	if status != http.StatusCreated {
+		t.Fatalf("exec test=false dir=/mdisk/myhub/RunPilot = %d, хочу 201", status)
+	}
+}

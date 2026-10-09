@@ -32,6 +32,7 @@ type execOpts struct {
 	prefer  string
 	waitMax int // сек; 0 → jobs.wait_max_default_sec
 	timeout int // сек; 0 → без таймаута
+	test    bool
 	args    []string
 }
 
@@ -69,6 +70,7 @@ func newExecCmd() *cobra.Command {
 	cmd.Flags().StringVar(&o.prefer, "prefer", "", "предпочтение сервера")
 	cmd.Flags().IntVar(&o.waitMax, "wait-max", 0, "макс. ожидание слота, сек (0 = jobs.wait_max_default_sec)")
 	cmd.Flags().IntVar(&o.timeout, "timeout", 0, "макс. время задания, сек (0 = без ограничения)")
+	cmd.Flags().BoolVar(&o.test, "test", false, "тестовая сессия (только /mdisk/myhub/test)")
 	return cmd
 }
 
@@ -95,7 +97,7 @@ func runExec(o execOpts) (int, error) {
 	// (node.host из конфига, иначе os.Hostname): корень пушится только этому
 	// узлу, и только он сообщает о смерти корня.
 	host := node.HostnameOrDefault(cfg.Node.Host)
-	sid, err := api.create(ctx, o.name, o.prio, o.pin, o.prefer, host, os.Getpid(), node.ProcStartTime(os.Getpid()))
+	sid, err := api.create(ctx, o.name, o.prio, o.pin, o.prefer, host, o.dir, o.test, os.Getpid(), node.ProcStartTime(os.Getpid()))
 	if err != nil {
 		return jobExitCode(err), err
 	}

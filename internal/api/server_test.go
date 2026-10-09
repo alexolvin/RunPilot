@@ -411,3 +411,30 @@ func TestHubDispatchRoundTrip(t *testing.T) {
 		t.Fatalf("rtt_ms = %d, вне разумного", out.RTTMS)
 	}
 }
+
+// test=true и каталог вне /mdisk/myhub/test → 400 DIR_FORBIDDEN (run).
+func TestRunTestDirForbidden(t *testing.T) {
+	ts, st, _ := testServer(t)
+	// test=true, dir вне /mdisk/myhub/test → 400.
+	body := map[string]any{"name": "test-run", "host": "h1", "host_ip": "127.0.0.1", "profile": "qwen", "test": true, "dir": "/mdisk/myhub/RunPilot"}
+	status, m := doJSON(t, "POST", ts.URL+"/api/v1/run", body)
+	if status != http.StatusBadRequest || m["code"] != "DIR_FORBIDDEN" {
+		t.Fatalf("run test=true dir=/mdisk/myhub/RunPilot = %d %v, хочу 400 DIR_FORBIDDEN", status, m)
+	}
+	// Сессия не должна быть создана.
+	if live, err := st.FindLiveByName("test-run"); err == nil && live.SID != "" {
+		t.Error("test-run: сессия не должна быть создана")
+	}
+	// test=true, dir=/mdisk/myhub/test → 201.
+	body = map[string]any{"name": "test-run-ok", "host": "h1", "host_ip": "127.0.0.1", "profile": "qwen", "test": true, "dir": "/mdisk/myhub/test"}
+	status, _ = doJSON(t, "POST", ts.URL+"/api/v1/run", body)
+	if status != http.StatusCreated {
+		t.Fatalf("run test=true dir=/mdisk/myhub/test = %d, хочу 201", status)
+	}
+	// test=false, dir=/mdisk/myhub/RunPilot → 201 (обычная сессия).
+	body = map[string]any{"name": "normal-run", "host": "h1", "host_ip": "127.0.0.1", "profile": "qwen", "dir": "/mdisk/myhub/RunPilot"}
+	status, _ = doJSON(t, "POST", ts.URL+"/api/v1/run", body)
+	if status != http.StatusCreated {
+		t.Fatalf("run test=false dir=/mdisk/myhub/RunPilot = %d, хочу 201", status)
+	}
+}

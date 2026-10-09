@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"runpilot/internal/model"
@@ -73,16 +74,10 @@ type jobCreateRequest struct {
 	Prio   string `json:"prio"`
 	Pin    string `json:"pin"`
 	Prefer string `json:"prefer"`
-	// Host — имя узла этой машины (client присылает os.Hostname): в записи
-	// EXEC-сессии хранится именно он (не «operator»), чтобы корень пушить
-	// только этому узлу + принимать его отчёты о смерти корня.
-	Host string `json:"host"`
-	// PID — PID процесса runpilot exec (client присылает os.Getpid());
-	// хранится в записи EXEC-сессии (exec_pid), доступен узлу.
-	PID int `json:"pid"`
-	// StartTime — время старта процесса runpilot exec (/proc/self/stat поле 22,
-	// clock ticks с boot); хранится в записи (exec_starttime). Пара (PID,
-	// StartTime) — корень EXEC-сессии для правила «кодер вне очереди».
+	Host   string `json:"host"`
+	Dir    string `json:"dir"`
+	Test   bool   `json:"test"`
+	PID    int    `json:"pid"`
 	StartTime int64 `json:"start_time"`
 }
 
@@ -110,6 +105,12 @@ func (s *Server) handleJobCreate(w http.ResponseWriter, r *http.Request) {
 		c = model.Constraint{Kind: model.ConstraintPin, Server: req.Pin}
 	} else if req.Prefer != "" {
 		c = model.Constraint{Kind: model.ConstraintPrefer, Server: req.Prefer}
+	}
+	// Тестовая сессия (test=true) — только /mdisk/myhub/test.
+	if req.Test && req.Dir != "" && !strings.HasPrefix(req.Dir, testDirPrefix) {
+		httpError(w, http.StatusBadRequest, "DIR_FORBIDDEN",
+			"тестовая сессия: каталог вне "+testDirPrefix)
+		return
 	}
 
 	newSID, err := sid.New()
