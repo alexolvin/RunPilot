@@ -296,6 +296,9 @@ type Lease struct {
 	ReleasedAt    time.Time
 	ReleaseReason string
 	Requests      int
+	// Rule — правило выбора слота (W13 этап 2): pin|prefer|warm_cache|
+	// priority|lru. Пусто = аренда до введения правила.
+	Rule string
 }
 
 // Turn — ход (раздел 4).

@@ -82,6 +82,8 @@ function normSession(s) {
     // Раздел постановки в очередь: буфер «команд для запуска» (заряд запуска).
     launch_command: s.LaunchCommand || '',
     untested: !!s.untested,
+    // W13 этап 2: сервер текущего слота + правило выбора («В работе»).
+    server: s.server || '', rule: s.rule || '',
   };
 }
 function normServer(s) {

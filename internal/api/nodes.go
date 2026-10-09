@@ -156,6 +156,13 @@ client:
 node:
   host: ""
 YAML
+# Телеметрия GPU (W13 этап 5): --gpu / --gpu-server.
+if [ -n "${GPU_SERVER:-}" ]; then
+  {
+    printf '  gpu: %%s\n' "${GPU:-nvidia}"
+    printf '  gpu_server: %%s\n' "$GPU_SERVER"
+  } >> "$cfg"
+fi
 QWEN_PATH="$(command -v qwen || true)"
 if [ -n "$QWEN_PATH" ]; then
   printf 'profiles:\n  qwen:\n    command: %%s\n' "$QWEN_PATH" >> "$cfg"
@@ -192,6 +199,20 @@ HOSTNAME_SUGGESTION="%s"
 BIN="/usr/local/bin/runpilot"
 if [ -w /usr/local/bin ]; then BIN="/usr/local/bin/runpilot"; else BIN="$HOME/.local/bin/runpilot"; fi
 mkdir -p "$(dirname "$BIN")" "$HOME/.config/runpilot"
+# Телеметрия GPU (W13 этап 5): --gpu <nvidia|amd>, --gpu-server <имя сервера>.
+GPU=""
+GPU_SERVER=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --gpu)
+      [ $# -ge 2 ] || { echo "runpilot: --gpu требует значение"; exit 2; }
+      GPU="$2"; shift 2 ;;
+    --gpu-server)
+      [ $# -ge 2 ] || { echo "runpilot: --gpu-server требует значение"; exit 2; }
+      GPU_SERVER="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
 echo "runpilot: скачиваю бинарник…"
 HDR="$(mktemp)"
 trap 'rm -f "$HDR"' EXIT

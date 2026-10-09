@@ -32,6 +32,11 @@ type SessionView struct {
 	// п.6: время начала удержания (queue_entry.held_since); не nil, только
 	// если сессия удерживает запрос (held_request=true).
 	HeldSince *time.Time `json:"held_since,omitempty"`
+	// W13 этап 2: сервер текущего слота и правило выбора («В работе»).
+	// Server — сервер действующей аренды; Rule — правило ТЗ §5
+	// (pin|prefer|warm_cache|priority|lru), пусто = аренда до правила.
+	Server string `json:"server,omitempty"`
+	Rule   string `json:"rule,omitempty"`
 }
 
 // NodeView — узел + действия (плоско, как api.NodeInfo без Conn).

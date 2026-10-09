@@ -129,6 +129,14 @@ func (n *Node) createQwenSettings(path string, contextWindow int) QwenSettingsRe
 	return QwenSettingsResult{Changed: true, Changes: changes}
 }
 
+// gatewayModelAlias — запасной alias шлюза, не совпадающий с id записей
+// modelProviders: если сконфигурированный model_alias коллидирует с id
+// записи, узел запускает кодера с этим alias (Runtime Model →
+// OPENAI_BASE_URL = шлюз). Шлюз подставит реальную модель (transformBody),
+// поэтому alias может быть любым; операторский прямой эндпоинт остаётся
+// доступным в /model (id записи не меняется).
+const gatewayModelAlias = "runpilot"
+
 // providerIDCollision — есть ли в modelProviders запись с id == modelAlias.
 // Такая запись превращает текущую (шлюзовую) модель в Provider Model:
 // qwen берёт baseUrl из записи, а не из OPENAI_BASE_URL — сессия идёт мимо
@@ -157,6 +165,38 @@ func providerIDCollision(doc map[string]any, modelAlias string) []string {
 		}
 	}
 	return out
+}
+
+// safeModelAlias — alias для запуска кодера, гарантированно не совпадающий
+// с id записей modelProviders (W13 этап 3: закрыть обход шлюза). Если
+// modelAlias коллидирует с id записи, qwen сочтёт текущую модель Provider
+// Model и возьмёт прямой baseUrl провайдера (в обход шлюза) — даже при
+// явном --openai-base-url. Возвращает gatewayModelAlias (Runtime Model →
+// OPENAI_BASE_URL = шлюз); шлюз подставит реальную модель. Без коллизии —
+// возвращает modelAlias как есть. Ошибки чтения конфига — modelAlias (нет
+// данных о коллизии → не хуже прежнего).
+func (n *Node) safeModelAlias(modelAlias string) string {
+	if modelAlias == "" {
+		return modelAlias
+	}
+	path, err := qwenSettingsPath()
+	if err != nil {
+		return modelAlias
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return modelAlias
+	}
+	var doc map[string]any
+	if json.Unmarshal(data, &doc) != nil {
+		return modelAlias
+	}
+	if len(providerIDCollision(doc, modelAlias)) == 0 {
+		return modelAlias
+	}
+	n.log.Warn("node: qwen settings: model_alias совпадает с id modelProviders — запускаю кодера с alias шлюза (обход закрыт)",
+		"alias", modelAlias, "safe", gatewayModelAlias)
+	return gatewayModelAlias
 }
 
 // patchQwenSettings — внести изменения; Changed=false, если они не нужны.

@@ -7,6 +7,22 @@ import { T } from '../i18n/ru.js';
 import { Badge } from './badge.js';
 import { navigate } from '../router.js';
 
+// slotStateLabel — состояние слота (W13 этап 2): свободен / занят <сессия> /
+// внешняя нагрузка / охлаждение.
+function slotStateLabel(meta, sl) {
+  switch (sl.state) {
+    case 'external':
+      return T.servers.slotExternal;
+    case 'cooldown':
+      return T.servers.slotCooldown;
+    case 'PENDING':
+    case 'ACTIVE':
+      return T.servers.slotBusy(sl.session || sl.slot);
+    default:
+      return T.servers.slotFree;
+  }
+}
+
 export function ServerCard(props) {
   const s = props.server;
   const meta = props.meta;
@@ -22,7 +38,7 @@ export function ServerCard(props) {
     <div class="server-card-metrics">
       <div class="metric">
         <span class="metric-k">${T.servers.slots}</span>
-        <span class="metric-v">${s.running}/${s.total}</span>
+        <span class="metric-v">${T.servers.freeOf(s.free, s.total)}</span>
       </div>
       <div class="metric">
         <span class="metric-k">${T.servers.kv}</span>
@@ -33,5 +49,10 @@ export function ServerCard(props) {
         <span class="metric-v">${s.missing ? T.units.none : fmtTokS(s.gen_tok_s)}</span>
       </div>
     </div>
+    ${s.slots_info && s.slots_info.length
+      ? html`<div class="server-card-slots">
+          ${s.slots_info.map((sl) => html`<span class="slot-chip" data-state=${sl.state}>${slotStateLabel(meta, sl)}</span>`)}
+        </div>`
+      : null}
   </div>`;
 }

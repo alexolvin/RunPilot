@@ -77,13 +77,19 @@ func (s *Scheduler) freeSlots(now time.Time) []slotRec {
 
 // choose — сервер и слот для выдачи (раздел 5 ТЗ, первое сработавшее
 // правило): pin/prefer → тёплый кэш → наибольший priority → LRU.
+// Возвращает выбранный слот и правило выбора (pin | prefer | warm_cache |
+// priority | lru) для LEASE_GRANT (наблюдаемость, W13 этап 2).
 func (s *Scheduler) choose(e model.QueueEntry, sess store.SessionRecord,
-	cand []slotRec, now time.Time) slotRec {
+	cand []slotRec, now time.Time) (slotRec, string) {
 	// Правило 1: цель pin или prefer.
 	if e.Constraint.Kind != model.ConstraintNone {
 		for _, f := range cand {
 			if f.Name == e.Constraint.Server {
-				return f
+				rule := "prefer"
+				if e.Constraint.Kind == model.ConstraintPin {
+					rule = "pin"
+				}
+				return f, rule
 			}
 		}
 	}
@@ -98,7 +104,7 @@ func (s *Scheduler) choose(e model.QueueEntry, sess store.SessionRecord,
 		if err == nil && (!ok || lastGrant.Before(sess.LastTurnEnd)) {
 			for _, f := range cand {
 				if f.Name == sess.LastServer {
-					return f
+					return f, "warm_cache"
 				}
 			}
 		}
@@ -109,21 +115,25 @@ func (s *Scheduler) choose(e model.QueueEntry, sess store.SessionRecord,
 	// Правило 4: слот, освобождённый раньше остальных (LRU) — внутри
 	// группы; zero = «освобождён всегда» = самый ранний.
 	top := s.topPriority(cand[0].Name)
-	best := slotRec{}
-	bestSet := false
+	var group []slotRec
 	for _, f := range cand {
 		if s.topPriority(f.Name) != top {
 			break
 		}
-		if !bestSet {
-			best, bestSet = f, true
-			continue
-		}
+		group = append(group, f)
+	}
+	if len(group) == 1 {
+		// Единственный слот с максимальным priority — выбор по priority.
+		return group[0], "priority"
+	}
+	// Несколько слотов с одинаковым priority — решает LRU.
+	best := group[0]
+	for _, f := range group[1:] {
 		if newerFree(f.FreeSince, best.FreeSince) {
 			best = f
 		}
 	}
-	return best
+	return best, "lru"
 }
 
 // topPriority — priority сервера по имени.

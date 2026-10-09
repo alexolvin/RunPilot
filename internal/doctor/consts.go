@@ -42,4 +42,8 @@ const (
 	psMinFields      = 3
 	// quoteLen — длина кавычки для снятия у строковых значений (effective_config).
 	quoteLen = 2
+	// Индексы/длины субмачей ss-регуляров (checkGatewayBypass).
+	ssPeerPortGroup   = 2 // группа порта в ssPeerRe
+	ssPeerSubmatchLen = 3 // полный матч + 2 группы (host, port)
+	ssPIDsSubmatchLen = 2 // полный матч + 1 группа (pid)
 )

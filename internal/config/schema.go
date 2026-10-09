@@ -268,6 +268,8 @@ func Schema() []SettingField {
 		// Узлы.
 		intField("node.scan_interval_sec", "s", "Узлы", "Интервал скана",
 			"Период скана tmux узлом.", ApplyNextTick),
+		intField("node.pulse_interval_sec", "s", "Узлы", "Интервал пульса",
+			"Период пульса Busy-панели (должен быть меньше scheduler.snapshot_max_age_sec).", ApplyNextTick),
 		intField("node.offline_after_sec", "s", "Узлы", "Оффлайн",
 			"Узел оффлайн после этого времени без связи.", ApplyNextTick),
 		intField("node.health_interval_sec", "s", "Узлы", "Интервал здоровья",

@@ -27,6 +27,8 @@ type QueueRow struct {
 	// п.6: удержание — веб показывает бейдж HELD и таймер (now − held_since).
 	Held      bool       `json:"held,omitempty"`
 	HeldSince *time.Time `json:"held_since,omitempty"`
+	// W13 этап 2: причины по серверам (почему сервер не даёт слот).
+	ServerReasons []ServerReason `json:"server_reasons,omitempty"`
 }
 
 // ServerSlotRow — слот сервера (занят/свободен/cool-down).
@@ -35,6 +37,15 @@ type ServerSlotRow struct {
 	State     string `json:"state"`
 	Session   string `json:"session,omitempty"`
 	TurnSince string `json:"turn_since,omitempty"`
+}
+
+// ServerReason — причина по серверу (W13 этап 2): почему сервер не даёт
+// слот записи. Reason — код (down|pin|class|free|external|cooldown|busy),
+// Detail — уточнение (число внешних запросов / имена сессий).
+type ServerReason struct {
+	Server string `json:"server"`
+	Reason string `json:"reason"`
+	Detail string `json:"detail,omitempty"`
 }
 
 // ServerRow — сервер для TUI/CLI (раздел 11 ТЗ). Метрики Э6:
@@ -95,6 +106,8 @@ func (s *Scheduler) QueueView() []QueueRow {
 		} else if e.IneligibleReason != "" && !e.IneligibleSince.IsZero() {
 			row.Why = e.IneligibleReason
 		}
+		// W13 этап 2: причины по серверам (почему сервер не даёт слот).
+		row.ServerReasons = s.serverReasons(e, sess, now)
 		// п.6: удерживающая запись — бейдж HELD + время начала удержания.
 		if e.HeldRequest {
 			row.Held = true

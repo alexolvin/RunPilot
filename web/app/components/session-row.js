@@ -21,6 +21,7 @@ export function SessionRow(props) {
     <div class="srow-main">
       <span class="srow-name" title=${s.sid}>${s.name || s.sid}</span>
       ${s.host ? html`<span class="srow-sub">${s.host}</span>` : null}
+      ${s.server ? html`<span class="srow-sub srow-slot" title=${T.queue.ruleTitle + ': ' + (s.rule || '—')}>${s.server}${s.rule && T.queue.rules[s.rule] ? ' · ' + T.queue.rules[s.rule] : ''}</span>` : null}
       ${why ? html`<span class="srow-why">${why}</span>` : null}
     </div>
     <div class="srow-side">

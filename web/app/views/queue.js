@@ -17,6 +17,16 @@ import { Section, SectionEmpty } from '../components/section.js';
 import { Badge } from '../components/badge.js';
 import { Button } from '../components/button.js';
 
+// W13 этап 2: причины по серверам строки очереди → «3p14: внешняя нагрузка (1) · vzu5: занят PhoneBroker».
+function serverReasonsText(sr) {
+  if (!sr || !sr.length) return '';
+  return sr.map((x) => {
+    const label = T.queue.serverReasons[x.reason];
+    const txt = typeof label === 'function' ? label(x.detail || '') : (label || x.reason);
+    return x.server + ': ' + txt;
+  }).join(' · ');
+}
+
 // W7 (8.2, J9/J11): статусы внешних кодеров.
 const EXT_STATUS = { ACTIVE: 'stActive', KILLED: 'stKilled', GONE: 'stGone', IGNORED: 'stIgnored' };
 const EXT_TONE = { ACTIVE: 'var(--color-warning)', KILLED: 'var(--color-danger)', GONE: 'var(--color-text-muted)', IGNORED: 'var(--color-text-muted)' };
@@ -181,6 +191,7 @@ export function QueuePage() {
         ? html`<div class="srow-list">
             ${queuedRows.slice(0, UI.queueWorkMax).map((row) => {
               const why = whyText(s.meta, 'ineligible', row.why);
+              const srs = serverReasonsText(row.server_reasons);
               const cTone = stateColorVar(String(row.class).toUpperCase());
               return html`<div class="srow qrow">
                 <span class="qrow-pos">${row.rank}</span>
@@ -188,6 +199,7 @@ export function QueuePage() {
                   <span class="srow-name" title=${row.sid}>${row.session}</span>
                   ${row.host ? html`<span class="srow-sub">${row.host}</span>` : null}
                   ${why ? html`<span class="srow-why">${why}</span>` : null}
+                  ${srs ? html`<span class="srow-why srow-servers" title=${T.queue.serverReasonsTitle}>${srs}</span>` : null}
                 </div>
                 <div class="srow-side">
                   ${row.held ? html`<${Badge} tone="var(--color-warning)" label=${T.queue.held} />` : null}

@@ -110,7 +110,7 @@ var configKeys = []string{
 	"retention.gone_sessions_days", "retention.audit_days",
 	"retention.notifications_days", "retention.external_days",
 	"client", "client.coordinator", "client.token_env",
-	"node", "node.host", "node.tmux_sockets", "node.scan_interval_sec", "node.gpu",
+	"node", "node.host", "node.tmux_sockets", "node.scan_interval_sec", "node.pulse_interval_sec", "node.gpu",
 	"node.gpu_server", "node.offline_after_sec", "node.health_interval_sec",
 	"node.project_roots_default",
 	"web", "web.bind", "web.port", "web.public_url",

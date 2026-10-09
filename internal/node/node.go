@@ -114,7 +114,7 @@ func New(cfg *config.Config, prof *profiles.Qwen, ex Execer, clk clock.Clock, lo
 		diskPath: defaultDiskPath(),
 		ptySes:   map[int]*ptySession{},
 	}
-	n.snap = newSnapshotter(clk, n.agentVer)
+	n.snap = newSnapshotter(clk, n.agentVer, time.Duration(cfg.Node.PulseIntervalSec)*time.Second)
 	n.cmd = NewCommandRunner(ex, re, Profile{
 		SubmitKeys:            []string{prof.SubmitKeys},
 		CancelKeys:            []string{prof.CancelKeys},
@@ -151,12 +151,20 @@ func (n *Node) coderPATH() string {
 
 // coderEnv — env кодера: PATH = каталог кодера + текущий PATH. Без абсолютного
 // пути — env не меняется (кодер берёт PATH tmux-сервера как есть).
+// W13 этап 3: OPENAI_MODEL, совпадающий с id записи modelProviders, заменяется
+// на alias шлюза (safeModelAlias) — иначе qwen пойдёт на прямой baseUrl в
+// обход шлюза.
 func (n *Node) coderEnv(env map[string]string) map[string]string {
 	if p := n.coderPATH(); p != "" {
 		if env == nil {
 			env = map[string]string{}
 		}
 		env["PATH"] = p
+	}
+	if alias := env["OPENAI_MODEL"]; alias != "" {
+		if safe := n.safeModelAlias(alias); safe != alias {
+			env["OPENAI_MODEL"] = safe
+		}
 	}
 	return env
 }
@@ -399,10 +407,20 @@ func (n *Node) cycle(ctx context.Context, send func(proto.Msg) error) error {
 			continue // панель исчезла между list и capture
 		}
 		if pane, changed := n.snap.sync(p, st, hash, input, now); changed {
+			// смена состояния — отправлено.
 			if err := send(proto.PaneOf(pane)); err != nil {
 				return err
 			}
+		} else if st != detect.Busy {
+			// non-Busy (QUEUED/DISPATCHING): снимок каждый scan-цикл
+			// (W13 этап 4) — иначе снимок устаревает (snapshot_max_age).
+			if pane, ok := n.snap.heartbeat(p, now); ok {
+				if err := send(proto.PaneOf(pane)); err != nil {
+					return err
+				}
+			}
 		} else if pane, ok := n.snap.pulse(p, now); ok {
+			// Busy: пульс по периоду из конфига.
 			if err := send(proto.PaneOf(pane)); err != nil {
 				return err
 			}

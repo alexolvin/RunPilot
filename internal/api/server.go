@@ -693,10 +693,22 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// W13 этап 2: сервер текущего слота + правило выбора по действующим
+	// арендам («В работе»).
+	leaseBySID := map[string]model.Lease{}
+	if ls, err := s.store.LeaseListActive(); err == nil {
+		for _, l := range ls {
+			leaseBySID[l.SID] = l
+		}
+	}
 	for _, rec := range st.Sessions {
 		sv := sessionView(rec)
 		if hs, ok := heldSince[rec.SID]; ok {
 			sv.HeldSince = hs
+		}
+		if l, ok := leaseBySID[rec.SID]; ok {
+			sv.Server = l.Server
+			sv.Rule = l.Rule
 		}
 		view.Sessions = append(view.Sessions, sv)
 	}

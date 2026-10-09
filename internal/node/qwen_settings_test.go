@@ -251,6 +251,51 @@ func TestQwenSettingsOp(t *testing.T) {
 	}
 }
 
+// TestSafeModelAliasNoCollision — alias не совпадает с id записей → alias как есть.
+func TestSafeModelAliasNoCollision(t *testing.T) {
+	writeQwenFixture(t, `{
+		"modelProviders": {"openai": [{"id": "qwen3.8-27b", "baseUrl": "http://127.0.0.1:8004/v1"}]}
+	}`)
+	n := newTestNode(t, &fakeExec{})
+	if got := n.safeModelAlias(qwenTestAlias); got != qwenTestAlias {
+		t.Fatalf("safeModelAlias=%q, хочу %q (нет коллизии)", got, qwenTestAlias)
+	}
+}
+
+// TestSafeModelAliasCollision — alias совпадает с id записи → alias шлюза
+// (закрыть обход: Runtime Model → OPENAI_BASE_URL).
+func TestSafeModelAliasCollision(t *testing.T) {
+	writeQwenFixture(t, `{
+		"modelProviders": {"openai": [{"id": "` + qwenTestAlias + `", "baseUrl": "http://127.0.0.1:8004/v1"}]}
+	}`)
+	n := newTestNode(t, &fakeExec{})
+	if got := n.safeModelAlias(qwenTestAlias); got != gatewayModelAlias {
+		t.Fatalf("safeModelAlias=%q, хочу %q (коллизия)", got, gatewayModelAlias)
+	}
+}
+
+// TestSafeModelAliasNoFile — файла нет → alias как есть (нет данных о коллизии).
+func TestSafeModelAliasNoFile(t *testing.T) {
+	writeQwenFixture(t, "")
+	n := newTestNode(t, &fakeExec{})
+	if got := n.safeModelAlias(qwenTestAlias); got != qwenTestAlias {
+		t.Fatalf("safeModelAlias=%q, хочу %q (нет файла)", got, qwenTestAlias)
+	}
+}
+
+// TestCoderEnvSubstitutesCollidingAlias — coderEnv заменяет OPENAI_MODEL,
+// совпадающий с id modelProviders, на alias шлюза (обход закрыт).
+func TestCoderEnvSubstitutesCollidingAlias(t *testing.T) {
+	writeQwenFixture(t, `{
+		"modelProviders": {"openai": [{"id": "` + qwenTestAlias + `", "baseUrl": "http://127.0.0.1:8004/v1"}]}
+	}`)
+	n := newTestNode(t, &fakeExec{})
+	env := n.coderEnv(map[string]string{"OPENAI_MODEL": qwenTestAlias, "OPENAI_BASE_URL": "http://127.0.0.1:8787/s/x/v1"})
+	if env["OPENAI_MODEL"] != gatewayModelAlias {
+		t.Fatalf("OPENAI_MODEL=%q, хочу %q (коллизия → alias шлюза)", env["OPENAI_MODEL"], gatewayModelAlias)
+	}
+}
+
 // TestSpawnEnsuresQwenSettings — auto-подключение к шлюзу (доп-3i): spawn
 // приводит ~/.qwen/settings.json в порядок ДО запуска кодера.
 func TestSpawnEnsuresQwenSettings(t *testing.T) {

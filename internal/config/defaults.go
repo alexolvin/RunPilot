@@ -146,6 +146,7 @@ func Defaults() *Config {
 			Host:            "",
 			TmuxSockets:     []string{"default"},
 			ScanIntervalSec: 2,
+			PulseIntervalSec: 3,
 			GPU:             "none",
 			GPUServer:       "",
 			OfflineAfterSec:     30,

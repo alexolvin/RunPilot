@@ -60,6 +60,43 @@ func TestNodeEnrollFileSetupUmask(t *testing.T) {
 	}
 }
 
+// TestNodeEnrollFileSetupGPU — W13 этап 5: --gpu-server в install.sh записывает
+// node.gpu + node.gpu_server в секцию node (GPU_SERVER задан); без него строк
+// gpu в конфиге нет.
+func TestNodeEnrollFileSetupGPU(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash не найден")
+	}
+	run := func(t *testing.T, gpu, gpuServer string) string {
+		dir := t.TempDir()
+		script := nodeEnrollFileSetup(dir, "https://3p14-aaa:8788", "tok123")
+		cmd := exec.Command("bash", "-c",
+			"set -euo pipefail\numask 0002\nGPU="+gpu+"\nGPU_SERVER="+gpuServer+"\n"+script)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("file-setup shell не завершился: %v\n%s", err, out)
+		}
+		cfg, err := os.ReadFile(filepath.Join(dir, "config.yaml"))
+		if err != nil {
+			t.Fatalf("read config.yaml: %v", err)
+		}
+		return string(cfg)
+	}
+	t.Run("with_gpu_server", func(t *testing.T) {
+		cfg := run(t, "nvidia", "vzu5")
+		for _, want := range []string{"gpu: nvidia", "gpu_server: vzu5"} {
+			if !strings.Contains(cfg, want) {
+				t.Errorf("config.yaml не содержит %q:\n%s", want, cfg)
+			}
+		}
+	})
+	t.Run("without_gpu_server", func(t *testing.T) {
+		cfg := run(t, "", "")
+		if strings.Contains(cfg, "gpu:") || strings.Contains(cfg, "gpu_server:") {
+			t.Errorf("config.yaml содержит gpu-строки без --gpu-server:\n%s", cfg)
+		}
+	})
+}
+
 // TestNodeUpdateStaleDistRefused — W12 (ТЗ 14): бинарник в dist_dir не
 // совпадает по версии с координатором (stale dist) → API-обновление отказывает
 // 409 DIST_MISMATCH (иначе self-update узлов разворачивал бы устаревший dist).

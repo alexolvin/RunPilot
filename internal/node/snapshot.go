@@ -35,15 +35,19 @@ func period(st detect.State) time.Duration {
 type snapshotter struct {
 	clk      clock.Clock
 	agentVer string
+	// pulseInterval — период пульса НЕизменённой Busy-панели (из конфига,
+	// W13 этап 4); обязан быть < snapshot_max_age_sec (инвариант загрузки).
+	pulseInterval time.Duration
 
 	panes map[string]*paneSnap // по pane_id
 }
 
-func newSnapshotter(clk clock.Clock, agentVer string) *snapshotter {
+func newSnapshotter(clk clock.Clock, agentVer string, pulseInterval time.Duration) *snapshotter {
 	return &snapshotter{
-		clk:      clk,
-		agentVer: agentVer,
-		panes:    map[string]*paneSnap{},
+		clk:           clk,
+		agentVer:      agentVer,
+		pulseInterval: pulseInterval,
+		panes:         map[string]*paneSnap{},
 	}
 }
 
@@ -78,10 +82,23 @@ func (s *snapshotter) sync(info PaneInfo, st detect.State, hash uint64, input st
 	return paneMsg(info, st, hash, input, ps.sentAt, s.agentVer), changed
 }
 
-// pulse — время пульса наступило, хотя состояние не менялось.
+// pulse — время пульса наступило, хотя состояние не менялось (Busy-панель:
+// период из конфига, W13 этап 4).
 func (s *snapshotter) pulse(info PaneInfo, now time.Time) (proto.Pane, bool) {
 	ps := s.panes[info.PaneID]
-	if ps == nil || now.Sub(ps.sentAt) < pulseInterval {
+	if ps == nil || now.Sub(ps.sentAt) < s.pulseInterval {
+		return proto.Pane{}, false
+	}
+	ps.sentAt = now
+	return paneMsg(info, ps.state, ps.hash, ps.input, ps.sentAt, s.agentVer), true
+}
+
+// heartbeat — non-Busy панель (QUEUED/DISPATCHING): снимок каждый scan-цикл,
+// хотя состояние не менялось (W13 этап 4) — иначе снимок устаревает
+// (snapshot_max_age_sec). Обновляет sentAt и возвращает сообщение.
+func (s *snapshotter) heartbeat(info PaneInfo, now time.Time) (proto.Pane, bool) {
+	ps := s.panes[info.PaneID]
+	if ps == nil {
 		return proto.Pane{}, false
 	}
 	ps.sentAt = now

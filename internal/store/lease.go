@@ -19,10 +19,10 @@ func (s *Store) LeaseCreate(l model.Lease) (int64, error) {
 	var id int64
 	err := s.DoWrite(func(tx *sql.Tx) error {
 		res, err := tx.Exec(`
-INSERT INTO lease (sid, server, slot, state, origin, granted_at, requests)
-VALUES (?, ?, ?, ?, ?, ?, ?)`,
+INSERT INTO lease (sid, server, slot, state, origin, granted_at, requests, rule)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			l.SID, l.Server, l.Slot, l.State, l.Origin,
-			l.GrantedAt.Format(time.RFC3339Nano), l.Requests)
+			l.GrantedAt.Format(time.RFC3339Nano), l.Requests, l.Rule)
 		if err != nil {
 			return err
 		}
@@ -61,10 +61,10 @@ ORDER BY granted_at DESC, id DESC LIMIT 1`, l.SID).Scan(&id)
 			return err
 		}
 		res, err := tx.Exec(`
-INSERT INTO lease (sid, server, slot, state, origin, granted_at, requests)
-VALUES (?, ?, ?, ?, ?, ?, ?)`,
+INSERT INTO lease (sid, server, slot, state, origin, granted_at, requests, rule)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			l.SID, l.Server, l.Slot, l.State, l.Origin,
-			l.GrantedAt.Format(time.RFC3339Nano), l.Requests)
+			l.GrantedAt.Format(time.RFC3339Nano), l.Requests, l.Rule)
 		if err != nil {
 			return err
 		}
@@ -107,7 +107,7 @@ WHERE server = ? AND state IN ('PENDING', 'ACTIVE', 'RECOVERING')`,
 func (s *Store) LeaseGet(sid string) (*model.Lease, error) {
 	row := s.db.QueryRow(`
 SELECT id, sid, server, slot, state, origin, granted_at, released_at,
-	release_reason, requests
+	release_reason, requests, rule
 FROM lease WHERE sid = ? AND state IN ('PENDING', 'ACTIVE', 'RECOVERING')
 ORDER BY granted_at DESC, id DESC LIMIT 1`, sid)
 	l, err := scanLease(row)
@@ -124,7 +124,7 @@ ORDER BY granted_at DESC, id DESC LIMIT 1`, sid)
 func (s *Store) LeaseGetByID(id int64) (*model.Lease, error) {
 	row := s.db.QueryRow(`
 SELECT id, sid, server, slot, state, origin, granted_at, released_at,
-	release_reason, requests FROM lease WHERE id = ?`, id)
+	release_reason, requests, rule FROM lease WHERE id = ?`, id)
 	l, err := scanLease(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -205,7 +205,7 @@ WHERE server = ? AND state IN ('PENDING', 'ACTIVE')`, server).Scan(&n)
 func (s *Store) LeaseListByServer(server string) ([]model.Lease, error) {
 	rows, err := s.db.Query(`
 SELECT id, sid, server, slot, state, origin, granted_at, released_at,
-	release_reason, requests
+	release_reason, requests, rule
 FROM lease WHERE server = ? AND state IN ('PENDING', 'ACTIVE')
 ORDER BY id`, server)
 	if err != nil {
@@ -245,7 +245,7 @@ ORDER BY granted_at DESC, id DESC LIMIT 1`, server, excludeSID).Scan(&granted)
 func (s *Store) LeaseListActive() ([]model.Lease, error) {
 	rows, err := s.db.Query(`
 SELECT id, sid, server, slot, state, origin, granted_at, released_at,
-	release_reason, requests
+	release_reason, requests, rule
 FROM lease WHERE state IN ('PENDING', 'ACTIVE', 'RECOVERING')
 ORDER BY granted_at, id`)
 	if err != nil {
@@ -257,7 +257,7 @@ ORDER BY granted_at, id`)
 		var l model.Lease
 		var state, origin, granted, released, reason string
 		if err := rows.Scan(&l.ID, &l.SID, &l.Server, &l.Slot, &state, &origin,
-			&granted, &released, &reason, &l.Requests); err != nil {
+			&granted, &released, &reason, &l.Requests, &l.Rule); err != nil {
 			return nil, err
 		}
 		l.State = model.LeaseState(state)
@@ -276,7 +276,7 @@ func scanLease(row interface{ Scan(...any) error }) (*model.Lease, error) {
 	var l model.Lease
 	var state, origin, granted, released, reason string
 	if err := row.Scan(&l.ID, &l.SID, &l.Server, &l.Slot, &state, &origin,
-		&granted, &released, &reason, &l.Requests); err != nil {
+		&granted, &released, &reason, &l.Requests, &l.Rule); err != nil {
 		return nil, err
 	}
 	l.State = model.LeaseState(state)

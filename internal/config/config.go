@@ -278,8 +278,12 @@ type Node struct {
 	Host            string   `yaml:"host"`
 	TmuxSockets     []string `yaml:"tmux_sockets"`
 	ScanIntervalSec int      `yaml:"scan_interval_sec"`
-	GPU             string   `yaml:"gpu"`
-	GPUServer       string   `yaml:"gpu_server"`
+	// PulseIntervalSec — период пульса снимка НЕизменённой Busy-панели (W13
+	// этап 4): период отправки < snapshot_max_age_sec, иначе снимок устареет.
+	// Non-Busy (QUEUED/DISPATCHING) панели шлются каждый scan-цикл.
+	PulseIntervalSec int    `yaml:"pulse_interval_sec"`
+	GPU              string `yaml:"gpu"`
+	GPUServer        string `yaml:"gpu_server"`
 	// v2 (раздел 4.2): рабочие ключи.
 	OfflineAfterSec     int      `yaml:"offline_after_sec"`
 	HealthIntervalSec   int      `yaml:"health_interval_sec"`
@@ -428,6 +432,7 @@ func (c *Config) Validate() error {
 		"notify.telegram.min_turn_sec":    c.Notify.Telegram.MinTurnSec,
 		"notify.telegram.coalesce_sec":    c.Notify.Telegram.CoalesceSec,
 		"node.scan_interval_sec":          c.Node.ScanIntervalSec,
+		"node.pulse_interval_sec":         c.Node.PulseIntervalSec,
 		"coordinator.shutdown_grace_sec":  c.Coordinator.ShutdownGraceSec,
 		"coordinator.bind_retry_sec":      c.Coordinator.BindRetrySec,
 		"coordinator.bind_alert_min":      c.Coordinator.BindAlertMin,
@@ -499,6 +504,15 @@ func (c *Config) Validate() error {
 	}
 	if c.Turn.DoneStableSec >= c.Dispatch.StartConfirmSec {
 		problems = append(problems, "turn.done_stable_sec должен быть меньше dispatch.start_confirm_sec")
+	}
+	// W13 этап 4: период отправки снимка < snapshot_max_age_sec, иначе снимок
+	// устаревает. Период отправки = scan_interval_sec (non-Busy панели) и
+	// pulse_interval_sec (Busy-панели).
+	if c.Node.ScanIntervalSec >= c.Scheduler.SnapshotMaxAgeSec {
+		problems = append(problems, "node.scan_interval_sec должен быть меньше scheduler.snapshot_max_age_sec (иначе снимок устаревает)")
+	}
+	if c.Node.PulseIntervalSec >= c.Scheduler.SnapshotMaxAgeSec {
+		problems = append(problems, "node.pulse_interval_sec должен быть меньше scheduler.snapshot_max_age_sec (иначе снимок устаревает)")
 	}
 
 	// Встроенный узел: хост gateway_url = coordinator.bind. Кодеры встроенного

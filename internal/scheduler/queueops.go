@@ -297,6 +297,8 @@ func (s *Scheduler) Why(target string) (Why, error) {
 	if err != nil {
 		return out, nil
 	}
+	// W13 этап 2: причины по серверам (актуально на момент запроса).
+	out.ServerReasons = s.serverReasons(*e, sess, now)
 	if rec, ok := s.why[sess.SID]; ok && now.Sub(rec.ts) < s.whyFresh() {
 		out.Reason = rec.reason
 		out.Candidates = rec.candidates
@@ -333,6 +335,8 @@ type Why struct {
 	Reason     string            `json:"reason,omitempty"`
 	Predicates map[string]any    `json:"predicates,omitempty"`
 	Candidates []string          `json:"candidates"`
+	// W13 этап 2: причины по серверам (почему сервер не даёт слот).
+	ServerReasons []ServerReason `json:"server_reasons,omitempty"`
 }
 
 // whyFresh — свежесть кэша why: один тик + запас.

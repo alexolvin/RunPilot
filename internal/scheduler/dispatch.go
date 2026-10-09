@@ -82,8 +82,8 @@ func (s *Scheduler) tickGrant(now time.Time) {
 			s.recordSkip(e, sess, free, s.paneRec[e.SID], now)
 			continue
 		}
-		chosen := s.choose(e, sess, cand, now)
-		s.grant(e, sess, chosen, now)
+		chosen, rule := s.choose(e, sess, cand, now)
+		s.grant(e, sess, chosen, now, rule, candNames(cand))
 		// Помечаем занятый слот в самом списке (копия не сработает).
 		for i := range free {
 			if free[i].Name == chosen.Name && free[i].Slot == chosen.Slot {
@@ -106,16 +106,30 @@ func anyFreeSlot(free []slotRec) bool {
 	return false
 }
 
+// candNames — имена серверов-кандидатов (для LEASE_GRANT, W13 этап 2).
+func candNames(cand []slotRec) []string {
+	out := make([]string, 0, len(cand))
+	seen := map[string]bool{}
+	for _, f := range cand {
+		if !seen[f.Name] {
+			seen[f.Name] = true
+			out = append(out, f.Name)
+		}
+	}
+	return out
+}
+
 // grant — выдача: аренда (PENDING плановая / ACTIVE held), сессия,
-// события, dispatch узлу (раздел 8 ТЗ).
-func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRec, now time.Time) {
+// события, dispatch узлу (раздел 8 ТЗ). rule — правило выбора
+// (pin|prefer|warm_cache|priority|lru), candidates — кандидаты (W13 этап 2).
+func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRec, now time.Time, rule string, candidates []string) {
 	if e.HeldRequest {
 		// Удержанный запрос: неявная аренда, без dispatch (Enter уже
 		// нажат оператором / ход продолжен).
 		l, err := s.st.LeaseCreateIfAbsent(model.Lease{
 			SID: sess.SID, Server: f.Name, Slot: f.Slot,
 			State: model.LeaseActive, Origin: model.LeaseOriginImplicit,
-			GrantedAt: now,
+			GrantedAt: now, Rule: rule,
 		}, s.serverSlots(f.Name), true)
 		if err != nil {
 			s.grantErr(sess.SID, f, "held-аренда", err)
@@ -135,6 +149,7 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 		}
 		s.eventAt(now, model.KindLeaseGrant, sess.SID, f.Name, map[string]any{
 			"server": f.Name, "slot": l.Slot, "origin": "IMPLICIT", "held": true,
+			"rule": rule, "candidates": candidates,
 		})
 		s.wake()
 		delete(s.why, sess.SID)
@@ -147,7 +162,7 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 		l, err := s.st.LeaseCreateIfAbsent(model.Lease{
 			SID: sess.SID, Server: f.Name, Slot: f.Slot,
 			State: model.LeaseActive, Origin: model.LeaseOriginDispatch,
-			GrantedAt: now,
+			GrantedAt: now, Rule: rule,
 		}, s.serverSlots(f.Name), false)
 		if err != nil {
 			s.grantErr(sess.SID, f, "JOB-аренда", err)
@@ -166,6 +181,7 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 		_ = s.st.QueueDelete(sess.SID)
 		s.eventAt(now, model.KindLeaseGrant, sess.SID, f.Name, map[string]any{
 			"server": f.Name, "slot": f.Slot, "origin": "DISPATCH", "job": true,
+			"rule": rule, "candidates": candidates,
 		})
 		s.wake()
 		delete(s.why, sess.SID)
@@ -176,7 +192,7 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 	l, err := s.st.LeaseCreateIfAbsent(model.Lease{
 		SID: sess.SID, Server: f.Name, Slot: f.Slot,
 		State: model.LeasePending, Origin: model.LeaseOriginDispatch,
-		GrantedAt: now,
+		GrantedAt: now, Rule: rule,
 	}, s.serverSlots(f.Name), false)
 	if err != nil {
 		s.grantErr(sess.SID, f, "аренда", err)
@@ -190,6 +206,7 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 	s.sessionEvent(sess, model.EvLeaseGranted, "")
 	s.eventAt(now, model.KindLeaseGrant, sess.SID, f.Name, map[string]any{
 		"server": f.Name, "slot": f.Slot, "origin": "DISPATCH",
+		"rule": rule, "candidates": candidates,
 	})
 
 	// Dispatch узлу: снимок панели → expect_hash; resume → resume_text.

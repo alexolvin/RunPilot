@@ -1,6 +1,8 @@
 package scheduler
 
 import (
+	"strconv"
+	"strings"
 	"time"
 
 	"runpilot/internal/model"
@@ -368,6 +370,70 @@ func serverStates(views []ServerView) map[string]any {
 		m[v.Name] = string(v.State)
 	}
 	return m
+}
+
+// serverReasons — причина по каждому серверу (W13 этап 2): почему сервер не
+// даёт слот записи e. Коды: down (сервер не UP), pin (привязан к другому),
+// class (не принимает эффективный класс), free (есть свободный слот),
+// external (внешняя нагрузка, Detail — число запросов), cooldown (охлаждение),
+// busy (все слоты заняты, Detail — имена сессий).
+func (s *Scheduler) serverReasons(e model.QueueEntry, sess store.SessionRecord, now time.Time) []ServerReason {
+	eff := s.eff(e, now)
+	out := []ServerReason{}
+	for _, v := range s.src.List() {
+		if e.Constraint.Kind == model.ConstraintPin && v.Name != e.Constraint.Server {
+			out = append(out, ServerReason{Server: v.Name, Reason: "pin"})
+			continue
+		}
+		if v.State != model.ServerUp {
+			out = append(out, ServerReason{Server: v.Name, Reason: "down"})
+			continue
+		}
+		if !accepts(v, eff) {
+			out = append(out, ServerReason{Server: v.Name, Reason: "class"})
+			continue
+		}
+		leases, _ := s.st.LeaseListByServer(v.Name)
+		leased := map[int]string{} // slot → имя сессии
+		for _, l := range leases {
+			if sn, err := s.st.GetSession(l.SID); err == nil {
+				leased[l.Slot] = sn.Name
+			} else {
+				leased[l.Slot] = l.SID
+			}
+		}
+		ext := s.externalSlots(v.Name)
+		extMarked, busy, cooldown, external, free := 0, 0, 0, 0, 0
+		var busyNames []string
+		for slot := 1; slot <= v.Slots; slot++ {
+			if name, ok := leased[slot]; ok {
+				busy++
+				busyNames = append(busyNames, name)
+				continue
+			}
+			if until, ok := s.cooldown[v.Name][slot]; ok && now.Before(until) {
+				cooldown++
+				continue
+			}
+			if extMarked < ext {
+				extMarked++
+				external++
+				continue
+			}
+			free++
+		}
+		switch {
+		case free > 0:
+			out = append(out, ServerReason{Server: v.Name, Reason: "free"})
+		case external > 0:
+			out = append(out, ServerReason{Server: v.Name, Reason: "external", Detail: strconv.Itoa(ext)})
+		case cooldown > 0:
+			out = append(out, ServerReason{Server: v.Name, Reason: "cooldown"})
+		default:
+			out = append(out, ServerReason{Server: v.Name, Reason: "busy", Detail: strings.Join(busyNames, ", ")})
+		}
+	}
+	return out
 }
 
 func contains(list []string, v string) bool {

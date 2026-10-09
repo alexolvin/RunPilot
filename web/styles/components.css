@@ -384,6 +384,12 @@
 .metric{display:flex;flex-direction:column;gap:2px;min-width:0}
 .metric-k{font-size:var(--font-size-xs);color:var(--color-text-muted)}
 .metric-v{font-size:var(--font-size-sm);font-weight:500;font-family:var(--font-mono);white-space:nowrap}
+/* W13 этап 2: состояния слотов сервера. */
+.server-card-slots{display:flex;flex-wrap:wrap;gap:var(--space-1);margin-top:var(--space-3)}
+.slot-chip{font-size:var(--font-size-xs);padding:2px 8px;border-radius:999px;background:var(--color-bg-subtle);color:var(--color-text-muted);white-space:nowrap}
+.slot-chip[data-state="external"]{background:var(--color-warning-subtle);color:var(--color-warning)}
+.slot-chip[data-state="cooldown"]{background:var(--color-bg-subtle);color:var(--color-text-muted)}
+.slot-chip[data-state="ACTIVE"],.slot-chip[data-state="PENDING"]{background:var(--color-accent-subtle);color:var(--color-accent)}
 
 /* ---- Строки списков (В работе / Очередь / Внимание / Сессии) ---- */
 .srow-hint{margin:0 0 var(--space-2);font-size:var(--font-size-xs);color:var(--color-text-muted)}

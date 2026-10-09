@@ -31,7 +31,7 @@ func TestSnapshotPeriods(t *testing.T) {
 
 func TestSnapshotSyncSendOnChange(t *testing.T) {
 	clk := clock.NewVirtual(t0)
-	s := newSnapshotter(clk, "0.24.4")
+	s := newSnapshotter(clk, "0.24.4", 10*time.Second)
 	info := PaneInfo{PaneID: "%10", SID: "S1", Session: "sess1"}
 
 	// Первый снимок: отправляется, stable_since = t0.
@@ -62,7 +62,7 @@ func TestSnapshotSyncSendOnChange(t *testing.T) {
 
 func TestSnapshotStableSinceTracksHashChange(t *testing.T) {
 	clk := clock.NewVirtual(t0)
-	s := newSnapshotter(clk, "0.24.4")
+	s := newSnapshotter(clk, "0.24.4", 10*time.Second)
 	info := PaneInfo{PaneID: "%10", SID: "S1", Session: "sess1"}
 
 	h1 := detect.Hash(idleScreen)
@@ -80,7 +80,7 @@ func TestSnapshotStableSinceTracksHashChange(t *testing.T) {
 
 func TestSnapshotInputChangeSends(t *testing.T) {
 	clk := clock.NewVirtual(t0)
-	s := newSnapshotter(clk, "0.24.4")
+	s := newSnapshotter(clk, "0.24.4", 10*time.Second)
 	info := PaneInfo{PaneID: "%10", SID: "S1", Session: "sess1"}
 
 	_, _ = s.sync(info, detect.Idle, detect.Hash(idleScreen), "", t0)
@@ -99,11 +99,40 @@ func TestSnapshotInputChangeSends(t *testing.T) {
 
 func TestSnapshotForgetsGonePanels(t *testing.T) {
 	clk := clock.NewVirtual(t0)
-	s := newSnapshotter(clk, "0.24.4")
+	s := newSnapshotter(clk, "0.24.4", 10*time.Second)
 	s.sync(PaneInfo{PaneID: "%10"}, detect.Idle, detect.Hash(idleScreen), "", t0)
 	s.forget("%10")
 	if len(s.panes) != 0 {
 		t.Fatal("забытая панель осталась в состоянии")
+	}
+}
+
+// TestSnapshotHeartbeatNonBusy — W13 этап 4: non-Busy (Idle) панель без смены
+// шлётся каждый scan-цикл (heartbeat) — sentAt обновляется, снимок не
+// устаревает (snapshot_max_age). Виртуальные часы.
+func TestSnapshotHeartbeatNonBusy(t *testing.T) {
+	clk := clock.NewVirtual(t0)
+	// pulseInterval большой (10 с) — пульс не сработает; heartbeat обязан.
+	s := newSnapshotter(clk, "0.24.4", 10*time.Second)
+	info := PaneInfo{PaneID: "%10", SID: "S1", Session: "sess1"}
+	// Первый снимок (Idle): отправлен.
+	if _, changed := s.sync(info, detect.Idle, detect.Hash(idleScreen), "", t0); !changed {
+		t.Fatal("первый снимок обязан быть отправлен")
+	}
+	// +2 с: без смены, пульса нет (10 с), но non-Busy → heartbeat.
+	if _, ok := s.pulse(info, t0.Add(2*time.Second)); ok {
+		t.Fatal("пульс через 2 с не положен (10 с)")
+	}
+	pane, ok := s.heartbeat(info, t0.Add(2*time.Second))
+	if !ok {
+		t.Fatal("heartbeat non-Busy обязан отправить")
+	}
+	if pane.State != "IDLE" {
+		t.Fatalf("heartbeat: state=%s, хочу IDLE", pane.State)
+	}
+	// sentAt обновлён — снимок свежий (виртуально +2 с).
+	if got := s.panes[info.PaneID].sentAt; !got.Equal(t0.Add(2*time.Second)) {
+		t.Fatalf("sentAt=%s, хочу %s (heartbeat обновил)", got, t0.Add(2*time.Second))
 	}
 }
 

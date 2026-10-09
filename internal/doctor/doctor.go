@@ -105,6 +105,12 @@ var (
 	psOutput = func() ([]byte, error) {
 		return exec.Command("ps", "-A", "-o", "pid=,ppid=,args=").Output()
 	}
+	// ssTnp — ESTAB TCP-соединения с pid: `ss -tnp state established`
+	// (один вызов); для checkGatewayBypass (прямое соединение кодера с
+	// upstream в обход шлюза).
+	ssTnp = func() ([]byte, error) {
+		return exec.Command("ss", "-tnp", "state", "established").Output()
+	}
 	readProcEnviron = func(pid string) ([]byte, error) {
 		return os.ReadFile("/proc/" + pid + "/environ")
 	}
@@ -128,6 +134,19 @@ var (
 			return "", err
 		}
 		return u.Username, nil
+	}
+	// gpuDetect — вендор GPU по железу: «nvidia», если `nvidia-smi -L`
+	// отдала непустой список карт; «amd», если `rocm-smi --showproductname`
+	// отработала; иначе ("", false). Для checkGPU.
+	gpuDetect = func() (string, bool) {
+		if out, err := exec.Command("nvidia-smi", "-L").Output(); err == nil &&
+			strings.TrimSpace(string(out)) != "" {
+			return "nvidia", true
+		}
+		if _, err := exec.Command("rocm-smi", "--showproductname").Output(); err == nil {
+			return "amd", true
+		}
+		return "", false
 	}
 )
 
@@ -166,6 +185,8 @@ func RoleChecks(r Role) []Check {
 			{Name: "qwen_timeout_guard", Run: checkQwenTimeoutGuard},
 			{Name: "coder_timeout_env", Run: checkCoderTimeoutEnv},
 			{Name: "coder_out_of_queue", Run: checkCoderOutOfQueue},
+			{Name: "gateway_bypass", Run: checkGatewayBypass},
+			{Name: "gpu", Run: checkGPU},
 			{Name: "file_mode", Run: checkFileMode},
 			{Name: "node_coordinator", Run: checkNodeCoordinator},
 			{Name: "node_version", Run: checkNodeVersion},
@@ -887,6 +908,28 @@ func (t *procTree) coderPID(root int, re *regexp.Regexp) int {
 	return 0
 }
 
+// subtree — все PID в поддереве под root (включая root), BFS-порядок.
+// Для checkGatewayBypass: кодер И его субагенты (qwen) могут держать
+// прямые соединения с upstream.
+func (t *procTree) subtree(root int) []int {
+	seen := map[int]bool{root: true}
+	queue := []int{root}
+	var out []int
+	for len(queue) > 0 {
+		p := queue[0]
+		queue = queue[1:]
+		out = append(out, p)
+		for _, c := range t.children[p] {
+			if seen[c] {
+				continue
+			}
+			seen[c] = true
+			queue = append(queue, c)
+		}
+	}
+	return out
+}
+
 // checkCoderOutOfQueue — «кодер вне очереди» (единое правило node.CoderOutOfQueue,
 // то же, что веб через node.ScanExternal): qwen-процесс (cmdline_regex), НЕ
 // (потомок панели живой сессии И OPENAI_BASE_URL = gateway_url/s/<sid>/v1).
@@ -959,6 +1002,158 @@ func checkCoderOutOfQueue(ctx *Context) Result {
 		parts = append(parts, fmt.Sprintf("%d (cwd=%s)", f.pid, f.cwd))
 	}
 	return result(name, WARN, "кодер вне очереди: "+strings.Join(parts, ", "))
+}
+
+// ssConn — ESTAB TCP-соединение: peer-порт и pid держателя сокета.
+type ssConn struct {
+	peerPort int
+	pid      int
+}
+
+// ssPeerRe — peer address:port в строке ss (перед «users:» или в конце строки).
+var ssPeerRe = regexp.MustCompile(`(\S+):(\d+)(?:\s+users:|\s*$)`)
+var ssPIDRe = regexp.MustCompile(`pid=(\d+)`)
+
+// parseSS — ESTAB-соединения из вывода `ss -tnp`: peer-порт + pid.
+func parseSS(out []byte) []ssConn {
+	var conns []ssConn
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.Contains(line, "ESTAB") {
+			continue
+		}
+		peer := ssPeerRe.FindStringSubmatch(line)
+		if len(peer) < ssPeerSubmatchLen {
+			continue
+		}
+		port, err := strconv.Atoi(peer[ssPeerPortGroup])
+		if err != nil {
+			continue
+		}
+		pid := 0
+		if m := ssPIDRe.FindStringSubmatch(line); len(m) >= ssPIDsSubmatchLen {
+			pid, _ = strconv.Atoi(m[1])
+		}
+		conns = append(conns, ssConn{peerPort: port, pid: pid})
+	}
+	return conns
+}
+
+// checkGatewayBypass — W13 этап 3: управляемый кодер (дерево процессов,
+// вкл. субагенты qwen) держит прямое ESTAB-соединение с upstream (vLLM-порт
+// из конфига серверов) в обход шлюза. Соединение с портом шлюза не считается
+// (это нормальный путь). Найден → FAIL с sid+PID.
+func checkGatewayBypass(ctx *Context) Result {
+	const name = "gateway_bypass"
+	if ctx.Cfg == nil {
+		return result(name, WARN, "нет конфигурации — проверку пропускаем")
+	}
+	// upstream-порты (vLLM) из конфига серверов.
+	upstreamPorts := map[int]bool{}
+	for _, s := range ctx.Cfg.Servers {
+		if u, err := url.Parse(s.Upstreams.OpenAI.URL); err == nil {
+			if p, err := strconv.Atoi(u.Port()); err == nil {
+				upstreamPorts[p] = true
+			}
+		}
+	}
+	if len(upstreamPorts) == 0 {
+		return result(name, PASS, "нет upstream-портов в конфиге — проверку пропускаем")
+	}
+	// порт шлюза — соединение с ним не bypass.
+	gatewayPort := 0
+	if u, err := url.Parse(ctx.Cfg.Coordinator.GatewayURL); err == nil {
+		gatewayPort, _ = strconv.Atoi(u.Port())
+	}
+	// Панели живых сессий: pane_pid → sid.
+	panePIDToSID := map[int]string{}
+	for _, socket := range ctx.Cfg.Node.TmuxSockets {
+		out, err := tmuxListPanes(socket)
+		if err != nil {
+			continue // нет tmux-сервера на сокете
+		}
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if line == "" {
+				continue
+			}
+			f := strings.Split(line, "\t")
+			if len(f) < paneFieldCount || f[paneFieldSID] == "" || f[paneFieldDead] == paneDeadFlag {
+				continue
+			}
+			if pid, err := strconv.Atoi(f[paneFieldPID]); err == nil {
+				panePIDToSID[pid] = f[paneFieldSID]
+			}
+		}
+	}
+	if len(panePIDToSID) == 0 {
+		return result(name, PASS, "нет живых управляемых сессий")
+	}
+	psOut, _ := psOutput()
+	tree := buildProcTree(psOut)
+	// кодер (и поддерево) → sid.
+	coderToSID := map[int]string{}
+	for panePID, sid := range panePIDToSID {
+		coder := tree.coderPID(panePID, ctx.Cmdline)
+		if coder == 0 {
+			coder = panePID
+		}
+		for _, p := range tree.subtree(coder) {
+			coderToSID[p] = sid
+		}
+	}
+	ssOut, err := ssTnp()
+	if err != nil {
+		return result(name, WARN, "ss -tnp: "+err.Error())
+	}
+	var bypass []string
+	seen := map[string]bool{}
+	for _, c := range parseSS(ssOut) {
+		if c.pid == 0 || c.peerPort == gatewayPort {
+			continue
+		}
+		if !upstreamPorts[c.peerPort] {
+			continue
+		}
+		sid, ok := coderToSID[c.pid]
+		if !ok {
+			continue
+		}
+		key := sid + "/" + strconv.Itoa(c.pid)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		bypass = append(bypass, fmt.Sprintf("sid=%s pid=%d (порт %d)", sid, c.pid, c.peerPort))
+	}
+	if len(bypass) == 0 {
+		return result(name, PASS, "прямого соединения кодеров с upstream нет (все через шлюз)")
+	}
+	sort.Strings(bypass)
+	return result(name, FAIL, "обход шлюза (кодер → upstream напрямую): "+strings.Join(bypass, ", "))
+}
+
+// checkGPU — W13 этап 5: на узле есть GPU, но телеметрия не настроена
+// (node.gpu=none) или настроена некорректно (нет node.gpu_server, вендор
+// не совпадает) → WARN. GPU нет → PASS (проверка не применима).
+func checkGPU(ctx *Context) Result {
+	const name = "gpu"
+	vendor, ok := gpuDetect()
+	if !ok {
+		return result(name, PASS, "GPU не обнаружен")
+	}
+	if ctx.Cfg == nil {
+		return result(name, WARN, "обнаружен GPU "+vendor+" — нет конфигурации")
+	}
+	gpu := ctx.Cfg.Node.GPU
+	switch {
+	case gpu == "none" || gpu == "":
+		return result(name, WARN, "обнаружен GPU "+vendor+" — node.gpu=none, телеметрия выключена")
+	case gpu != vendor:
+		return result(name, WARN, fmt.Sprintf("обнаружен GPU %s, но node.gpu=%s", vendor, gpu))
+	case ctx.Cfg.Node.GPUServer == "":
+		return result(name, WARN, "node.gpu="+gpu+", но не задан node.gpu_server")
+	default:
+		return result(name, PASS, "node.gpu="+gpu+", node.gpu_server="+ctx.Cfg.Node.GPUServer)
+	}
 }
 
 // procEnvHas — есть ли переменная в NUL-разделённом /proc/<pid>/environ.

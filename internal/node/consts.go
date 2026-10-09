@@ -81,9 +81,6 @@ const (
 	adoptQuitWait = 20 * time.Second
 	adoptPoll     = time.Second
 
-	// Pulse — пульс координатору без смены состояния (раздел 7 ТЗ).
-	pulseInterval = 10 * time.Second
-
 	// inputPreviewLen — сколько символов ввода показывают в очереди TUI.
 	inputPreviewLen = 80
 
