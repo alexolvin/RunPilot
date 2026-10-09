@@ -1,0 +1,5 @@
+{"time":"2026-10-09T02:48:25.056719409+03:00","level":"INFO","msg":"api: spawn: сессия создана","sid":"7SM5NAT93H","name":"hold-b2","node":"3p14-aaa","pane":"%19"}
+{"time":"2026-10-09T02:49:08.176033555+03:00","level":"INFO","msg":"gateway: удержание началось","sid":"7SM5NAT93H","hold_max_sec":60}
+{"time":"2026-10-09T02:49:08.176539704+03:00","level":"INFO","msg":"gateway: удержание началось","sid":"7SM5NAT93H","hold_max_sec":60}
+{"time":"2026-10-09T02:49:37.960465011+03:00","level":"INFO","msg":"gateway: client_gone во время удержания","sid":"7SM5NAT93H","held_ms":29784}
+{"time":"2026-10-09T02:50:08.177060601+03:00","level":"INFO","msg":"gateway: удержание истекло (hold_max_sec)","sid":"7SM5NAT93H","held_ms":60000}

@@ -1,0 +1,4 @@
+State Recv-Q Send-Q   Local Address:Port     Peer Address:PortProcess                                                                                                                                                       
+ESTAB 0      0      100.124.155.106:33918 100.124.155.106:8787 users:(("MainThread",pid=3217988,fd=30)) timer:(keepalive,5.797sec,0) uid:1000 ino:304176789 sk:9052 cgroup:/user.slice/user-1000.slice/session-569.scope <->
+ESTAB 0      0      100.124.155.106:53492 100.124.155.106:8787 users:(("MainThread",pid=3225806,fd=23)) timer:(keepalive,53sec,0) uid:1000 ino:304211959 sk:9053 cgroup:/user.slice/user-1000.slice/session-569.scope <->   
+ESTAB 0      0      100.124.155.106:43834 100.124.155.106:8787 users:(("MainThread",pid=3225806,fd=31)) timer:(keepalive,23sec,0) uid:1000 ino:304222209 sk:9054 cgroup:/user.slice/user-1000.slice/session-569.scope <->   

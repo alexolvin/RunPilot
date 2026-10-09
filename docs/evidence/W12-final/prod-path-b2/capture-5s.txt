@@ -1,0 +1,23 @@
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │ >_ Qwen Code (v0.25.0)                                                   │
+  │                                                                          │
+  │ API Key | qwen3.8-27b-fp8 (/model to change)                             │
+  │ /mdisk/myhub/test                                                        │
+  └──────────────────────────────────────────────────────────────────────────┘
+  Tips: Try /insight to generate personalized insights from your chat history.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  > Сгенерируй длинный текст на 5000 слов об истории компьютеров
+
+  .  Finding a suitable loading screen pun... (31s · esc to cancel)
+────────────────────────────────────────────────────────────────────────────────
+>   Type your message or @path/to/file
+────────────────────────────────────────────────────────────────────────────────
+  ➜ test · qwen3.8-27b-fp8
+  Enter to steer · Ctrl+Q to queue · Auto mode (shift + tab to cycle)
+
+
+
+
+
+
