@@ -34,6 +34,12 @@ func newDoctorCmd() *cobra.Command {
 				if _, serr := os.Stat(dbPath); serr == nil {
 					if st, oerr := store.Open(dbPath); oerr == nil {
 						_ = st.LoadWorkingInto(cfg)
+						// W13 этап 3: серверы (upstream-порты) после v2-миграции
+						// живут в БД, не в config.yaml — gateway_bypass без них
+						// пропускается. Загружаем best-effort (как в serve).
+						if servers, serr := st.ListServers(); serr == nil && len(servers) > 0 {
+							cfg.Servers = servers
+						}
 						if recs, rerr := st.LiveExecRoots(); rerr == nil {
 							execRoots = map[int]node.ExecRoot{}
 							for _, r := range recs {
