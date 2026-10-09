@@ -75,6 +75,10 @@ binary.
   rollback/restore.
 - **Adoption** — take over an existing tmux pane (already running an agent) and
   put it under management.
+- **Node updates** — operator-triggered only (no auto-update); SHA256
+  verification, downgrade protection, NOOP for same version (W12).
+- **Silent hold** — when no slot is free, the gateway holds the request
+  without responding; the coder times out at `client_timeout_sec` (W11).
 
 ## Requirements
 
@@ -260,6 +264,7 @@ hostnames or private CGNAT addresses leak into the code.
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — components, invariants, automata
 - [`docs/api.md`](docs/api.md) — HTTP/WS/SSE reference
+- [`docs/CHANGES-W11-W12.md`](docs/CHANGES-W11-W12.md) — W11–W12 behavior changes
 - [`testdata/config.example.yaml`](testdata/config.example.yaml) — full configuration example
 
 ## Contributing

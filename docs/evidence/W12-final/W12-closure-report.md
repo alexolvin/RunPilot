@@ -16,12 +16,14 @@
 | 4e | e2e CONTROL 2: 20 прогонов PASS | **PASS** | Гонка устранена (tmux kill-server в cleanup + явный `triggerUpdate`). 20/20 PASS |
 | 5a | Все узлы = версия координатора | **PASS** | vzu5-big, vzu5-claw, 3p14-aaa — все `2fa22ff`, `version_mismatch=false` |
 | 5b | SHA256 dist_dir = SHA256 координатора | **PASS** | `f505f1df...` = `f505f1df...` |
-| 5c | 0 переходов NODE_STATE (кроме update) | **PASS** | 5 переходов — все от deploy/update. 0 после 16:34:00Z. 60-мин контроль pending |
+| 5c | 0 переходов NODE_STATE (кроме update) | **PASS** | Окно 16:34:00Z–17:34:00Z: **0 переходов**. Выборка: `SELECT ts, host, state FROM event WHERE kind='NODE_STATE' AND ts>='2026-10-09T16:34:00Z' AND ts<='2026-10-09T17:34:00Z'` → пусто |
 | 6 | Влияние цикла на сессии | **PASS** | 26831 переходов за 22ч, 0 сессий затронуто (на узлах не было живых сессий). Артефакт: `self-update-loop-impact.md` |
 
 ## Итого: 12/12 PASS — W12 закрыт
 
 ## HANDOFF
+
+W12 закрыт: 12/12 PASS.
 
 Состояние после выката:
 - Координатор: `2fa22ff` (vcs.modified=false), runpilot.service active.
@@ -29,4 +31,4 @@
 - dist/runpilot: `2fa22ff` (SHA256 `f505f1df...`, синхронизирован с координатором).
 - Оператора-токен: /home/user/.config/runpilot/env (0600).
 
-Pending: 60-мин контроль NODE_STATE (0 переходов после 16:34:00Z, кроме update).
+Отложено (условие запуска): разбор флаппинга vzu5 командой `runpilot servers flaps --since 7d`, когда в журнале накопится не меньше 5 переходов в DOWN.

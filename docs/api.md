@@ -48,8 +48,9 @@
 | POST | `/resume` | — | `204` | Снять паузу |
 | POST | `/servers/{s}/drain` | `{on}` | `204` | Вывод сервера |
 | POST | `/nodes/{h}/drain` | `{on}` | `204` | Вывод узла |
-| POST | `/nodes/{h}/update` | — | `202 {id}` | Асинхронный self-update узла |
-| GET | `/nodes/{h}/update/{id}` | — | `{id,host,stage,result,version}` | Статус self-update |
+| POST | `/nodes/{h}/update` | `{downgrade?}` | `202 {id}` | Асинхронный update узла (W12) |
+| GET | `/nodes/{h}/update/{id}` | — | `{id,host,stage,result,version}` | Статус update |
+| GET | `/node/version` | — | `{version}` | Версия координатора (для doctor узла) |
 | GET | `/events?after=&limit=` | — | SSE / `[Event]` | События (SSE, или JSON при `limit`) |
 | POST | `/internal/dispatch` | `{sid,pane_id,mode,expect_hash}` | `{result,detail,rtt_ms}` | Замер dispatch (тесты) |
 | GET | `/internal/dispatch-latency` | — | `{n,p95_ms,samples_ms}` | p95 диспетчеризации |
@@ -155,3 +156,23 @@ gpu?, vram_used_gb?, vram_total_gb?, kv_pct?, gen_tok_s?, ext?, metrics_missing?
 JSON, `proto = 1` (раздел 13 ТЗ). Координатор версии N принимает узлы N и N−1
 одной мажорной версии; неизвестная мажорная — закрытие соединения. `host_ip` в
 `hello` обязан совпадать с удалённым адресом (раздел 14).
+
+Mismatch версий узла и координатора → WARN в doctor координатора + бейдж
+«версия ≠ координатора» на карточке узла в вебе. **Автообновление нет** (W12).
+
+## Update узла (W12)
+
+`POST /api/v1/nodes/{host}/update` — асинхронный update. Тело: `{downgrade?}`
+(опционально, для отката на старую версию). Ответ: `202 {id, host}`.
+
+Статус: `GET /api/v1/nodes/{host}/update/{id}` → `{stage, result, version}`.
+Стадии: `started → done | failed`.
+
+Защита (узел):
+- Та же версия → `UPDATE_NOOP` (без скачивания/рестарта).
+- Downgrade без `downgrade=true` → `UPDATE_REFUSED`.
+- SHA256 ≠ ожидаемому → `UPDATE_FAILED`.
+- Версия бинарника ≠ ожидаемой → `UPDATE_REFUSED`.
+
+Защита (координатор):
+- Stale dist (dist_dir ≠ версия координатора) → `409 DIST_MISMATCH`.
