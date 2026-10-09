@@ -214,6 +214,13 @@ func (g *Gateway) heldCountAdd(sid string) {
 	g.hm2.Unlock()
 }
 
+// heldCountGet — текущее значение счётчика (тесты).
+func (g *Gateway) heldCountGet(sid string) int {
+	g.hm2.Lock()
+	defer g.hm2.Unlock()
+	return g.heldCount[sid]
+}
+
 // heldCountDec — декремент счётчика; возвращает true, если это был
 // последний удерживаемый запрос (счётчик стал 0).
 func (g *Gateway) heldCountDec(sid string) bool {

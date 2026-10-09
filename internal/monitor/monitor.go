@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -362,20 +363,41 @@ func (m *Monitor) Tick() {
 
 // checkHealth — GET health_url (раздел 10 ТЗ): 200 = успех; серии
 // down_after/up_after → переходы состояния (наблюдатели шлюза).
+// Журналирует причину неудачи и время ответа (флаппинг vzu5, п.2 W12).
 func (m *Monitor) checkHealth(name string) {
 	sc := m.cfgBy[name]
 	ss := m.srvs[name]
 	ctx, cancel := context.WithTimeout(context.Background(),
 		time.Duration(m.cfg.Monitor.HealthTimeoutSec)*time.Second)
 	defer cancel()
+	start := m.clk.Now()
 	_, status, err := m.fetch(ctx, sc.HealthURL, bearer(sc))
+	elapsed := m.clk.Now().Sub(start)
 	healthy := err == nil && status == http.StatusOK
+
+	if !healthy {
+		reason := ""
+		if err != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				reason = "timeout"
+			} else {
+				reason = err.Error()
+			}
+		} else {
+			reason = "status=" + strconv.Itoa(status)
+		}
+		m.log.Debug("monitor: /health неудача",
+			"server", name, "reason", reason, "elapsed_ms", elapsed.Milliseconds())
+	}
 
 	ss.mu.Lock()
 	newHealth, changed := ss.health.Observe(healthy, m.cfg.Monitor.HealthDownAfter, m.cfg.Monitor.HealthUpAfter)
 	ss.health = newHealth
 	ss.mu.Unlock()
 	if changed {
+		m.log.Info("monitor: переход состояния",
+			"server", name, "state", newHealth.State,
+			"last_health_ms", elapsed.Milliseconds())
 		m.sink.SetState(name, newHealth.State)
 		if newHealth.State == model.ServerDown {
 			ss.mu.Lock()

@@ -312,8 +312,13 @@ func TestP2TwoParallelHeldRequests(t *testing.T) {
 		done2 <- err
 	}()
 
-	// Даём обоим запросам войти в удержание.
-	clk.Advance(100 * time.Millisecond)
+	// Ждём, пока оба запроса войдут в удержание (heldCount == 2).
+	for i := 0; i < 100; i++ {
+		if gw.heldCountGet(s) >= 2 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
 
 	// Запись очереди на месте (оба запроса удержаны).
 	if _, err := st.QueueGet(s); err != nil {
@@ -389,7 +394,13 @@ func TestP2BothRequestsGone(t *testing.T) {
 		done2 <- err
 	}()
 
-	clk.Advance(100 * time.Millisecond)
+	// Ждём, пока оба запроса войдут в удержание (heldCount == 2).
+	for i := 0; i < 100; i++ {
+		if gw.heldCountGet(s) >= 2 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
 
 	// Оба запроса оборвались.
 	cancel1()
