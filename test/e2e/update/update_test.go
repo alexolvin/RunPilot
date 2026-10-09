@@ -442,7 +442,9 @@ func waitForOnline(t *testing.T, m *machine, limit time.Duration) time.Duration 
 		if nodeVersion(t, m) != "" {
 			return time.Since(t0)
 		}
-		time.Sleep(300 * time.Millisecond)
+		// 50 мс: CONTROL 2 — узел v1→v2 self-update'ится за ~100 мс после
+		// hello (локальный dist); поллинг 300 мс не успевал поймать v1.
+		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatalf("узел не онлайн за %v (CONTROL 1)", limit)
 	return 0
