@@ -419,16 +419,72 @@ func (s *Server) handleNodeDelete(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleNodeUpdate — POST /api/v1/nodes/<host>/update: принудительный
-// self-update на версию координатора (CONTROL 2/3).
+// UpdateOp — асинхронная операция self-update узла (W12 7b).
+type UpdateOp struct {
+	ID        string    `json:"id"`
+	Host      string    `json:"host"`
+	Stage     string    `json:"stage"`
+	Result    string    `json:"result,omitempty"`
+	Version   string    `json:"version,omitempty"`
+	StartedAt time.Time `json:"started_at"`
+	EndedAt   time.Time `json:"ended_at,omitempty"`
+}
+
+// handleNodeUpdate — POST /api/v1/nodes/<host>/update: асинхронный self-update
+// на версию координатора (CONTROL 2/3, W12 7b). Возвращает 202 + id операции.
 func (s *Server) handleNodeUpdate(w http.ResponseWriter, r *http.Request) {
 	host := r.PathValue("host")
-	if err := s.triggerNodeUpdate(r.Context(), host); err != nil {
-		httpError(w, http.StatusServiceUnavailable, "UPDATE", err.Error())
+	op := &UpdateOp{
+		ID:        fmt.Sprintf("upd-%d", s.clk.Now().UnixNano()),
+		Host:      host,
+		Stage:     "started",
+		StartedAt: s.clk.Now(),
+	}
+	s.updateMu.Lock()
+	if s.updateOps == nil {
+		s.updateOps = map[string]*UpdateOp{}
+	}
+	s.updateOps[op.ID] = op
+	s.updateMu.Unlock()
+
+	go s.runNodeUpdate(op)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]string{"id": op.ID, "host": host})
+}
+
+// runNodeUpdate — фоновое выполнение self-update (W12 7b).
+func (s *Server) runNodeUpdate(op *UpdateOp) {
+	defer func() {
+		op.EndedAt = s.clk.Now()
+		s.updateMu.Lock()
+		opCopy := *op
+		s.updateOps[op.ID] = &opCopy
+		s.updateMu.Unlock()
+	}()
+	if err := s.triggerNodeUpdate(context.Background(), op.Host); err != nil {
+		op.Stage = "failed"
+		op.Result = err.Error()
+		return
+	}
+	op.Stage = "done"
+	op.Result = "ok"
+	op.Version = s.version
+}
+
+// handleNodeUpdateStatus — GET /api/v1/nodes/<host>/update/<id>: статус
+// асинхронного self-update (W12 7b).
+func (s *Server) handleNodeUpdateStatus(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	s.updateMu.Lock()
+	op, ok := s.updateOps[id]
+	s.updateMu.Unlock()
+	if !ok {
+		httpError(w, http.StatusNotFound, "NOT_FOUND", "нет операции")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"host": host, "result": "update-requested"})
+	json.NewEncoder(w).Encode(op)
 }
 
 // triggerNodeUpdate — отправить update-команду узлу (URL + sha256 + версия).

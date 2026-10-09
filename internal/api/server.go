@@ -77,6 +77,10 @@ type Server struct {
 	// аренда снимается сразу (releaseOnGone).
 	gw *gateway.Gateway
 
+	// updateOps — асинхронные self-update узлов (W12 7b): id → операция.
+	updateMu  sync.Mutex
+	updateOps map[string]*UpdateOp
+
 	// Активные SSE-подключения (cancel их контекста = разрыв для клиента;
 	// используется стендом для проверки RESYNC, v2 CONTROL 2).
 	sseMu      sync.Mutex
@@ -369,6 +373,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/nodes", s.handleNodes)
 	mux.HandleFunc("DELETE /api/v1/nodes/{host}", s.handleNodeDelete)
 	mux.HandleFunc("POST /api/v1/nodes/{host}/update", s.handleNodeUpdate)
+	mux.HandleFunc("GET /api/v1/nodes/{host}/update/{id}", s.handleNodeUpdateStatus)
 	mux.HandleFunc("POST /api/v1/nodes/{host}/qwen-settings", s.handleNodeQwenSettings)
 	mux.HandleFunc("GET /api/v1/nodes/{host}/dirs", s.handleNodeDirs)
 	mux.HandleFunc("GET /api/v1/queue", s.handleQueue)

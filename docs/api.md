@@ -48,6 +48,8 @@
 | POST | `/resume` | — | `204` | Снять паузу |
 | POST | `/servers/{s}/drain` | `{on}` | `204` | Вывод сервера |
 | POST | `/nodes/{h}/drain` | `{on}` | `204` | Вывод узла |
+| POST | `/nodes/{h}/update` | — | `202 {id}` | Асинхронный self-update узла |
+| GET | `/nodes/{h}/update/{id}` | — | `{id,host,stage,result,version}` | Статус self-update |
 | GET | `/events?after=&limit=` | — | SSE / `[Event]` | События (SSE, или JSON при `limit`) |
 | POST | `/internal/dispatch` | `{sid,pane_id,mode,expect_hash}` | `{result,detail,rtt_ms}` | Замер dispatch (тесты) |
 | GET | `/internal/dispatch-latency` | — | `{n,p95_ms,samples_ms}` | p95 диспетчеризации |
