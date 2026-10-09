@@ -1,5 +1,5 @@
 # HANDOFF
-Обновлено: 2026-10-10 (W13: правило аренды + причины по серверам + закрытие bypass + пульс не-Busy + GPU-конфиг узла, deploy 50d3d16; все узлы на 50d3d16)
+Обновлено: 2026-10-10 (W13: этапы 7–9 — маршрут кодера через аргументы, предпроверка 409, X-RunPilot-SID, диалог с авто-именем, project_dir_match, pin/prefer, имена моделей; deploy 1fbe60a; все узлы на 1fbe60a)
 
 ## W13 — планирование и отображение (2026-10-10) — `9015c96` + `50d3d16`
 
@@ -49,6 +49,32 @@
   (self-update через API).
 - **Bypass:** новый кодер ходит через шлюз; старый кодер RunPilot (pid 1917139,
   out-of-queue) держит прямое 127.0.0.1:8004 до рестарта сессии.
+
+### Этапы 7–9 — маршрут кодера, диалог, имена моделей — `1fbe60a`
+
+**Этап 7 — маршрут только через аргументы (без правки settings.json):**
+- Удалены `EnsureQwenSettings`/`safeModelAlias`/все записи settings.json.
+- `CoderArgsFromEnv`: `--auth-type openai --model <alias> --openai-base-url <шлюз>/s/<sid>/v1`.
+- `PreCheckCoder`: коллизия model_alias с id modelProviders (user+project) + qwen support → 409.
+- Шлюз: `X-RunPilot-SID` в `doAttempt`.
+- Удалена кнопка «Внести коррекции» + endpoint `qwen-settings`.
+
+**Этап 8 — диалог «Новая сессия» + закрепление:**
+- `project_dir_match` (defaults.go, schema, config_test) — фильтр каталогов.
+- Диалог: имя = `baseName(dir)`, занято → `-2`, `-3`…
+- Карточка сессии: pin/prefer + кнопка снятия.
+- PhoneBroker pin:vzu5 — выбор оператора (диалог не имеет дефолтного pin).
+
+**Этап 9 — имена моделей:**
+- `/v1/models`: 3p14 и vzu5 — `qwen3.8-27b`, `qwen3.8-27b-fp8`.
+- `servers[].upstreams.openai.model = "qwen3.8-27b"` (3p14, vzu5).
+- `profiles.qwen.model_alias = "qwen3.8-27b (RunPilot)"`.
+
+**Ворота → выкат 1fbe60a → узлы:**
+- `go test -race ./...` + `make staticcheck` + `make lint` — 0.
+- deploy-coordinator.sh (бэкап `runpilot.bak-20261009T233200Z`).
+- Узлы: 3p14-aaa (embedded), vzu5-claw, vzu5-big — все на 1fbe60a.
+- Сессии на перезапуск (без нового алиаса в cmdline): PhoneBroker, NextLife.
 
 ## W12-доп п.5 — фикс 403 self-node (2026-10-08) — `6075487`
 
