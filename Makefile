@@ -76,3 +76,13 @@ screenshots:
 # commit = manifest и предок HEAD. Использование: make visualcheck STAGE=W3
 visualcheck:
 	$(GO) run ./tools/visualcheck -stage $(STAGE) -evidence docs/evidence
+
+# Э4 e2e: 2×fakellm (по 1 слоту), 6×mockcoder × 3 хода. Стенд — координатор
+# со встроенным узлом (tmux-сокет e2e, не default). Бинарники в STAND_DIR.
+# Использование: make e2e-e4 [STAND_DIR=/tmp/runpilot-stand]
+E2E_STAND_DIR ?= /tmp/runpilot-stand
+e2e-e4:
+	CGO_ENABLED=0 $(GO) build -o $(E2E_STAND_DIR)/runpilot ./cmd/runpilot
+	CGO_ENABLED=0 $(GO) build -o $(E2E_STAND_DIR)/runpilot-fakellm ./cmd/runpilot-fakellm
+	CGO_ENABLED=0 $(GO) build -o $(E2E_STAND_DIR)/runpilot-mockcoder ./cmd/runpilot-mockcoder
+	STAND_DIR=$(E2E_STAND_DIR) python3 test/e2e/e4_harness.py
