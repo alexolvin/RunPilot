@@ -444,3 +444,60 @@ func httpCode(t *testing.T, url string) int {
 	resp.Body.Close()
 	return resp.StatusCode
 }
+
+// Тестовые сессии (acc-*, test-*, diag-*, hold-*) — только /mdisk/myhub/test.
+func TestSpawnTestSessionDirForbidden(t *testing.T) {
+	ts, st, hub := testServer(t)
+	addFakeNode(t, hub, "n1", proto.ResSpawned, "%0")
+
+	// acc-* с каталогом вне /mdisk/myhub/test → 400.
+	resp, err := httpPostJSON(t, ts.URL+"/api/v1/sessions/spawn", map[string]any{
+		"name": "acc-bad", "dir": "/mdisk/myhub/RunPilot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("acc-bad dir=/mdisk/myhub/RunPilot = %d, хочу 400", resp.StatusCode)
+	}
+	if live, err := st.FindLiveByName("acc-bad"); err == nil && live.SID != "" {
+		t.Error("acc-bad: сессия не должна быть создана")
+	}
+
+	// test-* с каталогом вне /mdisk/myhub/test → 400.
+	resp, err = httpPostJSON(t, ts.URL+"/api/v1/sessions/spawn", map[string]any{
+		"name": "test-bad", "dir": "/tmp/proj"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("test-bad dir=/tmp/proj = %d, хочу 400", resp.StatusCode)
+	}
+
+	// acc-* с каталогом /mdisk/myhub/test → 201.
+	resp, err = httpPostJSON(t, ts.URL+"/api/v1/sessions/spawn", map[string]any{
+		"name": "acc-ok", "dir": "/mdisk/myhub/test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("acc-ok dir=/mdisk/myhub/test = %d, хочу 201", resp.StatusCode)
+	}
+
+	// Нон-тестовая сессия с каталогом вне /mdisk/myhub/test → 201.
+	resp, err = httpPostJSON(t, ts.URL+"/api/v1/sessions/spawn", map[string]any{
+		"name": "prod-sess", "dir": "/mdisk/myhub/RunPilot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("prod-sess dir=/mdisk/myhub/RunPilot = %d, хочу 201", resp.StatusCode)
+	}
+}
