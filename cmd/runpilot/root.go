@@ -67,6 +67,7 @@ func newRoot(version string) *cobra.Command {
 		newResumeCmd(),
 		newStatsCmd(),
 		newEventsCmd(),
+		newLeaseCmd(),
 		newServiceCmd(),
 		newSelftestCmd(),
 		newRollbackCmd(),

@@ -23,3 +23,25 @@ func New() (string, error) {
 	}
 	return string(out), nil
 }
+
+// Valid — проверяет формат sid: 10 символов Crockford base32.
+func Valid(s string) bool {
+	if len(s) != Length {
+		return false
+	}
+	for _, c := range s {
+		if !isValidChar(c) {
+			return false
+		}
+	}
+	return true
+}
+
+func isValidChar(c rune) bool {
+	for _, a := range Alphabet {
+		if c == a {
+			return true
+		}
+	}
+	return false
+}

@@ -345,6 +345,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/emergency", s.handleEmergency)
 	mux.HandleFunc("POST /api/v1/emergency/release", s.handleEmergencyRelease)
 	mux.HandleFunc("POST /api/v1/sessions/hold-emergency/requeue", s.handleRequeueEmergency)
+	// Административное снятие аренды.
+	mux.HandleFunc("POST /api/v1/leases/release", s.handleLeaseRelease)
 	mux.HandleFunc("POST /api/v1/nodes/{h}/drain", s.handleNodeDrain)
 	mux.HandleFunc("POST /api/v1/servers/{s}/drain", s.handleServerDrain)
 	mux.HandleFunc("POST /api/v1/servers/{s}/pause", s.handleServerPause)

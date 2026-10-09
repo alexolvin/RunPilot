@@ -132,6 +132,14 @@ func (s *Server) handlePatchSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Инварианты на эффективном конфиге после наложения изменений.
+	if servers, err := s.store.ListServers(); err == nil && len(servers) > 0 {
+		cfg.Servers = servers
+	}
+	if err := cfg.Validate(); err != nil {
+		httpError(w, http.StatusBadRequest, "INVARIANT", err.Error())
+		return
+	}
 	snap, err := cfg.WorkingSnapshot()
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, "STORE", err.Error())

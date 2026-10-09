@@ -400,6 +400,10 @@ const (
 	ReleasePaneChanged     = "PANE_CHANGED"
 	ReleasePaneWaitUI      = "PANE_WAIT_UI"
 	ReleaseDispatchNoReply = "DISPATCH_NO_REPLY"
+	// Административное снятие аренды оператором.
+	ReleaseOperator = "OPERATOR"
+	// Самовосстановление: сессия GONE, аренда снята как неконсистентная.
+	ReleaseInconsistent = "INCONSISTENT"
 )
 
 // Коды ineligible_reason (приложение А ТЗ).

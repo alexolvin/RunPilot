@@ -144,6 +144,12 @@ func newServeCmd() *cobra.Command {
 			} else if len(servers) > 0 {
 				cfg.Servers = servers
 			}
+			// Инварианты на эффективном конфиге (defaults + DB overrides).
+			// Нарушение → код выхода 2.
+			if err := cfg.Validate(); err != nil {
+				log.Error("serve: нарушение инварианта эффективного конфига", "err", err.Error())
+				os.Exit(exitConfigError)
+			}
 			hub := api.NewHub(clk)
 			srv := api.NewServer(cfg, st, hub, clk, log)
 			srv.SetVersion(version)

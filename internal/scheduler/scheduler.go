@@ -341,6 +341,7 @@ func (s *Scheduler) Tick() {
 	s.tickJobStale(now)
 	s.tickAutoEnqueue(now)
 	s.tickServerRemoval(now)
+	s.tickGoneLeases(now)
 }
 
 // --- События извне (узел, шлюз, оператор) ---
@@ -721,4 +722,31 @@ func (s *Scheduler) event(kind, sid, server string, payload map[string]any) {
 func (s *Scheduler) eventAt(now time.Time, kind, sid, server string, payload map[string]any) {
 	data, _ := json.Marshal(payload)
 	_ = s.st.EventRecord(model.Event{TS: now, Kind: kind, SID: sid, Server: server, Payload: data})
+}
+
+// tickGoneLeases — самовосстановление: аренды PENDING/ACTIVE/RECOVERING у
+// сессий GONE снимаются с причиной INCONSISTENT (сессия мертва, аренда — артефакт).
+func (s *Scheduler) tickGoneLeases(now time.Time) {
+	leases, err := s.st.LeaseListActive()
+	if err != nil {
+		s.log.Error("scheduler: tickGoneLeases: список аренд", "err", err)
+		return
+	}
+	for _, l := range leases {
+		sess, err := s.st.GetSession(l.SID)
+		if err != nil {
+			continue // сессия удалена — аренда тоже неактуальна
+		}
+		if sess.State != model.SessionGone {
+			continue
+		}
+		if err := s.st.LeaseRelease(l.SID, model.ReleaseInconsistent, now); err != nil {
+			s.log.Error("scheduler: tickGoneLeases: снятие аренды", "sid", l.SID, "err", err)
+			continue
+		}
+		s.log.Info("scheduler: аренда снята (GONE сессия)", "sid", l.SID, "server", l.Server)
+		s.eventAt(now, model.KindLeaseRelease, l.SID, l.Server, map[string]any{
+			"reason": model.ReleaseInconsistent,
+		})
+	}
 }

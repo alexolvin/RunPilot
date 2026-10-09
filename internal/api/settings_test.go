@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -166,6 +167,31 @@ func TestSettingsPatchValidation(t *testing.T) {
 	}
 	if len(revs) != 0 {
 		t.Fatalf("отклонённые PATCH создали ревизии: %+v", revs)
+	}
+}
+
+// Инварианты на эффективном конфиге: нарушение → 400 INVARIANT.
+func TestSettingsPatchInvariantViolation(t *testing.T) {
+	ts, st, _ := testServer(t)
+	// Сервер с first_byte_timeout_sec=100 → В.7: client_timeout_sec(5400) >
+	// hold_max_sec + 100. Ставим hold_max_sec = 5400 → 5400 > 5400+100 = false.
+	_, _ = doJSON(t, http.MethodPost, ts.URL+"/api/v1/servers", map[string]any{
+		"name": "srv-inv", "slots": 1, "health_url": "http://127.0.0.1:1/health",
+		"first_byte_timeout_sec": 100})
+	status, raw := patchSettings(t, ts, map[string]any{"gateway.hold_max_sec": 5400})
+	if status != http.StatusBadRequest {
+		t.Fatalf("PATCH hold_max_sec=5400: %d %s, хочу 400", status, raw)
+	}
+	if !strings.Contains(string(raw), "INVARIANT") {
+		t.Errorf("ошибка не INVARIANT: %s", raw)
+	}
+	// Ничего не сохранено.
+	revs, err := st.ListRevisions(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revs) != 0 {
+		t.Fatalf("нарушение инварианта сохранило ревизию: %+v", revs)
 	}
 }
 

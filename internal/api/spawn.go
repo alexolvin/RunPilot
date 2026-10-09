@@ -22,18 +22,8 @@ import (
 	"runpilot/internal/store"
 )
 
-// testDirPrefix — допустимый каталог для тестовых сессий.
+// testDirPrefix — допустимый каталог для тестовых сессий (test=true).
 const testDirPrefix = "/mdisk/myhub/test"
-
-// isTestName — имя тестовой сессии (acc-*, test-*, diag-*, hold-*).
-func isTestName(name string) bool {
-	for _, p := range []string{"acc-", "test-", "diag-", "hold-"} {
-		if strings.HasPrefix(name, p) {
-			return true
-		}
-	}
-	return false
-}
 
 // SpawnRequest — POST /api/v1/sessions/spawn.
 type SpawnRequest struct {
@@ -44,6 +34,7 @@ type SpawnRequest struct {
 	Pin         string   `json:"pin"`
 	Prefer      string   `json:"prefer"`
 	AutoEnqueue bool     `json:"auto_enqueue"`
+	Test        bool     `json:"test"`
 	Args        []string `json:"args"`
 }
 
@@ -58,8 +49,8 @@ func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, "BAD_REQUEST", "dir обязателен")
 		return
 	}
-	// Тестовые сессии (acc-*, test-*, diag-*, hold-*) — только /mdisk/myhub/test.
-	if isTestName(req.Name) && !strings.HasPrefix(req.Dir, testDirPrefix) {
+	// Тестовая сессия (test=true) — только /mdisk/myhub/test.
+	if req.Test && !strings.HasPrefix(req.Dir, testDirPrefix) {
 		httpError(w, http.StatusBadRequest, "DIR_FORBIDDEN",
 			"тестовая сессия: каталог вне "+testDirPrefix)
 		return
