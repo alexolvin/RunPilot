@@ -268,13 +268,13 @@ func TestJobCreateTestDirForbidden(t *testing.T) {
 		t.Error("test-exec: сессия не должна быть создана")
 	}
 	// test=true, dir=/mdisk/myhub/test → 201.
-	status, out = jobReq(t, ts, "", http.MethodPost, "/api/v1/jobs",
+	status, _ = jobReq(t, ts, "", http.MethodPost, "/api/v1/jobs",
 		map[string]any{"name": "test-exec-ok", "dir": "/mdisk/myhub/test", "test": true})
 	if status != http.StatusCreated {
 		t.Fatalf("exec test=true dir=/mdisk/myhub/test = %d, хочу 201", status)
 	}
 	// test=false, dir=/mdisk/myhub/RunPilot → 201 (обычная сессия).
-	status, out = jobReq(t, ts, "", http.MethodPost, "/api/v1/jobs",
+	status, _ = jobReq(t, ts, "", http.MethodPost, "/api/v1/jobs",
 		map[string]any{"name": "normal-exec", "dir": "/mdisk/myhub/RunPilot"})
 	if status != http.StatusCreated {
 		t.Fatalf("exec test=false dir=/mdisk/myhub/RunPilot = %d, хочу 201", status)
