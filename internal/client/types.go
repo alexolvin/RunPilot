@@ -136,6 +136,13 @@ type StatsServer struct {
 	AvgSec   float64 `json:"avg_sec"`
 }
 
+// ServerFlapsRow — нестабильность сервера (GET /api/v1/servers/flaps).
+type ServerFlapsRow struct {
+	Name     string `json:"name"`
+	Count    int    `json:"count"`
+	LastFlap string `json:"last_flap"`
+}
+
 // StatsSession — итоги по сессии.
 type StatsSession struct {
 	Session  string `json:"session"`

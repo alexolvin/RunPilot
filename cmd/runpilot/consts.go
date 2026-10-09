@@ -75,4 +75,6 @@ const (
 	defHeartbeatSec  = 5
 	// versionShortHashLen — длина короткого хеша коммита в версии (buildinfo).
 	versionShortHashLen = 7
+	// defFlapsSince — окно flaps по умолчанию (10 мин).
+	defFlapsSince = "10m"
 )

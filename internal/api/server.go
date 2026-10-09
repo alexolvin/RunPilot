@@ -354,6 +354,7 @@ func (s *Server) Routes() http.Handler {
 	// v2 (W6, 5.1/5.2): серверы — мастер, удаление, управление.
 	mux.HandleFunc("POST /api/v1/servers", s.handleServerCreate)
 	mux.HandleFunc("POST /api/v1/servers/probe", s.handleServerProbe)
+	mux.HandleFunc("GET /api/v1/servers_flaps", s.handleServerFlaps)
 	mux.HandleFunc("GET /api/v1/servers/{name}", s.handleServerGet)
 	mux.HandleFunc("PATCH /api/v1/servers/{name}", s.handleServerPatch)
 	mux.HandleFunc("DELETE /api/v1/servers/{name}", s.handleServerDelete)

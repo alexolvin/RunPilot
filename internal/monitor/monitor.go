@@ -655,3 +655,35 @@ func kvPct(f *float64) *float64 {
 	p := *f * percentWhole
 	return &p
 }
+
+// ServerFlaps — переходы UP↔DOWN за период (для /api/v1/servers/flaps).
+type ServerFlaps struct {
+	Name     string
+	Count    int
+	LastFlap time.Time
+}
+
+// Flaps — список серверов с переходами UP↔DOWN за since.
+func (m *Monitor) Flaps(since time.Duration) []ServerFlaps {
+	var out []ServerFlaps
+	cutoff := m.clk.Now().Add(-since)
+	for _, name := range m.names {
+		ss := m.srvs[name]
+		ss.mu.Lock()
+		count := 0
+		var last time.Time
+		for _, ts := range ss.flaps {
+			if ts.After(cutoff) {
+				count++
+				if ts.After(last) {
+					last = ts
+				}
+			}
+		}
+		ss.mu.Unlock()
+		if count > 0 {
+			out = append(out, ServerFlaps{Name: name, Count: count, LastFlap: last})
+		}
+	}
+	return out
+}

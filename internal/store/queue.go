@@ -73,7 +73,7 @@ ON CONFLICT(sid) DO UPDATE SET
 	ineligible_reason = excluded.ineligible_reason,
 	ineligible_since = excluded.ineligible_since,
 	attempts = MAX(queue_entry.attempts, excluded.attempts),
-	held_since = MIN(queue_entry.held_since, excluded.held_since)`,
+	held_since = CASE WHEN queue_entry.held_since = '0001-01-01T00:00:00Z' THEN excluded.held_since ELSE MIN(queue_entry.held_since, excluded.held_since) END`,
 			e.SID, int(e.Class), e.EnqueuedAt.Format(time.RFC3339Nano),
 			e.NotBefore.Format(time.RFC3339Nano), kind, server, e.AfterSID,
 			string(e.Mode), boolInt(e.HeldRequest), e.IneligibleReason,

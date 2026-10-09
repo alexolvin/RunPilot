@@ -76,4 +76,7 @@ const (
 	// termReaperTick — период проверки бездействия терминалов (не порог ТЗ:
 	// кратно меньше типового terminal_idle_min).
 	termReaperTick = 10 * time.Second
+
+	// defFlapsSince — окно flaps по умолчанию (10 мин).
+	defFlapsSince = 10 * time.Minute
 )

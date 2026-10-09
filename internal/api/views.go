@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"runpilot/internal/client"
 	"runpilot/internal/model"
 	"runpilot/internal/scheduler"
 	"runpilot/internal/store"
@@ -104,6 +105,29 @@ func (s *Server) handleServers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, s.sched.ServersView())
+}
+
+// handleServerFlaps — GET /api/v1/servers/flaps?since=<duration>.
+func (s *Server) handleServerFlaps(w http.ResponseWriter, r *http.Request) {
+	since := r.URL.Query().Get("since")
+	d, err := time.ParseDuration(since)
+	if err != nil || d <= 0 {
+		d = defFlapsSince
+	}
+	if s.mon == nil {
+		writeJSON(w, []client.ServerFlapsRow{})
+		return
+	}
+	flaps := s.mon.Flaps(d)
+	rows := make([]client.ServerFlapsRow, 0, len(flaps))
+	for _, f := range flaps {
+		rows = append(rows, client.ServerFlapsRow{
+			Name:     f.Name,
+			Count:    f.Count,
+			LastFlap: f.LastFlap.Format(time.RFC3339),
+		})
+	}
+	writeJSON(w, rows)
 }
 
 // doctorServerRow — сервер в /api/v1/doctor (серверная часть, Э6).

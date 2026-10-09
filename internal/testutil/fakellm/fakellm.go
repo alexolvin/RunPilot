@@ -62,12 +62,36 @@ type Server struct {
 func New(model string) *Server {
 	s := &Server{model: model, chunks: defaultChunks}
 	s.mux = http.NewServeMux()
+	s.mux.HandleFunc("/_set-delays", s.handleSetDelays)
 	s.mux.HandleFunc("/", s.handle)
 	return s
 }
 
 // Handler — http.Handler fakellm.
 func (s *Server) Handler() http.Handler { return s.mux }
+
+// handleSetDelays — POST /_set-delays: {"firstByteMs": N, "chunkPauseMs": M, "chunks": K}.
+func (s *Server) handleSetDelays(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		FirstByteMs  int `json:"firstByteMs"`
+		ChunkPauseMs int `json:"chunkPauseMs"`
+		Chunks       int `json:"chunks"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	s.SetDelays(
+		time.Duration(req.FirstByteMs)*time.Millisecond,
+		time.Duration(req.ChunkPauseMs)*time.Millisecond,
+		req.Chunks,
+	)
+	w.WriteHeader(http.StatusOK)
+}
 
 // Start — fakellm с моделью model на случайном порту.
 func Start(model string) *Server {
