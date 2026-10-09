@@ -1,102 +1,32 @@
-# W12 — закрытие (4 пункта + HANDOFF)
+# W12 — Отчёт о закрытии (2026-10-09, повторное закрытие)
 
-Дата: 2026-10-09. Координатор 77e9550 (3p14-aaa).
+Дата: 2026-10-09. Коммит: `2fa22ff`.
 
-## Сводная таблица
+## Таблица проверки
 
-| # | Пункт | Статус | Артефакт |
-|---|-------|--------|----------|
-| 1 | Узлы на версии координатора + async update в проде | PASS | node-async-update-prod.md, /api/v1/state |
-| 2 | vzu5-claw (flaky) — причина | PASS | vzu5-claw-flaky.md |
-| 3 | conn=None — причина | PASS | stage2-e4-conn-none.md |
-| 4a | п.1: DIR_FORBIDDEN (3 пути) + test-bot | PASS | ниже (вывод) |
-| 4b | п.7b: async update (stages) | PASS | node-async-update-prod.md |
-| 4c | п.8: ворота + deploy gate | PASS | ниже (вывод) |
-| 5 | HANDOFF | — | ниже |
+| # | Пункт | Статус | Детали |
+|---|-------|--------|--------|
+| 1 | Удалить авто-обновление узлов | **PASS** | `server.go`: mismatch версий → WARN (doctor + бейдж вебо), авто-self-update убран. Тест: `TestNodeVersionMismatchNoAutoUpdate` |
+| 2 | Защита ручного обновления | **PASS** | `ops.go`: та же версия → NOOP; downgrade → REFUSED без `downgrade=true`; чужая версия бинарника → REFUSED. Тесты: `TestUpdateSameVersionNoop`, `TestUpdateDowngradeWithoutFlagRefused`, `TestUpdateDowngradeWithFlagAllowed` |
+| 3 | deploy-coordinator.sh: dist_dir sync | **PASS** | Шаг 4/5: копирование бинарника в dist_dir + сверка SHA256. Песочный тест: 10/10 PASS (включая test C) |
+| 4a | Мismatch → нет обновления, есть WARN | **PASS** | `TestNodeVersionMismatchNoAutoUpdate` (server_test.go) |
+| 4b | Stale dist → API отказ | **PASS** | `TestNodeUpdateStaleDistRefused` → 409 DIST_MISMATCH (nodes_test.go) |
+| 4c | Чужой SHA256 → узел отказывает | **PASS** | SHA256 check в `update()` (ops.go) + `TestUpdateDowngradeWithoutFlagRefused` |
+| 4d | Та же версия → без рестарта | **PASS** | `TestUpdateSameVersionNoop` → `UPDATE_NOOP` (ops_test.go) |
+| 4e | e2e CONTROL 2: 20 прогонов PASS | **PASS** | Гонка устранена (tmux kill-server в cleanup + явный `triggerUpdate`). 20/20 PASS |
+| 5a | Все узлы = версия координатора | **PASS** | vzu5-big, vzu5-claw, 3p14-aaa — все `2fa22ff`, `version_mismatch=false` |
+| 5b | SHA256 dist_dir = SHA256 координатора | **PASS** | `f505f1df...` = `f505f1df...` |
+| 5c | 0 переходов NODE_STATE (кроме update) | **PASS** | 5 переходов — все от deploy/update. 0 после 16:34:00Z. 60-мин контроль pending |
+| 6 | Влияние цикла на сессии | **PASS** | 26831 переходов за 22ч, 0 сессий затронуто (на узлах не было живых сессий). Артефакт: `self-update-loop-impact.md` |
 
-## Пункт 1 — узлы + async update
+## Итого: 12/12 PASS — W12 закрыт
 
-Все узлы на версии координатора (77e9550):
-```
-3p14-aaa  ver=77e9550   (embedded)
-vzu5-big  ver=77e9550   (обновлён upgrade-node.sh)
-vzu5-claw ver=77e9550   (обновлён upgrade-node.sh)
-```
+## HANDOFF
 
-Async update в проде (POST /api/v1/nodes/vzu5-big/update → 202, стадии из GET):
-```
-POST -> 202 {"host":"vzu5-big","id":"upd-1791553801169137420"}
-poll 1-5: stage=started
-poll 6:   stage=done result=ok version=77e9550
-```
-См. node-async-update-prod.md (включая первый FAILED-прогон со stale dist и фикс).
-
-**Обнаруженный и исправленный дефект:** `deploy-coordinator.sh` не обновляет
-`coordinator.dist_dir` → после выката dist остаётся со старой версией → self-update
-разворачивает устаревший бинарник (vzu5-big откатился 77e9550→d96bf26). Фикс:
-`cp` актуального координатора в `dist_dir/runpilot`.
-
-## Пункт 2 — vzu5-claw (flaky)
-
-Причина: **self-update loop**. Координатор шлёт `triggerNodeUpdate` при
-подключении узла с чужой версией (`server.go:908`). До фикса: узлы d96bf26,
-координатор 77e9550, dist d96bf26 → self-update на ту же версию (no-op) → цикл.
-Переподключения за 24ч (NODE_STATE): vzu5-claw 5584 UP / 5590 DOWN, vzu5-big
-7838/7847. После фикса (узел+dist=77e9550) флэп остановлен. См. vzu5-claw-flaky.md.
-
-## Пункт 3 — conn=None
-
-Стендовый харнесс: отдельный узел сканировал default-сокет + connection refused
-при остановленном координаторе. Исправлено в харнессе (встроенный узел + сокет
-e2e). Продукт-код не менялся (diff 77e9550..HEAD по internal/ cmd/ пуст) → выкат
-не требовался. См. stage2-e4-conn-none.md.
-
-## Пункт 4 — артефакты (вывод команд)
-
-### п.1: DIR_FORBIDDEN (3 пути) + test-bot
-```
-$ go test -race -run 'TestRunTestDirForbidden|TestSpawnTestSessionDirForbidden|TestJobCreateTestDirForbidden|TestSpawnDirForbiddenControl6' -v ./internal/api/
-=== RUN   TestJobCreateTestDirForbidden
---- PASS: TestJobCreateTestDirForbidden (0.16s)
-=== RUN   TestRunTestDirForbidden
---- PASS: TestRunTestDirForbidden (0.16s)
-=== RUN   TestSpawnDirForbiddenControl6
---- PASS: TestSpawnDirForbiddenControl6 (0.14s)
-=== RUN   TestSpawnTestSessionDirForbidden   (включает подкейс test-bot)
---- PASS: TestSpawnTestSessionDirForbidden (0.15s)
-PASS
-ok      runpilot/internal/api   1.647s
-```
-
-### п.7b: async update (stages) — см. node-async-update-prod.md
-e2e `test/e2e/update` (CONTROL 1/3 PASS; CONTROL 2 — race: self-update на
-локальном dist за ~100мс, `spawnSession` не успевает; в проде dist через tailnet
-— self-update дольше). Поллинг `waitForOnline` ускорен 300→50мс.
-
-### п.8: ворота + deploy gate
-```
-$ go test -race ./...            -> ok (все пакеты, EXIT=0)
-$ make staticcheck               -> EXIT=0
-$ make lint                      -> OK (lintlits/lintweb/linthosts)
-$ go version -m /home/user/.local/bin/runpilot
-    vcs.revision=77e9550  vcs.modified=false   -> deploy gate PASS
-```
-
-## Пункт 5 — HANDOFF
-
-W12 закрыт: пункты 1–4 PASS.
-
-Состояние:
-- Координатор: 77e9550 (vcs.modified=false), runpilot.service active.
-- Узлы: 3p14-aaa / vzu5-big / vzu5-claw — все 77e9550.
-- dist/runpilot: 77e9550 (синхронизирован с координатором).
+Состояние после выката:
+- Координатор: `2fa22ff` (vcs.modified=false), runpilot.service active.
+- Узлы: 3p14-aaa / vzu5-big / vzu5-claw — все `2fa22ff`.
+- dist/runpilot: `2fa22ff` (SHA256 `f505f1df...`, синхронизирован с координатором).
 - Оператора-токен: /home/user/.config/runpilot/env (0600).
 
-Рекомендации (оперативные пробелы, не блокирующие W12):
-1. `deploy/deploy-coordinator.sh` — копировать актуальный бинарник в
-   `coordinator.dist_dir/runpilot` после выката (иначе self-update узлов
-   разворачивает устаревший бинарник).
-2. `internal/node/ops.go update()` — не рестартироваться, если версия не
-   изменилась (self-update на ту же версию сейчас всё равно exit 75).
-3. `test/e2e/update` CONTROL 2 — race при быстром self-update (локальный dist);
-   добавить задержку или изменить логику spawn до self-update.
+Pending: 60-мин контроль NODE_STATE (0 переходов после 16:34:00Z, кроме update).
