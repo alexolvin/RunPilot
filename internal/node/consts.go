@@ -122,9 +122,6 @@ const (
 	// (13.4): tmux штатно детачится по SIGTERM, SIGKILL — страховка.
 	ptyKillGrace = 2 * time.Second
 
-	// qwenSettingsFileMode — режим ~/.qwen/settings.json (W9 доп-3c).
-	qwenSettingsFileMode = 0o600
-
 	// binVersionTimeout — таймаут <bin> version (W12: сверка версии при self-update).
 	binVersionTimeout = binVersionTimeoutSec * time.Second
 )

@@ -100,7 +100,7 @@ func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 	}
 	if rep.Result != proto.ResSpawned {
 		status := http.StatusBadRequest
-		if rep.Result == "NAME_IN_USE" {
+		if rep.Result == "NAME_IN_USE" || rep.Result == proto.ResPrecheckFailed {
 			status = http.StatusConflict
 		}
 		httpError(w, status, rep.Result, rep.Detail)

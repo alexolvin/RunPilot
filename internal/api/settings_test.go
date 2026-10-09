@@ -81,13 +81,13 @@ func expectValidation400(t *testing.T, raw []byte, path, code string) {
 	t.Fatalf("нет проблемы %s/%s в списке: %s", path, code, raw)
 }
 
-// 4.5: GET /api/v1/settings — все 99 рабочих ключа с действующими значениями.
+// 4.5: GET /api/v1/settings — все 100 рабочих ключа с действующими значениями.
 func TestSettingsGetReturnsWorkingValues(t *testing.T) {
 	ts, st, _ := testServer(t)
 	// Пустая БД → значения из defaults.
 	m := getSettings(t, ts)
-	if len(m) != 99 {
-		t.Fatalf("ключей = %d, хочу 99", len(m))
+	if len(m) != 100 {
+		t.Fatalf("ключей = %d, хочу 100", len(m))
 	}
 	if v, ok := m["scheduler.aging_sec"].(float64); !ok || int(v) != 900 {
 		t.Fatalf("scheduler.aging_sec = %v (defaults 900)", m["scheduler.aging_sec"])
@@ -122,8 +122,8 @@ func TestSettingsSchemaEndpoint(t *testing.T) {
 	if err := json.Unmarshal(raw, &fields); err != nil {
 		t.Fatalf("schema не JSON: %v", err)
 	}
-	if len(fields) != 99 {
-		t.Fatalf("полей схемы = %d, хочу 99", len(fields))
+	if len(fields) != 100 {
+		t.Fatalf("полей схемы = %d, хочу 100", len(fields))
 	}
 	for _, f := range fields {
 		if f["path"] == nil || f["type"] == nil || f["group"] == nil ||

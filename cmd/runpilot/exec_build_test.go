@@ -15,8 +15,8 @@ func TestBuildQwenCmdPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// [qwen --model qwen3.8-27b --openai-base-url http://127.0.0.1:8787/s/SID/v1 Сделай X]
-	want := []string{"qwen", "--model", "qwen3.8-27b", "--openai-base-url", "http://127.0.0.1:8787/s/SID/v1", "Сделай X"}
+	// [qwen --auth-type openai --model qwen3.8-27b --openai-base-url http://127.0.0.1:8787/s/SID/v1 Сделай X]
+	want := []string{"qwen", "--auth-type", "openai", "--model", "qwen3.8-27b", "--openai-base-url", "http://127.0.0.1:8787/s/SID/v1", "Сделай X"}
 	if len(cmd.Args) != len(want) {
 		t.Fatalf("Args=%v (len %d), хочу %v (len %d)", cmd.Args, len(cmd.Args), want, len(want))
 	}

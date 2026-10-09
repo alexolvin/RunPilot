@@ -32,6 +32,7 @@ const (
 	ResRespawned    = "RESPAWNED"
 	ResDirForbidden = "DIR_FORBIDDEN"
 	ResDirNotFound  = "DIR_NOT_FOUND"
+	ResPrecheckFailed = "PRECHECK_FAILED" // W13 этап 7: предпроверка (409)
 	ResKilled         = "KILLED"
 	ResProcessChanged = "PROCESS_CHANGED"
 	ResProcessGone    = "PROCESS_GONE"
@@ -49,11 +50,6 @@ const (
 	ResAdopted  = "ADOPTED"
 	ResNotIdle  = "NOT_IDLE"
 	ResManaged  = "MANAGED"
-
-	// qwen_settings (W9 доп-3i): исход приведения ~/.qwen/settings.json.
-	ResQwenSettingsOK      = "QWEN_SETTINGS_OK"      // файл уже в порядке
-	ResQwenSettingsChanged = "QWEN_SETTINGS_CHANGED" // изменён/создан (Detail — что)
-	ResQwenSettingsError   = "QWEN_SETTINGS_ERROR"   // ошибка (Detail — причина)
 
 	// Терминал (13.4 ТЗ): PTY открыт (tmux attach запущен).
 	ResPtyOpened = "PTY_OPENED"
@@ -103,7 +99,6 @@ const (
 	KindConfig      Kind = "config"
 	KindExecRoots   Kind = "exec_roots" // EXEC-корни (PID+время старта+sid) узлу
 	KindAdopt       Kind = "adopt"
-	KindQwenSettings Kind = "qwen_settings" // доп-3i: явная проверка/поправка settings.json
 
 	// Терминал в браузере (13.4 ТЗ, v2). pty_open/pty_close — команды
 	// координатора; pty_exit — узел сообщает о завершении tmux attach.
@@ -123,7 +118,7 @@ var AllKinds = map[Kind]bool{
 	KindSetStatus: true, KindSetSummary: true, KindDrain: true,
 	KindSpawn: true, KindRespawn: true, KindKillSession: true, KindReleasePane: true,
 	KindKillProcess: true, KindListDirs: true, KindUpdate: true, KindUninstall: true,
-	KindConfig: true, KindExecRoots: true, KindAdopt: true, KindQwenSettings: true,
+	KindConfig: true, KindExecRoots: true, KindAdopt: true,
 	KindPtyOpen: true, KindPtyClose: true, KindPtyExit: true,
 }
 

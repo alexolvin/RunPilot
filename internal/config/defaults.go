@@ -152,6 +152,7 @@ func Defaults() *Config {
 			OfflineAfterSec:     30,
 			HealthIntervalSec:   15,
 			ProjectRootsDefault: []string{"~"},
+			ProjectDirMatch:     "",
 		},
 		Faults: Faults{
 			WindowSec:       300,

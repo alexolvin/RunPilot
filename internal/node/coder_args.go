@@ -1,26 +1,32 @@
 package node
 
-// CoderArgsFromEnv — явные аргументы qwen, которые обязателен передать
-// при запуске управляемого кодера, чтобы не обойти шлюз:
+// CoderArgsFromEnv — явные аргументы qwen, которые обязан передать запуск
+// управляемого кодера, чтобы маршрут (auth + модель + baseUrl) был задан
+// ТОЛЬКО аргументами процесса, без правки settings.json (W13 этап 7):
 //
-//   - --model <OPENAI_MODEL>            (model_alias)
+//   - --auth-type openai           (перекрывает security.auth.selectedType из settings)
+//   - --model <OPENAI_MODEL>       (model_alias)
 //   - --openai-base-url <OPENAI_BASE_URL> (<gateway>/s/<sid>/v1)
 //
 // Qwen Code резолвит модель слоями: --model > settings.model.name >
-// env OPENAI_MODEL. Если settings.model.name совпадает с id записи
-// modelProviders, qwen берёт baseUrl из этой записи (прямой vLLM) — шлюз
-// обойден. Явные аргументы --model и --openai-base-url имеют высший
-// приоритет и гарантируют, что запросы идут через шлюз. Env остаётся
-// как есть (низший приоритет, но нужен для fallback).
+// env OPENAI_MODEL; auth: --auth-type > security.auth.selectedType. Явные
+// аргументы имеют высший приоритет и гарантируют, что запросы идут через
+// шлюз, даже если settings.json имеет model.name, совпадающий с id записи
+// modelProviders, и selectedType != openai (худший случай оператора).
 //
 // Возвращает пустой срез, если в env нет OPENAI_MODEL и OPENAI_BASE_URL
-// (например, профиль без этих переменных) — аргументы не добавляются.
+// (профиль без шлюза) — аргументы не добавляются.
 func CoderArgsFromEnv(env map[string]string) []string {
-	var args []string
-	if model := env["OPENAI_MODEL"]; model != "" {
+	model := env["OPENAI_MODEL"]
+	base := env["OPENAI_BASE_URL"]
+	if model == "" && base == "" {
+		return nil
+	}
+	args := []string{"--auth-type", "openai"}
+	if model != "" {
 		args = append(args, "--model", model)
 	}
-	if base := env["OPENAI_BASE_URL"]; base != "" {
+	if base != "" {
 		args = append(args, "--openai-base-url", base)
 	}
 	return args

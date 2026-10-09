@@ -71,6 +71,9 @@ export const W6 = {
   copyFlashMs: 1500,         // «скопировано» в диалоге подключения
   revPreviewLen: 80,         // превью diff ревизии
   defaultPriority: 10,       // приоритет нового сервера (мастер)
+  nameSuffixStart: 2,        // W13 этап 8: суффикс занятого имени (-2, -3…)
+  parseIntBase: 10,          // основа parseInt
+  nameSuffixGroup: 2,        // индекс группы regex для суффикса
 };
 
 // Число серверных цветов (tokens.css: --server-1..--server-5).

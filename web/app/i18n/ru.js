@@ -244,12 +244,7 @@ export const T = {
     endpointTitle: 'Эндпоинт (шлюз runpilot)',
     endpointShort: (alias) =>
       'Кодер запустится через шлюз runpilot (модель ' + alias + ').',
-    settingsApply: 'Внести коррекции',
-    settingsApplying: 'Проверяем…',
-    settingsUntouched: 'settings.json: не проверено',
-    settingsOk: 'settings.json в порядке',
-    settingsChanged: 'settings.json обновлён',
-    settingsError: 'Ошибка изменения settings.json',
+    precheckFailed: 'Предпроверка не пройдена',
     profile: 'Профиль',
     create: 'Создать сессию',
     creating: 'Создаём…',

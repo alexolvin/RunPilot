@@ -336,6 +336,10 @@ func (g *Gateway) doAttempt(w http.ResponseWriter, r *http.Request, ctx context.
 	// Тело подменялось (model/key) — длина могла измениться;
 	// Content-Length обязан совпадать с фактической длиной тела.
 	req.ContentLength = int64(len(body))
+	// W13 этап 7: шлюз добавляет SID к запросам в апстрим.
+	if sid != "" {
+		req.Header.Set("X-RunPilot-SID", sid)
+	}
 	// Ответ пишется через captureWriter: при миграции байты не доходят
 	// до клиента, первый байт фиксируется по часам шлюза.
 	cw := &captureWriter{ResponseWriter: w, st: st, clk: g.clk}

@@ -595,44 +595,22 @@ func (s *Server) handleNodeDirs(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusServiceUnavailable, "NODE", err.Error())
 		return
 	}
+	dirs := splitLines(rep.Detail)
+	// W13 этап 8: фильтр по project_dir_match (подстрока в пути).
+	if match := s.cfg.Node.ProjectDirMatch; match != "" {
+		filtered := make([]string, 0, len(dirs))
+		for _, d := range dirs {
+			if strings.Contains(d, match) {
+				filtered = append(filtered, d)
+			}
+		}
+		dirs = filtered
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"result": rep.Result, "dirs": splitLines(rep.Detail),
+		"result": rep.Result, "dirs": dirs,
 		"roots": rep.ProjectRoots,
 	})
-}
-
-// handleNodeQwenSettings — POST /api/v1/nodes/<host>/qwen-settings (доп-3i):
-// явная проверка/поправка ~/.qwen/settings.json узла. Веб показывает результат
-// оператору (статус ok/changed/error + что изменено) ПЕРЕД запуском кодера.
-func (s *Server) handleNodeQwenSettings(w http.ResponseWriter, r *http.Request) {
-	host := r.PathValue("host")
-	if _, ok := s.hub.Node(host); !ok {
-		httpError(w, http.StatusServiceUnavailable, "NODE", "узел не подключён")
-		return
-	}
-	m := proto.New(proto.KindQwenSettings)
-	m.ModelAlias = s.cfg.Profiles.Qwen.ModelAlias
-	// item 3: размер контекста (min по серверам) → contextWindowSize кодера.
-	m.ContextWindow = s.MinContextWindow()
-	rep, err := s.dispatchToNodeTimeout(r.Context(), host, m, s.nodeOpTimeout())
-	if err != nil {
-		httpError(w, http.StatusServiceUnavailable, "NODE", err.Error())
-		return
-	}
-	status, message := "ok", "настройки уже в порядке"
-	switch rep.Result {
-	case proto.ResQwenSettingsChanged:
-		status, message = "changed", rep.Detail
-	case proto.ResQwenSettingsError:
-		status, message = "error", rep.Detail
-	default:
-		if rep.Detail != "" {
-			message = rep.Detail
-		}
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": status, "message": message})
 }
 
 // dispatchToNodeTimeout — команда узлу с коротким таймаутом.

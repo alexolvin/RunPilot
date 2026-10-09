@@ -380,7 +380,6 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/nodes/{host}", s.handleNodeDelete)
 	mux.HandleFunc("POST /api/v1/nodes/{host}/update", s.handleNodeUpdate)
 	mux.HandleFunc("GET /api/v1/nodes/{host}/update/{id}", s.handleNodeUpdateStatus)
-	mux.HandleFunc("POST /api/v1/nodes/{host}/qwen-settings", s.handleNodeQwenSettings)
 	mux.HandleFunc("GET /api/v1/nodes/{host}/dirs", s.handleNodeDirs)
 	mux.HandleFunc("GET /api/v1/queue", s.handleQueue)
 	mux.HandleFunc("GET /api/v1/servers", s.handleServers)

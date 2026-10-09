@@ -31,6 +31,7 @@ func TestSchemaApplyWhen(t *testing.T) {
 		{"gateway.hold_max_sec", ApplyNewRequest},
 		// Строка 6: profiles.qwen.model_alias — для новых сессий.
 		{"profiles.qwen.model_alias", ApplyNewSession},
+		{"node.project_dir_match", ApplyNewSession},
 		// Строка 7: web — для новых соединений и сессий браузера.
 		{"web.session_ttl_days", ApplyNewConn},
 		{"web.screen_interval_ms", ApplyNewConn},

@@ -112,7 +112,7 @@ var configKeys = []string{
 	"client", "client.coordinator", "client.token_env",
 	"node", "node.host", "node.tmux_sockets", "node.scan_interval_sec", "node.pulse_interval_sec", "node.gpu",
 	"node.gpu_server", "node.offline_after_sec", "node.health_interval_sec",
-	"node.project_roots_default",
+	"node.project_roots_default", "node.project_dir_match",
 	"web", "web.bind", "web.port", "web.public_url",
 	"web.session_ttl_days", "web.login_rate_per_min",
 	"web.screen_interval_ms", "web.paste_verify_sec", "web.paste_max_kb",

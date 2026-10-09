@@ -151,20 +151,16 @@ func (n *Node) coderPATH() string {
 
 // coderEnv — env кодера: PATH = каталог кодера + текущий PATH. Без абсолютного
 // пути — env не меняется (кодер берёт PATH tmux-сервера как есть).
-// W13 этап 3: OPENAI_MODEL, совпадающий с id записи modelProviders, заменяется
-// на alias шлюза (safeModelAlias) — иначе qwen пойдёт на прямой baseUrl в
-// обход шлюза.
+// W13 этап 7: маршрут задан аргументами процесса (CoderArgsFromEnv: --auth-type
+// openai, --model, --openai-base-url) — env OPENAI_MODEL подменяем не
+// защищаем (qwen выбирает модель в порядке --model > settings.model.name >
+// env, поэтому env игнорируется при заданном model.name).
 func (n *Node) coderEnv(env map[string]string) map[string]string {
 	if p := n.coderPATH(); p != "" {
 		if env == nil {
 			env = map[string]string{}
 		}
 		env["PATH"] = p
-	}
-	if alias := env["OPENAI_MODEL"]; alias != "" {
-		if safe := n.safeModelAlias(alias); safe != alias {
-			env["OPENAI_MODEL"] = safe
-		}
 	}
 	return env
 }
@@ -553,8 +549,6 @@ func (n *Node) Handle(ctx context.Context, m proto.Msg) (*Reply, error) {
 		return n.config(ctx, m)
 	case proto.KindExecRoots:
 		return n.applyExecRoots(m)
-	case proto.KindQwenSettings:
-		return n.qwenSettings(ctx, m)
 	case proto.KindAdopt:
 		return n.adopt(ctx, m)
 	case proto.KindKillProcess:

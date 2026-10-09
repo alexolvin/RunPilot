@@ -276,6 +276,8 @@ func Schema() []SettingField {
 			"Период проверки здоровья узла.", ApplyNextTick),
 		listField("node.project_roots_default", "Узлы", "Корни проектов",
 			"Корни проектов по умолчанию для нового узла.", ApplyNextTick),
+		stringField("node.project_dir_match", "", "Узлы", "Фильтр каталогов",
+			"Подстрока для фильтра каталогов в диалоге (пусто — все).", ApplyNewSession),
 
 		// Подключение узлов.
 		intField("enroll.token_ttl_min", "min", "Подключение", "TTL токена",

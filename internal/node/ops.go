@@ -134,17 +134,12 @@ func (n *Node) spawn(ctx context.Context, m proto.Msg) (*Reply, error) {
 	if tmuxSessionExists(ctx, n.ex, socket, m.Name) {
 		return &Reply{CmdID: m.CmdID, Result: "NAME_IN_USE", Detail: m.Name}, nil
 	}
-	// Автоматическое подключение кодера к шлюзу (доп-3i): перед запуском
-	// приводим ~/.qwen/settings.json в порядок, чтобы OPENAI_*-окружение
-	// сессии не перебивалось собственным конфигом qwen (не фатально: при
-	// ошибке/коллизии кодер запустится, но может ходить мимо шлюза).
+	// W13 этап 7: предпроверка ПЕРЕД запуском — только проверяет, ничего не
+	// правит. Коллизия model_alias с id modelProviders (кодер пойдёт мимо
+	// шлюза) или неподдерживаемые аргументы qwen → PRECHECK_FAILED (409).
 	if alias := m.Env["OPENAI_MODEL"]; alias != "" {
-		if res := n.EnsureQwenSettings(alias, m.ContextWindow); res.Err != nil {
-			n.log.Warn("node: spawn: settings.json не приведён", "err", res.Err.Error())
-		} else {
-			for _, w := range res.Warnings {
-				n.log.Warn("node: spawn: "+w)
-			}
+		if err := n.PreCheckCoder(alias, m.Dir, n.coderCommand()); err != nil {
+			return &Reply{CmdID: m.CmdID, Result: proto.ResPrecheckFailed, Detail: err.Error()}, nil
 		}
 	}
 	env := n.coderEnv(m.Env)
@@ -377,32 +372,7 @@ func (n *Node) config(ctx context.Context, m proto.Msg) (*Reply, error) {
 	if m.GatewayURL != "" {
 		n.SetGatewayURL(m.GatewayURL)
 	}
-	// W9 доп-3c: hello-ответ координатора (model_alias) — привести
-	// ~/.qwen/settings.json в порядок, чтобы окружение сессии шлюза
-	// (OPENAI_BASE_URL/OPENAI_MODEL) не перебивалось конфигом qwen.
-	if m.ModelAlias != "" {
-		n.EnsureQwenSettings(m.ModelAlias, m.ContextWindow)
-	}
 	return &Reply{CmdID: m.CmdID, Result: ResSent}, nil
-}
-
-// qwenSettings — явная проверка/поправка ~/.qwen/settings.json (доп-3i):
-// веб-кнопка «Внести коррекции» в диалоге новой сессии. Возвращает исход,
-// чтобы оператор увидел результат ПЕРЕД запуском кодера. Warnings (коллизия
-// model_alias с id modelProviders) — всегда в Detail: это единственный
-// случай, когда кодер пойдёт мимо шлюза.
-func (n *Node) qwenSettings(ctx context.Context, m proto.Msg) (*Reply, error) {
-	res := n.EnsureQwenSettings(m.ModelAlias, m.ContextWindow)
-	switch {
-	case res.Err != nil:
-		return &Reply{CmdID: m.CmdID, Result: proto.ResQwenSettingsError, Detail: res.Err.Error()}, nil
-	case res.Changed:
-		return &Reply{CmdID: m.CmdID, Result: proto.ResQwenSettingsChanged,
-			Detail: strings.Join(append(res.Changes, res.Warnings...), "; ")}, nil
-	default:
-		return &Reply{CmdID: m.CmdID, Result: proto.ResQwenSettingsOK,
-			Detail: strings.Join(res.Warnings, "; ")}, nil
-	}
 }
 
 // --- uninstall (5.3): снять узел, не трогая tmux/кодеры ---

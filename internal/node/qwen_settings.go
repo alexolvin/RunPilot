@@ -1,57 +1,36 @@
 package node
 
-// Эндпоинт qwen code (W9 доп-3c, политика пересмотрена 2026-10-02).
-// runpilot запускает кодера с окружением OPENAI_BASE_URL=<шлюз>/s/<sid>/v1 +
-// OPENAI_MODEL=<model_alias>. Qwen Code резолвит baseUrl слоями
-// (документация model-providers, «Resolution Layers», first present wins):
-//   - модель, ВЫБРАННАЯ из modelProviders (её id совпал с текущей моделью),
-//     — sealed-слой: baseUrl берётся из записи провайдера;
-//   - иначе модель — Runtime Model: baseUrl из env (OPENAI_BASE_URL) →
-//     settings → defaults.
+// Маршрут кодера (W13 этап 7) — только аргументы процесса, без правки
+// settings.json. runpilot запускает кодера с явными аргументами
+// (CoderArgsFromEnv: --auth-type openai, --model <alias>, --openai-base-url
+// <шлюз>/s/<sid>/v1) и окружением (OPENAI_API_KEY, QWEN_CODE_API_TIMEOUT_MS).
+// Аргументы имеют высший приоритет над settings.json:
+//   - модель: --model > settings.model.name > env OPENAI_MODEL;
+//   - auth: --auth-type > security.auth.selectedType.
+// Поэтому settings.json НЕ правится: ни selectedType, ни contextWindowSize,
+// ни modelProviders. Оператор управляет ~/.qwen/settings.json сам (в т.ч.
+// окно контекста: model.generationConfig.contextWindowSize для Runtime Model).
 //
-// Отсюда политика EnsureQwenSettings:
-//   - security.auth.selectedType = "openai" (обязательно: иначе OPENAI_*-env
-//     не участвует в резолвинге);
-//   - modelProviders НЕ удаляются (операторское решение 2026-10-02): чужие
-//     эндпоинты остаются живыми, в /model кодера они видны и доступны —
-//     оператор может переключить кодера на прямой бэкенд, когда нужно.
-//     Шлюз по умолчанию: model_alias из env не совпадает с id записей →
-//     Runtime Model → OPENAI_BASE_URL (шлюз) выигрывает.
-//   - КОЛЛИЗИЯ (id записи == model_alias) — единственный опасный случай:
-//     текущая модель становится Provider Model и идёт на прямой baseUrl в
-//     обход шлюза. Узел записи не чинит и не удаляет (данные оператора);
-//     возвращает Warning — узел логирует WARN, веб-отчёт показывает, doctor
-//     ставит FAIL. Оператор решает: сменить model_alias (рабочая настройка)
-//     или id записи.
-//
-// Идемпотентно; при первом изменении — резервная копия
-// settings.json.runpilot.bak; каждое изменение — в журнал.
-// Ошибки не фатальны (WARN) — узел работает, и только Warning о коллизии
-// говорит, что сессии могут ходить мимо шлюза.
+// Единственный опасный случай — КОЛЛИЗИЯ: id записи modelProviders ==
+// model_alias. Тогда alias становится Provider Model (sealed) и qwen берёт
+// baseUrl из записи провайдера в обход шлюза — даже при явном --model и
+// --openai-base-url. Узел записи не чинит и не удаляет (данные оператора);
+// предпроверка PreCheckCoder отклоняет создание сессии (409) при коллизии.
+// Окно контекста RunPilot не пишет — его оператор ставит в своём
+// settings.json (для Runtime Model действует top-level
+// model.generationConfig.contextWindowSize).
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
-const qwenSettingsBackupSuffix = ".runpilot.bak"
-
-// QwenSettingsResult — исход приведения ~/.qwen/settings.json в порядок
-// (W9 доп-3i): Changed — файл создан/изменён, Changes — что именно,
-// Warnings — проблемы, которые узел НЕ чинит (коллизия model_alias с id
-// записи modelProviders: кодер пойдёт на прямой baseUrl в обход шлюза),
-// Err — ошибка (в этом случае файл не тронут либо изменён частично).
-type QwenSettingsResult struct {
-	Changed  bool
-	Changes  []string
-	Warnings []string
-	Err      error
-}
-
-// qwenSettingsPath — ~/.qwen/settings.json.
+// qwenSettingsPath — ~/.qwen/settings.json (пользовательский).
 func qwenSettingsPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -60,87 +39,31 @@ func qwenSettingsPath() (string, error) {
 	return filepath.Join(home, ".qwen", "settings.json"), nil
 }
 
-// EnsureQwenSettings — см. комментарий вверху. Вызывается из config
-// (hello-ответ координатора) — на старте и при каждом reconnect, из spawn
-// (до запуска кодера) и из операции qwen_settings (явная проверка с отчётом
-// в веб). modelAlias — alias шлюза из env сессии: используется только для
-// проверки коллизии с id записей modelProviders (см. политику вверху);
-// записи не удаляются. contextWindow (item 3) — размер контекста (min по
-// серверам): пишется в model.generationConfig.contextWindowSize (для
-// Runtime Model — это шлюзовой alias); 0 — не менять. Возвращает результат.
-func (n *Node) EnsureQwenSettings(modelAlias string, contextWindow int) QwenSettingsResult {
-	if modelAlias == "" {
-		return QwenSettingsResult{Err: fmt.Errorf("пустой model_alias")}
-	}
-	path, err := qwenSettingsPath()
-	if err != nil {
-		n.log.Warn("node: qwen settings: HOME не определён")
-		return QwenSettingsResult{Err: fmt.Errorf("HOME не определён: %w", err)}
-	}
+// projectSettingsPath — <dir>/.qwen/settings.json (проектный).
+func projectSettingsPath(dir string) string {
+	return filepath.Join(dir, ".qwen", "settings.json")
+}
+
+// readSettingsDoc — читает settings.json по пути; (nil, nil) — файла нет.
+func readSettingsDoc(path string) (map[string]any, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return n.createQwenSettings(path, contextWindow)
+			return nil, nil
 		}
-		n.log.Warn("node: qwen settings: чтение", "err", err.Error())
-		return QwenSettingsResult{Err: fmt.Errorf("чтение: %w", err)}
+		return nil, err
 	}
-	return n.patchQwenSettings(path, data, modelAlias, contextWindow)
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("%s: не JSON: %w", path, err)
+	}
+	return doc, nil
 }
-
-// applyContextWindow — model.generationConfig.contextWindowSize (item 3).
-// Возвращает строку изменения ("" — не задано (0) или уже совпадает).
-func applyContextWindow(doc map[string]any, contextWindow int) string {
-	if contextWindow <= 0 {
-		return ""
-	}
-	model, _ := doc["model"].(map[string]any)
-	if model == nil {
-		model = map[string]any{}
-		doc["model"] = model
-	}
-	gc, _ := model["generationConfig"].(map[string]any)
-	if gc == nil {
-		gc = map[string]any{}
-		model["generationConfig"] = gc
-	}
-	// после json.Unmarshal число — float64; сверяем с ним.
-	if f, ok := gc["contextWindowSize"].(float64); ok && int(f) == contextWindow {
-		return ""
-	}
-	gc["contextWindowSize"] = contextWindow
-	return fmt.Sprintf("model.generationConfig.contextWindowSize: %d", contextWindow)
-}
-
-// createQwenSettings — файла нет: создаём минимальный правильный конфиг.
-func (n *Node) createQwenSettings(path string, contextWindow int) QwenSettingsResult {
-	doc := map[string]any{
-		"security": map[string]any{
-			"auth": map[string]any{"selectedType": "openai"},
-		},
-	}
-	changes := []string{"файл создан: security.auth.selectedType=openai"}
-	if cw := applyContextWindow(doc, contextWindow); cw != "" {
-		changes = append(changes, cw)
-	}
-	if err := n.writeQwenSettings(path, doc, strings.Join(changes, "; ")); err != nil {
-		return QwenSettingsResult{Err: err}
-	}
-	return QwenSettingsResult{Changed: true, Changes: changes}
-}
-
-// gatewayModelAlias — запасной alias шлюза, не совпадающий с id записей
-// modelProviders: если сконфигурированный model_alias коллидирует с id
-// записи, узел запускает кодера с этим alias (Runtime Model →
-// OPENAI_BASE_URL = шлюз). Шлюз подставит реальную модель (transformBody),
-// поэтому alias может быть любым; операторский прямой эндпоинт остаётся
-// доступным в /model (id записи не меняется).
-const gatewayModelAlias = "runpilot"
 
 // providerIDCollision — есть ли в modelProviders запись с id == modelAlias.
 // Такая запись превращает текущую (шлюзовую) модель в Provider Model:
-// qwen берёт baseUrl из записи, а не из OPENAI_BASE_URL — сессия идёт мимо
-// шлюза. Возвращает список описаний коллизий ("" — нет).
+// qwen берёт baseUrl из записи, а не из --openai-base-url — сессия идёт
+// мимо шлюза. Возвращает список описаний коллизий ("" — нет).
 func providerIDCollision(doc map[string]any, modelAlias string) []string {
 	var out []string
 	mp, ok := doc["modelProviders"].(map[string]any)
@@ -158,116 +81,107 @@ func providerIDCollision(doc map[string]any, modelAlias string) []string {
 				continue
 			}
 			if id, _ := entry["id"].(string); id != "" && id == modelAlias {
-				out = append(out, fmt.Sprintf(
-					"modelProviders.%s: id %q совпадает с model_alias — кодер пойдёт на прямой baseUrl (в обход шлюза); смените model_alias или id записи",
-					prov, id))
+				out = append(out, fmt.Sprintf("modelProviders.%s: id %q", prov, id))
 			}
 		}
 	}
 	return out
 }
 
-// safeModelAlias — alias для запуска кодера, гарантированно не совпадающий
-// с id записей modelProviders (W13 этап 3: закрыть обход шлюза). Если
-// modelAlias коллидирует с id записи, qwen сочтёт текущую модель Provider
-// Model и возьмёт прямой baseUrl провайдера (в обход шлюза) — даже при
-// явном --openai-base-url. Возвращает gatewayModelAlias (Runtime Model →
-// OPENAI_BASE_URL = шлюз); шлюз подставит реальную модель. Без коллизии —
-// возвращает modelAlias как есть. Ошибки чтения конфига — modelAlias (нет
-// данных о коллизии → не хуже прежнего).
-func (n *Node) safeModelAlias(modelAlias string) string {
-	if modelAlias == "" {
-		return modelAlias
-	}
-	path, err := qwenSettingsPath()
-	if err != nil {
-		return modelAlias
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return modelAlias
-	}
-	var doc map[string]any
-	if json.Unmarshal(data, &doc) != nil {
-		return modelAlias
-	}
-	if len(providerIDCollision(doc, modelAlias)) == 0 {
-		return modelAlias
-	}
-	n.log.Warn("node: qwen settings: model_alias совпадает с id modelProviders — запускаю кодера с alias шлюза (обход закрыт)",
-		"alias", modelAlias, "safe", gatewayModelAlias)
-	return gatewayModelAlias
-}
-
-// patchQwenSettings — внести изменения; Changed=false, если они не нужны.
-// modelProviders не удаляются (политика см. вверху): только проверка
-// коллизии model_alias с id записей → Warnings (без правки файла).
-func (n *Node) patchQwenSettings(path string, data []byte, modelAlias string, contextWindow int) QwenSettingsResult {
-	var doc map[string]any
-	if err := json.Unmarshal(data, &doc); err != nil {
-		n.log.Warn("node: qwen settings: не JSON", "path", path, "err", err.Error())
-		return QwenSettingsResult{Err: fmt.Errorf("файл не JSON: %w", err)}
-	}
-	var changes []string
-	// 1) security.auth.selectedType = "openai" — без этого OPENAI_*-env не
-	//    участвует в резолвинге Runtime Model.
-	sec, _ := doc["security"].(map[string]any)
-	if sec == nil {
-		sec = map[string]any{}
-		doc["security"] = sec
-	}
-	auth, _ := sec["auth"].(map[string]any)
-	if auth == nil {
-		auth = map[string]any{}
-		sec["auth"] = auth
-	}
-	if sel, _ := auth["selectedType"].(string); sel != "openai" {
-		auth["selectedType"] = "openai"
-		changes = append(changes, "security.auth.selectedType: "+sel+" → openai")
-	}
-	// 2) modelProviders — не трогаем (операторские эндпоинты остаются
-	//    доступными в /model). Коллизия id == model_alias — Warning:
-	//    именно она уводит текущую сессию на прямой baseUrl.
-	warnings := providerIDCollision(doc, modelAlias)
-	for _, w := range warnings {
-		n.log.Warn("node: qwen settings: "+w)
-	}
-	// 3) model.generationConfig.contextWindowSize (item 3) — для Runtime
-	//    Model (шлюзовый alias) top-level generationConfig и участвует в
-	//    резолвинге (provider-записи sealed и свой не трогаем).
-	if cw := applyContextWindow(doc, contextWindow); cw != "" {
-		changes = append(changes, cw)
-	}
-	if len(changes) == 0 {
-		return QwenSettingsResult{Warnings: warnings}
-	}
-	if err := n.writeQwenSettings(path, doc, strings.Join(changes, "; ")); err != nil {
-		return QwenSettingsResult{Changes: changes, Warnings: warnings, Err: err}
-	}
-	return QwenSettingsResult{Changed: true, Changes: changes, Warnings: warnings}
-}
-
-// writeQwenSettings — резервная копия (однократно) + атомарная запись.
-func (n *Node) writeQwenSettings(path string, doc map[string]any, note string) error {
-	bak := path + qwenSettingsBackupSuffix
-	if _, err := os.Stat(bak); os.IsNotExist(err) {
-		if b, rerr := os.ReadFile(path); rerr == nil && len(b) > 0 {
-			if werr := os.WriteFile(bak, b, qwenSettingsFileMode); werr != nil {
-				n.log.Warn("node: qwen settings: резервная копия", "err", werr.Error())
+// settingsCollision — коллизия model_alias с id modelProviders в
+// пользовательском И проектном settings.json (W13 этап 7: предпроверка
+// смотрит оба файла). Возвращает описания ("" — нет).
+func settingsCollision(modelAlias, dir string) []string {
+	var out []string
+	if userPath, err := qwenSettingsPath(); err == nil {
+		if doc, err := readSettingsDoc(userPath); err != nil {
+			out = append(out, userPath+": "+err.Error())
+		} else if doc != nil {
+			for _, c := range providerIDCollision(doc, modelAlias) {
+				out = append(out, userPath+": "+c)
 			}
 		}
 	}
-	out, err := json.MarshalIndent(doc, "", "  ")
+	if dir != "" {
+		projPath := projectSettingsPath(dir)
+		if doc, err := readSettingsDoc(projPath); err != nil {
+			out = append(out, projPath+": "+err.Error())
+		} else if doc != nil {
+			for _, c := range providerIDCollision(doc, modelAlias) {
+				out = append(out, projPath+": "+c)
+			}
+		}
+	}
+	return out
+}
+
+// qwenSupportFlags — аргументы/env, которые обязан поддерживать
+// установленный qwen для маршрута через аргументы (W13 этап 7).
+var qwenSupportFlags = []string{"--auth-type", "--openai-base-url"}
+
+// qwenSupportCache — результат проверки поддержки qwen (однократно):
+// qwen-версия не меняется в ходе работы узла.
+var (
+	qwenSupportMu    sync.Mutex
+	qwenSupportOK    bool
+	qwenSupportChecked bool
+)
+
+// checkQwenSupport — установленный qwen поддерживает --auth-type,
+// --openai-base-url (и QWEN_CODE_API_TIMEOUT_MS — env, проверяем флаг
+// --auth-type и --openai-base-url в --help). Результат кэшируется.
+// qwenCmd — путь к qwen ("" — qwen из PATH).
+func checkQwenSupport(qwenCmd string) error {
+	qwenSupportMu.Lock()
+	defer qwenSupportMu.Unlock()
+	if qwenSupportChecked {
+		if qwenSupportOK {
+			return nil
+		}
+		return fmt.Errorf("установленный qwen не поддерживает требуемые аргументы")
+	}
+	if qwenCmd == "" {
+		qwenCmd = "qwen"
+	}
+	out, err := exec.Command(qwenCmd, "--help").Output()
 	if err != nil {
-		return fmt.Errorf("JSON: %w", err)
+		qwenSupportChecked = true
+		return fmt.Errorf("qwen --help: %w", err)
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, out, qwenSettingsFileMode); err != nil {
-		return fmt.Errorf("запись: %w", err)
+	help := string(out)
+	var missing []string
+	for _, f := range qwenSupportFlags {
+		if !strings.Contains(help, f) {
+			missing = append(missing, f)
+		}
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		return fmt.Errorf("rename: %w", err)
+	qwenSupportChecked = true
+	if len(missing) > 0 {
+		qwenSupportOK = false
+		return fmt.Errorf("установленный qwen не поддерживает: %s", strings.Join(missing, ", "))
 	}
-	n.log.Info("node: qwen settings обновлён: "+note, "path", path, "backup", bak)
+	qwenSupportOK = true
+	return nil
+}
+
+// PreCheckCoder — предпроверка на узле ПЕРЕД созданием сессии (W13 этап 7):
+// только проверяет, ничего не правит. Возвращает ошибку (→ 409) при:
+//   - model_alias совпадает с id modelProviders в пользовательском/проектном
+//     settings.json (коллизия → кодер пойдёт на прямой baseUrl в обход шлюза);
+//   - установленный qwen не поддерживает --auth-type / --openai-base-url.
+//
+// alias — model_alias (OPENAI_MODEL); dir — каталог проекта; qwenCmd — путь
+// к qwen ("" — из PATH).
+func (n *Node) PreCheckCoder(alias, dir, qwenCmd string) error {
+	if alias == "" {
+		return fmt.Errorf("пустой model_alias")
+	}
+	if coll := settingsCollision(alias, dir); len(coll) > 0 {
+		return fmt.Errorf("model_alias %q совпадает с id modelProviders — кодер пойдёт в обход шлюза: %s",
+			alias, strings.Join(coll, "; "))
+	}
+	if err := checkQwenSupport(qwenCmd); err != nil {
+		return err
+	}
 	return nil
 }

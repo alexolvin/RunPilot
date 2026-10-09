@@ -288,6 +288,9 @@ type Node struct {
 	OfflineAfterSec     int      `yaml:"offline_after_sec"`
 	HealthIntervalSec   int      `yaml:"health_interval_sec"`
 	ProjectRootsDefault []string `yaml:"project_roots_default"`
+	// ProjectDirMatch — подстрока для фильтра каталогов в диалоге (W13 этап 8).
+	// Пусто — все каталоги project_roots.
+	ProjectDirMatch string `yaml:"project_dir_match"`
 }
 
 // Faults — параметры обработки отказов серверов (v2 раздел 4.2).
