@@ -29,6 +29,10 @@ set -u
 NEW_BIN="${1:-}"
 COORD_BIN="${COORD_BIN:-/home/user/.local/bin/runpilot}"
 COORD_SERVICE="${COORD_SERVICE:-runpilot}"
+# DIST_DIR — каталог дистрибутива узла (coordinator.dist_dir): после выката
+# координатора обновляется на его бинарник (W12: иначе self-update узлов
+# разворачивает устаревший dist). Пусто — шаг пропускается.
+DIST_DIR="${DIST_DIR:-$HOME/.local/share/runpilot/dist}"
 RESTART_CMD="${RESTART_CMD:-}"
 IS_ACTIVE_CMD="${IS_ACTIVE_CMD:-}"
 STAGE=""
@@ -44,14 +48,14 @@ fail() { printf 'FAIL: %s\n' "$*" >&2; exit 1; }
 command -v go >/dev/null 2>&1 || fail "go не найден"
 command -v sha256sum >/dev/null 2>&1 || fail "sha256sum не найден"
 
-# --- 1/4 проверка vcs.modified: выкат только из чистого HEAD ---
+# --- 1/5 проверка vcs.modified: выкат только из чистого HEAD ---
 VCS_REV="$(go version -m "$NEW_BIN" 2>/dev/null | awk -F'vcs.revision=' '/vcs.revision=/{print $2; exit}' || true)"
 VCS_MOD="$(go version -m "$NEW_BIN" 2>/dev/null | awk -F'vcs.modified=' '/vcs.modified=/{print $2; exit}' || true)"
 printf 'vcs.revision: %s\n' "${VCS_REV:-unknown}"
 printf 'vcs.modified: %s\n' "${VCS_MOD:-unknown}"
 [ "$VCS_MOD" != "true" ] || fail "vcs.modified=true — бинарник из грязного дерева; выкат только из чистого HEAD (закоммить/состейджить и пересобрать)"
 
-# --- 2/4 бэкап ---
+# --- 2/5 бэкап ---
 COORD_DIR="$(dirname "$COORD_BIN")"
 BACKUP=""
 if [ -f "$COORD_BIN" ]; then
@@ -62,7 +66,7 @@ else
   echo "(прежнего бинарника нет — бэкап не нужен)"
 fi
 
-# --- 3/4 атомарная замена (mv -f, без ETXTBSY) ---
+# --- 3/5 атомарная замена (mv -f, без ETXTBSY) ---
 STAGE="${COORD_BIN}.new.$$"
 cp -a "$NEW_BIN" "$STAGE" || fail "cp -a $NEW_BIN $STAGE не удался"
 chmod 755 "$STAGE" || fail "chmod 755 $STAGE не удался"
@@ -70,7 +74,28 @@ mv -f "$STAGE" "$COORD_BIN" || fail "mv -f не удался (целевой н�
 STAGE=""
 printf 'бинарник: %s\n' "$(sha256sum "$COORD_BIN" | awk '{print $1}')"
 
-# --- 4/4 рестарт + проверка активности ---
+# --- 4/5 dist_dir: бинарник дистрибутива = бинарник координатора ---
+# W12 (ТЗ 14): без этого self-update узлов разворачивает устаревший dist
+# (цикл: версия dist != версия координатора). Атомарно + сверка SHA256.
+DIST_BIN=""
+if [ -n "$DIST_DIR" ]; then
+  DIST_BIN="${DIST_DIR}/runpilot"
+  mkdir -p "$DIST_DIR" || fail "mkdir -p $DIST_DIR не удался"
+  STAGE="${DIST_BIN}.new.$$"
+  cp -a "$COORD_BIN" "$STAGE" || fail "cp -a $COORD_BIN $STAGE не удался"
+  chmod 755 "$STAGE" || fail "chmod 755 $STAGE не удался"
+  mv -f "$STAGE" "$DIST_BIN" || fail "mv -f в dist_dir не удался"
+  STAGE=""
+  # Сверка SHA256: dist = установленный бинарник координатора.
+  WANT_SHA="$(sha256sum "$COORD_BIN" | awk '{print $1}')"
+  GOT_SHA="$(sha256sum "$DIST_BIN" | awk '{print $1}')"
+  [ "$WANT_SHA" = "$GOT_SHA" ] || fail "SHA256 dist_dir не совпадает с координатором (dist=$GOT_SHA coord=$WANT_SHA)"
+  printf 'dist_dir : %s (sha256 %s)\n' "$DIST_BIN" "$GOT_SHA"
+else
+  echo "(DIST_DIR пуст — dist_dir не обновляется)"
+fi
+
+# --- 5/5 рестарт + проверка активности ---
 if [ -n "$RESTART_CMD" ]; then
   # shellcheck disable=SC2086 # команда-хук, намеренно без кавычек
   bash -c "$RESTART_CMD" || fail "рестарт не удался"
@@ -90,6 +115,7 @@ printf '\n==================================================\n'
 printf 'ИТОГ: PASS\n'
 printf '  vcs.revision: %s\n' "${RUN_REV:-unknown}"
 printf '  бинарник    : %s\n' "$COORD_BIN"
+[ -n "$DIST_BIN" ] && printf '  dist_dir    : %s\n' "$DIST_BIN"
 [ -n "$BACKUP" ] && printf '  бэкап       : %s\n' "$BACKUP"
 printf '==================================================\n'
 exit 0

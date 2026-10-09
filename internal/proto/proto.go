@@ -37,7 +37,12 @@ const (
 	ResProcessGone    = "PROCESS_GONE"
 	ResUpdated        = "UPDATED"
 	ResUpdateFailed = "NODE_UPDATE_FAILED"
-	ResUninstalled  = "UNINSTALLED"
+	// W12 (ТЗ 14): защита self-update. Noop — целевая версия = текущей (узел
+	// ничего не делает и не перезапускается). Refused — откат без downgrade=true
+	// или версия скачанного бинарника ≠ ожидаемой.
+	ResUpdateNoop    = "UPDATE_NOOP"
+	ResUpdateRefused = "UPDATE_REFUSED"
+	ResUninstalled   = "UNINSTALLED"
 	ResAgentExit    = "AGENT_EXIT"
 
 	// adopt (8.3 X1): «Перезапустить под runpilot» — панель принята в управление.
@@ -216,6 +221,12 @@ type Msg struct {
 	Version      string   `json:"version,omitempty"`
 	URL          string   `json:"url,omitempty"`
 	SHA256       string   `json:"sha256,omitempty"`
+	// BuildTime — commit timestamp (vcs.time, unix-сек) бинарника, который
+	// ставит координатор. Узел сверяет со своим: target < current → откат,
+	// допускается только при Downgrade=true. 0 — неизвестен (e2e без git).
+	BuildTime int64 `json:"build_time,omitempty"`
+	// Downgrade — явное разрешение отката на более старую версию (W12, ТЗ 14).
+	Downgrade bool `json:"downgrade,omitempty"`
 	ProjectRoots []string `json:"project_roots,omitempty"`
 	// config (W9 доп-3c): эндпоинт qwen code — узел приводит
 	// ~/.qwen/settings.json в порядок (selectedType=openai, нет

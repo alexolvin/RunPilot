@@ -38,6 +38,11 @@ type Node struct {
 	clk      clock.Clock
 	log      *slog.Logger
 	agentVer string
+	// version/buildTimeUnix — версия и commit timestamp самого бинарника; для
+	// защиты self-update (W12): та же версия → no-op, откат → только с
+	// downgrade=true. Ставятся из cmd/runpilot (SetVersion/SetBuildTime).
+	version       string
+	buildTimeUnix int64
 
 	snap *snapshotter
 	cmd  *CommandRunner

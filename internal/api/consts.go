@@ -79,4 +79,7 @@ const (
 
 	// defFlapsSince — окно flaps по умолчанию (10 мин).
 	defFlapsSince = 10 * time.Minute
+
+	// distVersionTimeout — таймаут `<dist> version` (W12: защита от stale dist).
+	distVersionTimeout = 10 * time.Second
 )

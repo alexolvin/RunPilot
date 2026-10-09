@@ -63,6 +63,9 @@ func (r Result) String() string {
 type Context struct {
 	Cfg     *config.Config
 	CfgPath string
+	// NodeVersion — версия самого бинарника (runpilot version); для
+	// checkNodeVersion (сверка с версией координатора, W12: автообновления нет).
+	NodeVersion string
 	// Cmdline — cmdline_regex профиля кодера (profiles.Qwen.Cmdline()); nil —
 	// профиль не загружен, проверки деградируют до pane_pid.
 	Cmdline *regexp.Regexp
@@ -165,6 +168,7 @@ func RoleChecks(r Role) []Check {
 			{Name: "coder_out_of_queue", Run: checkCoderOutOfQueue},
 			{Name: "file_mode", Run: checkFileMode},
 			{Name: "node_coordinator", Run: checkNodeCoordinator},
+			{Name: "node_version", Run: checkNodeVersion},
 			{Name: "linger", Run: checkLinger},
 		}
 	}
@@ -241,6 +245,29 @@ var httpGet = func(url string, token string) (int, error) {
 	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
 	return resp.StatusCode, nil
+}
+
+// httpGetBody — HTTP-GET, возвращает (статус, тело, error). Для checkNodeVersion
+// (сверка версии узла с версией координатора, W12). Подменяется в тестах.
+var httpGetBody = func(url string, token string) (int, []byte, error) {
+	client := &http.Client{Timeout: clientCoordinatorTimeoutSec * time.Second}
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return 0, nil, err
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, nil, err
+	}
+	return resp.StatusCode, body, nil
 }
 
 // checkClientCoordinator — client.coordinator (адрес координатора, который
@@ -372,6 +399,41 @@ func checkNodeCoordinator(ctx *Context) Result {
 		return result(name, FAIL, "handshake не принят "+addr)
 	}
 	return result(name, PASS, "handshake принят "+addr)
+}
+
+// checkNodeVersion — версия узла == версия координатора (W12, ТЗ 14:
+// «Автообновления aqm нет»). Несовпадение → WARN (не FAIL): узел работает, но
+// на старой версии — оператор обновляет вручную (API/веб/CLI/выкат).
+func checkNodeVersion(ctx *Context) Result {
+	const name = "node_version"
+	if ctx.Cfg == nil {
+		return result(name, WARN, "нет конфигурации — проверку пропускаем")
+	}
+	addr := strings.TrimRight(ctx.Cfg.Client.Coordinator, "/")
+	if addr == "" {
+		return result(name, WARN, "client.coordinator не задан")
+	}
+	token := nodeTokenValue(ctx.Cfg.Client.TokenEnv)
+	status, body, err := httpGetBody(addr+"/api/v1/node/version", token)
+	if err != nil {
+		return result(name, WARN, "координатор не отвечает: "+err.Error())
+	}
+	if status != http.StatusOK {
+		return result(name, WARN, fmt.Sprintf("HTTP %d", status))
+	}
+	var v struct{ Version string }
+	if err := json.Unmarshal(body, &v); err != nil || v.Version == "" {
+		return result(name, WARN, "не удалось разобрать версию координатора")
+	}
+	if ctx.NodeVersion == "" {
+		return result(name, WARN, "версия узла неизвестна")
+	}
+	if v.Version != ctx.NodeVersion {
+		return result(name, WARN,
+			fmt.Sprintf("версия узла %s != координатора %s (автообновления нет — обновите узел вручную)",
+				ctx.NodeVersion, v.Version))
+	}
+	return result(name, PASS, "версии совпадают: "+v.Version)
 }
 
 // checkLinger — узел работает как systemd user-сервис; без linger user@UID

@@ -153,6 +153,7 @@ func newServeCmd() *cobra.Command {
 			hub := api.NewHub(clk)
 			srv := api.NewServer(cfg, st, hub, clk, log)
 			srv.SetVersion(version)
+			srv.SetBuildTime(buildTimeUnix)
 			// v2 раздел 2.1: веб-слушатель — те же маршруты /api/v1/*,
 			// cookie-аутентификация + CSRF (отдельной логики данных нет).
 			webSrv := web.New(cfg, st, srv.Routes(), clk, log)

@@ -46,6 +46,9 @@ type Server struct {
 	notify func(text string)
 	// version — версия координатора (GET /api/v1/meta, v2 раздел 15.1).
 	version string
+	// buildTimeUnix — commit timestamp координатора (vcs.time); несётся в
+	// update-команде узлу для детекта отката (W12).
+	buildTimeUnix int64
 
 	// serverDrain — drain/undrain сервера (runpilot server drain); ставится из
 	// serve.go (шлюз меняет состояние, планировщик — через OnChange).
@@ -242,6 +245,9 @@ func (s *Server) PendingRemoval(host string) bool {
 // SetVersion — версия координатора (для meta); ставится из serve.go.
 func (s *Server) SetVersion(v string) { s.version = v }
 
+// SetBuildTime — commit timestamp координатора (vcs.time); ставится из serve.go.
+func (s *Server) SetBuildTime(t int64) { s.buildTimeUnix = t }
+
 // SetScheduler — планировщик (Э4): хуки снимков/узлов + why/pause.
 func (s *Server) SetScheduler(sch *scheduler.Scheduler) { s.sched = sch }
 
@@ -431,6 +437,7 @@ func (s *Server) EnrollHandler() http.Handler {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/v1/node", s.nodeAuth(http.HandlerFunc(s.handleNodeWS)))
+	mux.Handle("GET /api/v1/node/version", s.nodeAuth(http.HandlerFunc(s.handleNodeVersion)))
 	mux.Handle("GET /api/v1/dist/", http.HandlerFunc(s.handleDist))
 	mux.Handle("/enroll/", s.EnrollHandler())
 	// Раздел 14 ТЗ: /metrics — Bearer-токен оператора.
@@ -903,16 +910,13 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 	if s.sched != nil {
 		s.sched.NodeSeen(host)
 	}
-	// W6 (CONTROL 2/3): версия узла != версия координатора и узел умеет
-	// self-update → отправить update (бинарник проверяется SHA-256 + selftest).
-	if s.version != "" && hello.RUNPILOTVersion != s.version && hasFeature(hello.Features, "update") {
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), s.updateTimeout())
-			defer cancel()
-			if err := s.triggerNodeUpdate(ctx, host); err != nil {
-				s.log.Warn("api: node: self-update: "+err.Error(), "host", host)
-			}
-		}()
+	// W12 (ТЗ 14: «Автообновления aqm нет»): несовпадение версий узла и
+	// координатора — ТОЛЬКО WARN. Никакого авто-self-update: обновление узла —
+	// только по команде оператора (API/веб/CLI/процедура выката). Видимость —
+	// бейдж в вебе (VersionMismatch) и WARN в doctor узла.
+	if s.version != "" && hello.RUNPILOTVersion != s.version {
+		s.log.Warn("api: node: mismatch версий (автообновления нет — обновите узел вручную)",
+			"host", host, "node", hello.RUNPILOTVersion, "coordinator", s.version)
 	}
 	// W9 доп-3c: hello-ответ — конфиг узла: эндпоинт qwen code (model_alias +
 	// gateway_url). Узел приводит ~/.qwen/settings.json в порядок (idempotent),

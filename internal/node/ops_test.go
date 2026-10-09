@@ -364,6 +364,115 @@ func TestUpdateSuccess(t *testing.T) {
 	}
 }
 
+// TestUpdateSameVersionNoop — W12 (ТЗ 14): целевая версия = текущей → NOOP,
+// бинарник не скачивается и не меняется, узел не рестартится.
+func TestUpdateSameVersionNoop(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "runpilot")
+	if err := os.WriteFile(bin, []byte("OLD-BIN"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	downloaded := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		downloaded = true
+		_, _ = w.Write([]byte("NEW-BIN"))
+	}))
+	defer srv.Close()
+	withSelftest(t, func(_ context.Context, _ string, _ time.Duration) error { return nil })
+
+	ex := &fakeExec{}
+	n := newTestNode(t, ex)
+	n.SetBinPath(bin)
+	n.SetNodeToken("node-tok")
+	n.SetVersion("9.9.9") // текущая версия узла
+
+	m := proto.New(proto.KindUpdate)
+	m.CmdID = "c1"
+	m.URL = srv.URL
+	m.Version = "9.9.9" // та же версия
+	rep, _ := n.Handle(context.Background(), m)
+	if rep.Result != proto.ResUpdateNoop {
+		t.Fatalf("Result = %q, хочу UPDATE_NOOP", rep.Result)
+	}
+	if downloaded {
+		t.Errorf("бинарник скачан при no-op (не должен)")
+	}
+	if got, _ := os.ReadFile(bin); string(got) != "OLD-BIN" {
+		t.Errorf("бинарник изменился при no-op: %q", got)
+	}
+}
+
+// TestUpdateDowngradeWithoutFlagRefused — W12 (ТЗ 14): откат на более старую
+// версию (build_time target < current) без downgrade=true → REFUSED, бинарник
+// не скачивается и не меняется.
+func TestUpdateDowngradeWithoutFlagRefused(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "runpilot")
+	if err := os.WriteFile(bin, []byte("OLD-BIN"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	downloaded := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		downloaded = true
+		_, _ = w.Write([]byte("NEW-BIN"))
+	}))
+	defer srv.Close()
+	withSelftest(t, func(_ context.Context, _ string, _ time.Duration) error { return nil })
+
+	ex := &fakeExec{}
+	n := newTestNode(t, ex)
+	n.SetBinPath(bin)
+	n.SetNodeToken("node-tok")
+	n.SetVersion("2.0")
+	n.SetBuildTime(2000) // текущий build_time
+
+	m := proto.New(proto.KindUpdate)
+	m.CmdID = "c1"
+	m.URL = srv.URL
+	m.Version = "1.0" // старая версия
+	m.BuildTime = 1000 // build_time target < current
+	rep, _ := n.Handle(context.Background(), m)
+	if rep.Result != proto.ResUpdateRefused {
+		t.Fatalf("Result = %q, хочу UPDATE_REFUSED", rep.Result)
+	}
+	if downloaded {
+		t.Errorf("бинарник скачан при откате без downgrade (не должен)")
+	}
+	if got, _ := os.ReadFile(bin); string(got) != "OLD-BIN" {
+		t.Errorf("бинарник изменился при откате без downgrade: %q", got)
+	}
+}
+
+// TestUpdateDowngradeWithFlagAllowed — W12 (ТЗ 14): откат с downgrade=true →
+// допускается (бинарник ставится).
+func TestUpdateDowngradeWithFlagAllowed(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "runpilot")
+	if err := os.WriteFile(bin, []byte("OLD-BIN"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("NEW-BIN"))
+	}))
+	defer srv.Close()
+	withSelftest(t, func(_ context.Context, _ string, _ time.Duration) error { return nil })
+
+	ex := &fakeExec{}
+	n := newTestNode(t, ex)
+	n.SetBinPath(bin)
+	n.SetNodeToken("node-tok")
+	n.SetVersion("2.0")
+	n.SetBuildTime(2000)
+
+	m := proto.New(proto.KindUpdate)
+	m.CmdID = "c1"
+	m.URL = srv.URL
+	m.Version = "1.0"
+	m.BuildTime = 1000
+	m.Downgrade = true // явный откат
+	rep, _ := n.Handle(context.Background(), m)
+	if rep.Result != proto.ResUpdated {
+		t.Fatalf("Result = %q, хочу UPDATED", rep.Result)
+	}
+}
+
 // TestUpdateShamismatch — CONTROL 3-связанное: SHA-256 не сошёлся → отказ.
 func TestUpdateShamismatch(t *testing.T) {
 	bin := filepath.Join(t.TempDir(), "runpilot")

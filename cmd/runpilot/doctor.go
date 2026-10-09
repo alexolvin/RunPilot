@@ -62,7 +62,7 @@ func newDoctorCmd() *cobra.Command {
 				}
 				checks = rc
 			}
-			results := doctor.Run(&doctor.Context{Cfg: cfg, CfgPath: resolvedPath, Cmdline: cmdline, ExecRoots: execRoots}, checks)
+			results := doctor.Run(&doctor.Context{Cfg: cfg, CfgPath: resolvedPath, NodeVersion: version, Cmdline: cmdline, ExecRoots: execRoots}, checks)
 			for _, r := range results {
 				fmt.Println(r)
 			}

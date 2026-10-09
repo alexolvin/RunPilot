@@ -1,11 +1,19 @@
 package api
 
 import (
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"runpilot/internal/clock"
+	"runpilot/internal/config"
+	"runpilot/internal/store"
 )
 
 // TestNodeEnrollFileSetupUmask — создание config.yaml + secrets.env (install.sh
@@ -49,5 +57,84 @@ func TestNodeEnrollFileSetupUmask(t *testing.T) {
 	}
 	if !strings.Contains(string(sec), "RUNPILOT_NODE_TOKEN=tok123") {
 		t.Errorf("secrets.env не содержит RUNPILOT_NODE_TOKEN=tok123")
+	}
+}
+
+// TestNodeUpdateStaleDistRefused — W12 (ТЗ 14): бинарник в dist_dir не
+// совпадает по версии с координатором (stale dist) → API-обновление отказывает
+// 409 DIST_MISMATCH (иначе self-update узлов разворачивал бы устаревший dist).
+func TestNodeUpdateStaleDistRefused(t *testing.T) {
+	dir := t.TempDir()
+	distDir := filepath.Join(dir, "dist")
+	if err := os.MkdirAll(distDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// dist-бинарник отчитывается СТАРОЙ версией (stale dist).
+	staleBin := filepath.Join(distDir, "runpilot")
+	if err := os.WriteFile(staleBin, []byte("#!/bin/sh\necho d96bf26\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.Defaults()
+	cfg.Coordinator.DistDir = distDir
+	st, err := store.Open(filepath.Join(dir, "runpilot.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	clk := clock.NewReal()
+	srv := NewServer(cfg, st, NewHub(clk), clk,
+		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	srv.SetVersion("77e9550")
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(func() { ts.Close() })
+
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/nodes/vzu5-big/update", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusConflict {
+		t.Fatalf("статус %d, хочу 409 (DIST_MISMATCH)", resp.StatusCode)
+	}
+}
+
+// TestNodeUpdateDistOK — W12: бинарник в dist_dir = версии координатора →
+// API-обновление НЕ отказывает по версии (202, операция запущена).
+func TestNodeUpdateDistOK(t *testing.T) {
+	dir := t.TempDir()
+	distDir := filepath.Join(dir, "dist")
+	if err := os.MkdirAll(distDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// dist-бинарник отчитывается версией координатора.
+	okBin := filepath.Join(distDir, "runpilot")
+	if err := os.WriteFile(okBin, []byte("#!/bin/sh\necho 77e9550\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.Defaults()
+	cfg.Coordinator.DistDir = distDir
+	st, err := store.Open(filepath.Join(dir, "runpilot.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	clk := clock.NewReal()
+	srv := NewServer(cfg, st, NewHub(clk), clk,
+		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	srv.SetVersion("77e9550")
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(func() { ts.Close() })
+
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/nodes/vzu5-big/update", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("статус %d, хочу 202 (обновление запущено)", resp.StatusCode)
 	}
 }

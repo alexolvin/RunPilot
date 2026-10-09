@@ -66,6 +66,8 @@ function NodeCard(props) {
       <span class="node-card-count">${props.count} ${T.nodes.sessions}${n.unmanaged ? ' · ' + n.unmanaged + ' ' + T.nodes.unmanaged : ''}</span>
     </div>
     <div class="node-card-sub">${n.host_ip || T.units.none} · ${n.runpilot_version || T.units.none}</div>
+    ${n.version_mismatch ? html`<div class="node-card-mismatch">
+      <${Badge} tone="var(--color-warning)" label=${T.nodes.versionMismatch} /></div>` : null}
     ${n.sockets.length ? html`<div class="node-card-socks">${n.sockets.join(', ')}</div>` : null}
   </div>`;
 }

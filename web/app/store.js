@@ -101,6 +101,8 @@ function normNode(n) {
   return {
     host: n.Host, host_ip: n.HostIP, runpilot_version: n.RUNPILOTVersion,
     tmux_version: n.TmuxVersion, os: n.OS, sockets: n.Sockets || [],
+    // W12 (ТЗ 14): несовпадение версии узла и координатора — бейдж в вебе.
+    version_mismatch: !!n.VersionMismatch,
     // W7 (14.4, N9/N10): здоровье узла — проблемы и расхождение часов.
     health: h
       ? {

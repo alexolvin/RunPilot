@@ -59,7 +59,9 @@ func newNodeCmd() *cobra.Command {
 			if token == "" {
 				token = tokenFromSecrets(cfg.Client.TokenEnv)
 			}
-			n.SetNodeToken(token) // self-update: загрузка дистрибутива (14.2)
+			n.SetNodeToken(token)          // self-update: загрузка дистрибутива (14.2)
+			n.SetVersion(version)          // W12: защита self-update (та же версия → no-op)
+			n.SetBuildTime(buildTimeUnix)  // W12: детект отката (build_time)
 			ws := node.NewWSClient(cfg.Client.Coordinator, token, version, clk, log, n)
 
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

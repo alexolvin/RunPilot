@@ -108,6 +108,19 @@ B_AFTER="$(sha "$COORD_BIN")"
 [ "$B_AFTER" != "$B_BEFORE" ] && ok "целевой заменён (sha)" || bad "целевой НЕ заменён"
 printf '%s\n' "$out_b" | grep -q 'ИТОГ: PASS' && ok "печать «ИТОГ: PASS»" || bad "нет печати «ИТОГ: PASS»"
 
+echo "== C. dist_dir/runpilot = бинарник координатора (W12, ТЗ 14) =="
+DIST_BIN="$SB/.local/share/runpilot/dist/runpilot"
+[ -f "$DIST_BIN" ] && ok "dist_dir/runpilot создан" || bad "dist_dir/runpilot отсутствует"
+if [ -f "$DIST_BIN" ]; then
+  [ "$(sha "$DIST_BIN")" = "$(sha "$COORD_BIN")" ] \
+    && ok "dist sha256 = координатор sha256" \
+    || bad "dist sha256 != координатор sha256"
+  # версионная защита: dist отчитывается той же версией, что и координатор.
+  [ "$("$DIST_BIN" version)" = "$("$COORD_BIN" version)" ] \
+    && ok "dist version = координатор version" \
+    || bad "dist version != координатор version"
+fi
+
 echo
 printf 'ИТОГ sandbox: PASS=%d FAIL=%d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

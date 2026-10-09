@@ -7,6 +7,9 @@ const (
 	// gpuTimeoutSec — таймаут на одну команду GPU (не порог ТЗ).
 	gpuTimeoutSec = 10
 
+	// binVersionTimeoutSec — таймаут <bin> version (W12: сверка версии при self-update).
+	binVersionTimeoutSec = 10
+
 	// binFilePerm — права загруженного бинарника self-update (14.2): исполняемый.
 	binFilePerm = 0o755
 
@@ -124,4 +127,7 @@ const (
 
 	// qwenSettingsFileMode — режим ~/.qwen/settings.json (W9 доп-3c).
 	qwenSettingsFileMode = 0o600
+
+	// binVersionTimeout — таймаут <bin> version (W12: сверка версии при self-update).
+	binVersionTimeout = binVersionTimeoutSec * time.Second
 )

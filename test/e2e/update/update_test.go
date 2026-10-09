@@ -238,6 +238,11 @@ enroll:
 	if err := os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// W12: убить tmux-сервер на соке в конце теста (иначе сессии живут между
+	// прогонами, и повторный spawn на тот же apiPort → NAME_IN_USE).
+	t.Cleanup(func() {
+		_ = exec.Command("tmux", "-L", m.socket, "kill-server").Run()
+	})
 	return m
 }
 
@@ -500,6 +505,9 @@ func TestControl1NodeOnline(t *testing.T) {
 }
 
 // --- CONTROL 2: новая версия координатора → узел обновлён ≤ 120 с, сессии равны ---
+// W12 (ТЗ 14: «Автообновления aqm нет»): self-update — только по команде
+// оператора (API), не по hello. Гонка (быстрый локальный dist) устранена:
+// update триггерится ЯВНО после создания сессии, не по подключению.
 
 func TestControl2SelfUpdate(t *testing.T) {
 	m := newMachine(t, runpilotV2) // dist = runpilot-v2 (новая версия)
@@ -509,12 +517,13 @@ func TestControl2SelfUpdate(t *testing.T) {
 	tok := enrollToken(t, m)
 	node := m.startNode(t, tok)
 
-	waitForOnline(t, m, onlineLimit) // v1 онлайн
+	waitForOnline(t, m, onlineLimit) // v1 онлайн (авто-self-update нет)
 	spawnSession(t, m, "e2e-sess-1") // сессия ДО обновления
 	before := waitSessions(t, m, 1)
 
 	t0 := time.Now()
-	// v2(координатор) != v1(узел) → self-update по hello: download+SHA+selftest+swap.
+	// W12: операторский self-update через API → download+SHA+selftest+swap.
+	triggerUpdate(t, m)
 	waitBinSwapped(t, m, v2)
 	// Перезапуск узла (аналог systemd Restart=always): теперь работает runpilot-v2.
 	killProc(node)
@@ -533,6 +542,62 @@ func TestControl2SelfUpdate(t *testing.T) {
 		"pass": elapsed <= updateLimit && len(before) > 0,
 	})
 	t.Logf("CONTROL 2: узел v1→v2 за %v (лимит %v), сессии=%v", elapsed, updateLimit, after)
+}
+
+// triggerUpdate — операторский self-update через API (W12, ТЗ 14):
+// POST /api/v1/nodes/{host}/update → 202, poll GET …/update/{id} до stage=done.
+func triggerUpdate(t *testing.T, m *machine) {
+	t.Helper()
+	resp := m.do(t, http.MethodGet, "/api/v1/nodes", nil)
+	if resp == nil {
+		t.Fatal("triggerUpdate: нет /nodes")
+	}
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	var nodes []struct {
+		Host string `json:"Host"`
+	}
+	if err := json.Unmarshal(b, &nodes); err != nil || len(nodes) == 0 {
+		t.Fatalf("triggerUpdate: нет узлов: %s", b)
+	}
+	host := nodes[0].Host
+	resp = m.do(t, http.MethodPost, "/api/v1/nodes/"+host+"/update", nil)
+	if resp == nil {
+		t.Fatal("triggerUpdate: нет ответа")
+	}
+	rb, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("triggerUpdate: POST = %d: %s", resp.StatusCode, rb)
+	}
+	var out struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(rb, &out); err != nil || out.ID == "" {
+		t.Fatalf("triggerUpdate: нет id: %s", rb)
+	}
+	deadline := time.Now().Add(updateLimit)
+	for time.Now().Before(deadline) {
+		r2 := m.do(t, http.MethodGet, "/api/v1/nodes/"+host+"/update/"+out.ID, nil)
+		if r2 != nil {
+			b2, _ := io.ReadAll(r2.Body)
+			r2.Body.Close()
+			var op struct {
+				Stage  string `json:"stage"`
+				Result string `json:"result"`
+			}
+			if json.Unmarshal(b2, &op) == nil {
+				if op.Stage == "done" {
+					return
+				}
+				if op.Stage == "failed" {
+					t.Fatalf("triggerUpdate: failed: %s", b2)
+				}
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("triggerUpdate: не дождались done за %v", updateLimit)
 }
 
 // --- CONTROL 3: проваленный selftest → бинарник не ставится, узел на старой версии ---

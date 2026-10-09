@@ -253,6 +253,56 @@ func TestNodeHelloSendsConfigWithModelAlias(t *testing.T) {
 	}
 }
 
+// TestNodeVersionMismatchNoAutoUpdate — W12 (ТЗ 14: «Автообновления aqm нет»):
+// несовпадение версий узла и координатора → авто-self-update НЕТ (только WARN).
+// После hello узел получает config + exec_roots, но НЕ update.
+func TestNodeVersionMismatchNoAutoUpdate(t *testing.T) {
+	dbDir := t.TempDir()
+	st, err := store.Open(filepath.Join(dbDir, "runpilot.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	cfg := config.Defaults()
+	clk := clock.NewReal()
+	srv := NewServer(cfg, st, NewHub(clk), clk,
+		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	srv.SetVersion("77e9550")
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	dialer := websocket.Dialer{}
+	conn, _, err := dialer.Dial(wsURL(ts.URL), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	m := proto.New(proto.KindHello)
+	m.Host, m.HostIP = "h1", "127.0.0.1"
+	m.RUNPILOTVersion = "d96bf26" // другая версия → раньше шло авто-self-update
+	if err := conn.WriteJSON(m); err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var got proto.Msg
+	if err := conn.ReadJSON(&got); err != nil {
+		t.Fatalf("ожидал config после hello: %v", err)
+	}
+	if got.Type != proto.KindConfig {
+		t.Fatalf("первый ответ = %s, хочу config", got.Type)
+	}
+	// Авто-self-update НЕТ: среди следующих сообщений нет update.
+	_ = conn.SetReadDeadline(time.Now().Add(800 * time.Millisecond))
+	for i := 0; i < 5; i++ {
+		if err := conn.ReadJSON(&got); err != nil {
+			break // timeout — сообщений больше нет
+		}
+		if got.Type == proto.KindUpdate {
+			t.Fatalf("получил update после hello (автообновление!), хочу только WARN")
+		}
+	}
+}
+
 func TestNodeWSUnknownProtoClosed(t *testing.T) {
 	ts, _, _ := testServer(t)
 	dialer := websocket.Dialer{}

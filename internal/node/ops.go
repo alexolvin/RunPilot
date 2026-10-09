@@ -40,6 +40,12 @@ func sortedEnvKeys(m map[string]string) []string {
 // SetNodeToken — Bearer-токен узла для загрузки дистрибутива (14.2).
 func (n *Node) SetNodeToken(tok string) { n.nodeToken = tok }
 
+// SetVersion — версия бинарника узла (W12: защита self-update).
+func (n *Node) SetVersion(v string) { n.version = v }
+
+// SetBuildTime — commit timestamp бинарника узла (W12: детект отката).
+func (n *Node) SetBuildTime(t int64) { n.buildTimeUnix = t }
+
 // SetBinPath — путь бинарника узла (self-update swap; подмена в тестах).
 func (n *Node) SetBinPath(p string) { n.binPathOverride = p }
 
@@ -422,16 +428,33 @@ var selftestFunc = func(ctx context.Context, bin string, timeout time.Duration) 
 // update — скачать бинарник по URL (Bearer-токен узла), сверить SHA-256,
 // selftest, при успехе сохранить runpilot.prev + атомарно заменить и завершиться
 // кодом 75 (systemd перезапустит); при неудаче — NODE_UPDATE_FAILED.
+//
+// W12 (ТЗ 14: «Автообновления aqm нет»): защита ручного self-update:
+//   - целевая версия = текущей → NOOP (узел ничего не делает, не рестартится);
+//   - откат на более старую версию (build_time target < current) → REFUSED,
+//     допускается только при м.Downgrade=true;
+//   - версия скачанного бинарника ≠ ожидаемой (m.Version) → REFUSED.
 func (n *Node) update(ctx context.Context, m proto.Msg) (*Reply, error) {
 	bin := n.selfBinPath()
 	if bin == "" || m.URL == "" {
 		return &Reply{CmdID: m.CmdID, Result: proto.ResUpdateFailed, Detail: "нет bin/url"}, nil
+	}
+	// Та же версия → no-op (не скачивать, не рестартироваться).
+	if m.Version != "" && n.version != "" && m.Version == n.version {
+		return &Reply{CmdID: m.CmdID, Result: proto.ResUpdateNoop, Detail: m.Version}, nil
+	}
+	// Откат на более старую версию (build_time target < current) — только с
+	// downgrade=true. build_time=0 (e2e без git) — сравнение пропускается.
+	if n.buildTimeUnix > 0 && m.BuildTime > 0 && m.BuildTime < n.buildTimeUnix && !m.Downgrade {
+		return &Reply{CmdID: m.CmdID, Result: proto.ResUpdateRefused,
+			Detail: "откат на более старую версию без downgrade=true"}, nil
 	}
 	newPath := bin + ".new"
 	if err := n.download(ctx, m.URL, newPath); err != nil {
 		_ = os.Remove(newPath)
 		return &Reply{CmdID: m.CmdID, Result: proto.ResUpdateFailed, Detail: "download: " + err.Error()}, nil
 	}
+	// SHA-256 скачанного бинарника = ожидаемому.
 	if m.SHA256 != "" {
 		if h, err := sha256File(newPath); err != nil || hex.EncodeToString(h) != strings.ToLower(m.SHA256) {
 			_ = os.Remove(newPath)
@@ -442,6 +465,17 @@ func (n *Node) update(ctx context.Context, m proto.Msg) (*Reply, error) {
 		_ = os.Remove(newPath)
 		return &Reply{CmdID: m.CmdID, Result: proto.ResUpdateFailed, Detail: "selftest: " + err.Error()}, nil
 	}
+	// Версия скачанного бинарника = ожидаемой (защита от чужого/stale bинарника).
+	// Если бинарник не runpilot (version не отвечает) — check пропускаем:
+	// его ловит selftest (ниже). Валидный runpilot-бинарник с чужой версией —
+	// REFUSED.
+	if m.Version != "" {
+		if v := binVersion(ctx, newPath); v != "" && v != m.Version {
+			_ = os.Remove(newPath)
+			return &Reply{CmdID: m.CmdID, Result: proto.ResUpdateRefused,
+				Detail: fmt.Sprintf("версия бинарника %q != ожидаемой %q", v, m.Version)}, nil
+		}
+	}
 	// успех: текущий → .prev, новый → bin, exit 75 (systemd/launchd перезапустит).
 	if err := os.Rename(bin, bin+".prev"); err == nil {
 		if err := os.Rename(newPath, bin); err != nil {
@@ -450,6 +484,18 @@ func (n *Node) update(ctx context.Context, m proto.Msg) (*Reply, error) {
 		}
 	}
 	return &Reply{CmdID: m.CmdID, Result: proto.ResUpdated, Detail: m.Version}, nil
+}
+
+// binVersion — <bin> version (вывод). Для защиты self-update (W12): сверка
+// версии скачанного бинарника с ожидаемой. Ошибка — "" (≠ m.Version → refused).
+func binVersion(ctx context.Context, bin string) string {
+	cctx, cancel := context.WithTimeout(ctx, binVersionTimeout)
+	defer cancel()
+	out, err := execOutput(cctx, bin, "version")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func (n *Node) download(ctx context.Context, url, dest string) error {

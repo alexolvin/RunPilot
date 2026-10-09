@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -327,6 +328,22 @@ func fileExists(p string) bool {
 	return err == nil && fi.Mode().IsRegular()
 }
 
+// distVersion — версия бинарника в dist_dir (`<dist> version`); для защиты от
+// stale dist (W12, ТЗ 14). Ошибка — бинарник недоступен/не runpilot.
+func (s *Server) distVersion() (string, error) {
+	p := s.distBinaryPath()
+	if p == "" {
+		return "", errors.New("бинарник недоступен")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), distVersionTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, p, "version").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // serveBinary — отдать бинарник с заголовком X-RUNPILOT-Sha256.
 func (s *Server) serveBinary(w http.ResponseWriter, r *http.Request, path string) {
 	if h, err := sha256FileHex(path); err == nil {
@@ -365,6 +382,14 @@ func (s *Server) handleDist(w http.ResponseWriter, r *http.Request) {
 	s.serveBinary(w, r, p)
 }
 
+// handleNodeVersion — GET /api/v1/node/version: версия координатора (токен
+// узла, W12). Doctor узла сверяет свою версию с версией координатора и выносит
+// WARN при несовпадении (автообновления нет — ТЗ 14).
+func (s *Server) handleNodeVersion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"version": s.version})
+}
+
 // --- список/удаление/обновление узлов (CONTROL 7) ---
 
 // handleNodes — GET /api/v1/nodes: подключённые узлы + их токены/панели.
@@ -372,8 +397,9 @@ func (s *Server) handleNodes(w http.ResponseWriter, r *http.Request) {
 	nodes := s.hub.Nodes()
 	type nodeOut struct {
 		NodeInfo
-		Unmanaged int             `json:"unmanaged"`
-		Health    *NodeHealthView `json:"health,omitempty"`
+		Unmanaged       int             `json:"unmanaged"`
+		Health          *NodeHealthView `json:"health,omitempty"`
+		VersionMismatch bool            `json:"version_mismatch"`
 	}
 	out := make([]nodeOut, 0, len(nodes))
 	for _, n := range nodes {
@@ -382,7 +408,12 @@ func (s *Server) handleNodes(w http.ResponseWriter, r *http.Request) {
 		if ok {
 			hp = &health
 		}
-		out = append(out, nodeOut{NodeInfo: n, Unmanaged: s.hub.UnmanagedCount(n.Host), Health: hp})
+		// W12 (ТЗ 14): несовпадение версии узла и координатора — бейдж в вебе.
+		mismatch := s.version != "" && n.RUNPILOTVersion != s.version
+		out = append(out, nodeOut{
+			NodeInfo: n, Unmanaged: s.hub.UnmanagedCount(n.Host), Health: hp,
+			VersionMismatch: mismatch,
+		})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(out)
@@ -432,8 +463,18 @@ type UpdateOp struct {
 
 // handleNodeUpdate — POST /api/v1/nodes/<host>/update: асинхронный self-update
 // на версию координатора (CONTROL 2/3, W12 7b). Возвращает 202 + id операции.
+// W12 (ТЗ 14): если бинарник в dist_dir не совпадает по версии с координатором
+// (stale dist) — отказ 409 DIST_MISMATCH, обновление не запускается.
 func (s *Server) handleNodeUpdate(w http.ResponseWriter, r *http.Request) {
 	host := r.PathValue("host")
+	// Защита от stale dist: версия бинарника в dist_dir = версии координатора.
+	// Если dist не runpilot-бинарник (version не отвечает) — пропускаем (узел
+	// проверит selftest + версию); если отвечает и не совпадает — отказ.
+	if dv, err := s.distVersion(); err == nil && s.version != "" && dv != s.version {
+		httpError(w, http.StatusConflict, "DIST_MISMATCH",
+			fmt.Sprintf("версия dist %s != версии координатора %s — обновите dist (deploy-coordinator.sh)", dv, s.version))
+		return
+	}
 	op := &UpdateOp{
 		ID:        fmt.Sprintf("upd-%d", s.clk.Now().UnixNano()),
 		Host:      host,
@@ -499,6 +540,7 @@ func (s *Server) triggerNodeUpdate(ctx context.Context, host string) error {
 	}
 	m := proto.New(proto.KindUpdate)
 	m.Version = s.version
+	m.BuildTime = s.buildTimeUnix // W12: детект отката узлом
 	m.URL = s.requestBaseNoPath() + "/api/v1/dist/runpilot"
 	m.SHA256 = sha
 	if _, err := s.hub.DispatchToNode(ctx, host, m); err != nil {
@@ -584,11 +626,6 @@ func (s *Server) nodeOpTimeout() time.Duration {
 	return time.Duration(s.cfg.Web.NodeOpTimeoutSec) * time.Second
 }
 
-// updateTimeout — таймаут self-update узла (14.2).
-func (s *Server) updateTimeout() time.Duration {
-	return time.Duration(s.cfg.Web.UpdateTimeoutSec) * time.Second
-}
-
 func splitLines(s string) []string {
 	var out []string
 	for _, l := range strings.Split(s, "\n") {
@@ -599,12 +636,3 @@ func splitLines(s string) []string {
 	return out
 }
 
-// hasFeature — есть ли возможность в hello.features (proto 2, 15.5).
-func hasFeature(features []string, want string) bool {
-	for _, f := range features {
-		if f == want {
-			return true
-		}
-	}
-	return false
-}
