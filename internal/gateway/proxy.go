@@ -105,6 +105,18 @@ func stateFromCtx(ctx context.Context) *attemptState {
 	return st
 }
 
+type sidCtxKey struct{}
+
+// withSID — SID сессии в контексте запроса (W13 этап 7: X-RunPilot-SID).
+func withSID(r *http.Request, sid string) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), sidCtxKey{}, sid))
+}
+
+func sidFromCtx(ctx context.Context) string {
+	s, _ := ctx.Value(sidCtxKey{}).(string)
+	return s
+}
+
 // captureWriter — ResponseWriter: при миграции (502/503/504 до первого
 // байта) ответ не доходит до клиента; первый байт фиксируется по часам
 // шлюза (t_first_byte строки request).
@@ -200,6 +212,10 @@ func (g *Gateway) direct(out *http.Request, srv *Server) {
 	out.Header.Del("x-api-key")
 	if key := srv.Key(); key != "" {
 		out.Header.Set("Authorization", "Bearer "+key)
+	}
+	// W13 этап 7: шлюз добавляет SID к запросам в апстрим.
+	if sid := sidFromCtx(out.Context()); sid != "" {
+		out.Header.Set("X-RunPilot-SID", sid)
 	}
 }
 
@@ -331,15 +347,12 @@ func (g *Gateway) doAttempt(w http.ResponseWriter, r *http.Request, ctx context.
 	rest string, body []byte, decision *leaseDecision, sid string) (bool, *attemptState) {
 	st := newAttemptState()
 	req := withState(r, st)
+	req = withSID(req, sid)
 	req.URL.Path = rest
 	req.Body = io.NopCloser(bytes.NewReader(body))
 	// Тело подменялось (model/key) — длина могла измениться;
 	// Content-Length обязан совпадать с фактической длиной тела.
 	req.ContentLength = int64(len(body))
-	// W13 этап 7: шлюз добавляет SID к запросам в апстрим.
-	if sid != "" {
-		req.Header.Set("X-RunPilot-SID", sid)
-	}
 	// Ответ пишется через captureWriter: при миграции байты не доходят
 	// до клиента, первый байт фиксируется по часам шлюза.
 	cw := &captureWriter{ResponseWriter: w, st: st, clk: g.clk}

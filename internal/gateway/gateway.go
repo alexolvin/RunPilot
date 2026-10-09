@@ -341,6 +341,7 @@ func (g *Gateway) handlePassthrough(w http.ResponseWriter, r *http.Request, sess
 		return
 	}
 	req := r.Clone(r.Context())
+	req = withSID(req, sess.SID)
 	req.URL.Path = rest
 	// Прямой writer: удержание и миграция для прочих путей не действуют.
 	g.proxyFor(srv).ServeHTTP(w, req)
