@@ -148,6 +148,7 @@ func RoleChecks(r Role) []Check {
 			{Name: "allow_cidrs", Run: checkAllowCIDRs},
 			{Name: "metrics", Run: checkMetrics},
 			{Name: "require_direct", Run: checkRequireDirect},
+			{Name: "log_rotation", Run: checkLogRotation},
 		}
 	case RoleClient:
 		return []Check{
@@ -916,4 +917,16 @@ func procEnvValue(environ []byte, key string) string {
 		}
 	}
 	return ""
+}
+
+// checkLogRotation — ротация лога координатора настроена (log.max_mb > 0).
+func checkLogRotation(ctx *Context) Result {
+	if ctx.Cfg.Log.MaxMB <= 0 {
+		return result("log_rotation", WARN, "log.max_mb не задан — лог растёт без ограничений")
+	}
+	detail := fmt.Sprintf("max_mb=%d, backups=%d", ctx.Cfg.Log.MaxMB, ctx.Cfg.Log.Backups)
+	if ctx.Cfg.Log.Path == "" {
+		detail += ", path=stderr"
+	}
+	return result("log_rotation", PASS, detail)
 }

@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"syscall"
@@ -21,6 +23,7 @@ import (
 	"runpilot/internal/backup"
 	"runpilot/internal/clock"
 	"runpilot/internal/gateway"
+	"runpilot/internal/logx"
 	"runpilot/internal/model"
 	"runpilot/internal/monitor"
 	"runpilot/internal/scheduler"
@@ -77,7 +80,23 @@ func newServeCmd() *cobra.Command {
 			if err := cfg.ValidateToken(os.Getenv(cfg.Coordinator.TokenEnv)); err != nil {
 				return err
 			}
-			log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			logWriter := io.Writer(os.Stderr)
+			var logCloser io.Closer
+			if cfg.Log.Path != "" {
+				logPath, err := expandPath(cfg.Log.Path)
+				if err != nil {
+					return fmt.Errorf("log.path: %w", err)
+				}
+				rw, err := logx.NewRotateWriter(logPath,
+					int64(cfg.Log.MaxMB)*logx.MiB, cfg.Log.Backups)
+				if err != nil {
+					return fmt.Errorf("log: %w", err)
+				}
+				logWriter = rw
+				logCloser = rw
+			}
+			log := slog.New(slog.NewJSONHandler(logWriter, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			defer logCloser.Close()
 			dbPath, err := cfg.DBPath()
 			if err != nil {
 				return err
@@ -518,4 +537,16 @@ func (f faultEventSink) RecordServerFault(name string, fc model.FaultClass, coun
 	_ = f.st.EventRecord(model.Event{
 		TS: f.clk.Now(), Kind: model.KindServerFault, Server: name, Payload: payload,
 	})
+}
+
+// expandPath — ~ → $HOME.
+func expandPath(p string) (string, error) {
+	if len(p) > 0 && p[0] == '~' {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(home, p[twoArgs:]), nil
+	}
+	return p, nil
 }

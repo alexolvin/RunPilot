@@ -424,6 +424,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/v1/node", s.nodeAuth(http.HandlerFunc(s.handleNodeWS)))
 	mux.Handle("GET /api/v1/dist/", http.HandlerFunc(s.handleDist))
 	mux.Handle("/enroll/", s.EnrollHandler())
+	// Раздел 14 ТЗ: /metrics — Bearer-токен оператора.
+	if s.gw != nil {
+		mux.Handle("GET /metrics", s.auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			s.gw.MetricsHandler().ServeHTTP(w, r)
+		})))
+	}
 	// runpilot exec (раздел 8.1): токен оператора ИЛИ узла с host_ip — своя
 	// аутентификация. Точные method+path-паттерны (без subtree-редиректа).
 	mux.Handle("POST /api/v1/jobs", s.jobsAuth(http.HandlerFunc(s.handleJobCreate)))

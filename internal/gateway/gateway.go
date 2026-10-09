@@ -167,15 +167,12 @@ func NewGateway(cfg *config.Config, st *store.Store, clk clock.Clock, log *slog.
 // Servers — реестр серверов (для планировщика и монитора, Э4/Э6).
 func (g *Gateway) Servers() *Servers { return g.servers }
 
+// MetricsHandler — обработчик /metrics (раздел 14 ТЗ); монтируется на API-порт.
+func (g *Gateway) MetricsHandler() http.Handler { return g.metrics.Handler() }
+
 // Handler — HTTP-обработчик шлюза (gateway_port).
 func (g *Gateway) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/metrics" {
-			g.metrics.Handler().ServeHTTP(w, r)
-			return
-		}
-		g.serveHTTP(w, r)
-	})
+	return http.HandlerFunc(g.serveHTTP)
 }
 
 // serveHTTP — разбор пути /s/<sid>/..., доступ, маршрутизация.

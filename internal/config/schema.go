@@ -298,6 +298,14 @@ func Schema() []SettingField {
 			"Максимум ожидания слота по умолчанию (runpilot exec).", ApplyNextTick),
 		intField("jobs.slots", "", "Задания", "Одновременные задания",
 			"Максимум одновременных JOB-аренд (runpilot exec).", ApplyNextTick),
+
+		// Лог-ротация.
+		stringField("log.path", "", "Лог", "Путь",
+			"Путь к лог-файлу координатора (пусто — stderr).", ApplyNextTick),
+		intField("log.max_mb", "MB", "Лог", "Макс. размер",
+			"Максимальный размер лог-файла (МБ); 0 — без ротации.", ApplyNextTick),
+		intField("log.backups", "", "Лог", "Бэкапы",
+			"Сколько бэкапов хранить (.1, .2, ...).", ApplyNextTick),
 	}
 
 	d := Defaults()

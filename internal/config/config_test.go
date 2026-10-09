@@ -127,6 +127,7 @@ var configKeys = []string{
 	"external", "external.detect", "external.kill_grace_sec",
 	"jobs", "jobs.slots", "jobs.heartbeat_sec", "jobs.heartbeat_timeout_sec", "jobs.wait_max_default_sec",
 	"backup", "backup.daily_at_utc", "backup.keep",
+	"log", "log.path", "log.max_mb", "log.backups",
 }
 
 // flattenYAMLKeys — рекурсивно собирает yaml-пути полей структуры.

@@ -45,12 +45,20 @@ type Config struct {
 	Client      Client      `yaml:"client"`
 	Node        Node        `yaml:"node"`
 	Web         Web         `yaml:"web"`
+	Log         Log         `yaml:"log"`
 	// v2 (раздел 4.2): новые рабочие группы.
 	Faults   Faults   `yaml:"faults"`
 	Enroll   Enroll   `yaml:"enroll"`
 	External External `yaml:"external"`
 	Jobs     Jobs     `yaml:"jobs"`
 	Backup   Backup   `yaml:"backup"`
+}
+
+// Log — параметры ротации лога координатора.
+type Log struct {
+	Path    string `yaml:"path"`    // путь к лог-файлу (пусто — stderr)
+	MaxMB   int    `yaml:"max_mb"`  // максимальный размер (МБ); 0 — без ротации
+	Backups int    `yaml:"backups"` // сколько бэкапов (.1, .2, ...)
 }
 
 type Coordinator struct {

@@ -178,5 +178,10 @@ func Defaults() *Config {
 			DailyAtUTC: "03:00",
 			Keep:       7,
 		},
+		Log: Log{
+			Path:    "~/.local/share/runpilot/coordinator.log",
+			MaxMB:   10,
+			Backups: 3,
+		},
 	}
 }
