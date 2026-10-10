@@ -239,11 +239,10 @@ export const T = {
     node: 'Узел',
     dir: 'Каталог проекта',
     dirPh: '~/proj',
+    dirChoose: 'Выбрать каталог',
     dirHint: 'в пределах project_roots узла',
     dirHintRoots: (roots) => 'доступны каталоги узла: ' + roots.join(', '),
-    endpointTitle: 'Эндпоинт (шлюз runpilot)',
-    endpointShort: (alias) =>
-      'Кодер запустится через шлюз runpilot (модель ' + alias + ').',
+    endpointLabel: (alias) => 'Эндпоинт: RunPilot (' + alias + ')',
     precheckFailed: 'Предпроверка не пройдена',
     profile: 'Профиль',
     create: 'Создать сессию',
@@ -351,12 +350,13 @@ export const T = {
   // Экран серверов (11.6) + мастер/удаление (W6, 5.1/5.2).
   servers: {
     slots: 'Слоты',
+    busy: 'Занято',
     kv: 'KV',
     gen: 'Генерация',
     power: 'Мощность',
     state: 'Состояние',
-    // W13 этап 2: «Свободно X из N» + состояние каждого слота.
-    freeOf: (f, t) => `Свободно ${f} из ${t}`,
+    // W13 этап 2: состояние каждого слота; мини-карточка — «свободно/всего».
+    freeOf: (f, t) => `${f}/${t}`,
     slotFree: 'свободен',
     slotBusy: (s) => `занят ${s}`,
     slotExternal: 'внешняя нагрузка',

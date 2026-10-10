@@ -2,7 +2,7 @@
 // Тон — state-style (один код — один цвет, 9.4); клик — детальная страница.
 import { html } from '../html.js';
 import { stateColorVar } from '../state-style.js';
-import { serverStateLabel, fmtPct, fmtTokS } from '../labels.js';
+import { serverStateLabel, fmtTokS } from '../labels.js';
 import { T } from '../i18n/ru.js';
 import { Badge } from './badge.js';
 import { navigate } from '../router.js';
@@ -39,10 +39,6 @@ export function ServerCard(props) {
       <div class="metric">
         <span class="metric-k">${T.servers.slots}</span>
         <span class="metric-v">${T.servers.freeOf(s.free, s.total)}</span>
-      </div>
-      <div class="metric">
-        <span class="metric-k">${T.servers.kv}</span>
-        <span class="metric-v">${s.missing ? T.units.none : fmtPct(s.kv_pct)}</span>
       </div>
       <div class="metric">
         <span class="metric-k">${T.servers.gen}</span>

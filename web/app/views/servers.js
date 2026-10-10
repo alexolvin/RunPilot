@@ -73,7 +73,7 @@ function ServerDetail({ name }) {
       <${Badge} tone=${tone} label=${serverStateLabel(s.meta, server.state)} />
     </div>
     <div class="stat-grid">
-      <${Stat} label=${T.servers.slots} value=${server.running + '/' + server.total} />
+      <${Stat} label=${T.servers.busy} value=${server.running + '/' + server.total} />
       <${Stat} label=${T.servers.kv} value=${server.missing ? T.units.none : fmtPct(server.kv_pct)} />
       <${Stat} label=${T.servers.gen} value=${server.missing ? T.units.none : fmtTokS(server.gen_tok_s)} />
       <${Stat} label=${T.servers.power}

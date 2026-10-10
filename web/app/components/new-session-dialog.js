@@ -30,6 +30,7 @@ export function NewSessionDialog() {
   const [nameUsed, setNameUsed] = useState(false);
   const [dirs, setDirs] = useState([]);
   const [roots, setRoots] = useState([]);
+  const [dirsOpen, setDirsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [ok, setOk] = useState('');
@@ -119,7 +120,6 @@ export function NewSessionDialog() {
     </${Dialog}>`;
   }
 
-  const showDirs = dirs.length > 0 && dirs.some((d) => d !== dir);
   return html`<${Dialog} title=${T.newSession.title} onClose=${close}
     footer=${html`
       <${Button} variant="secondary" label=${T.nodes.enClose} onClick=${close} />
@@ -133,7 +133,7 @@ export function NewSessionDialog() {
     </div>
     <div class="field">
       <label>${T.newSession.node}</label>
-      <select value=${host} onChange=${(e) => { setHost(e.target.value); setDirs([]); }}>
+      <select value=${host} onChange=${(e) => { setHost(e.target.value); setDirs([]); setDirsOpen(false); }}>
         ${s.nodes.map((n) => html`<option value=${n.host}>${n.host}</option>`)}
       </select>
     </div>
@@ -141,14 +141,20 @@ export function NewSessionDialog() {
       <label>${T.newSession.dir}</label>
       <input ref=${dirRef} value=${dir} placeholder=${T.newSession.dirPh} autocomplete="off"
         onInput=${(e) => setDir(e.target.value)} />
-      ${showDirs ? html`<ul class="dir-list">
-        ${dirs.map((d) => html`<li key=${d} onClick=${() => setDir(d)}>${d}</li>`)}
-      </ul>` : null}
+      ${dirs.length ? html`
+        <button type="button" class="dir-dd" aria-expanded=${dirsOpen}
+          onClick=${() => setDirsOpen(!dirsOpen)}>
+          <span class="dir-dd-caret">${dirsOpen ? '▴' : '▾'}</span>
+          ${T.newSession.dirChoose}
+        </button>
+        ${dirsOpen ? html`<ul class="dir-list">
+          ${dirs.map((d) => html`<li key=${d} class=${d === dir ? 'is-active' : ''}
+            onClick=${() => { setDir(d); setDirsOpen(false); }}>${d}</li>`)}
+        </ul>` : null}` : null}
       <div class="field-hint">${roots.length ? T.newSession.dirHintRoots(roots) : T.newSession.dirHint}</div>
     </div>
     ${s.gateway ? html`<div class="field">
-      <label>${T.newSession.endpointTitle}</label>
-      <div class="field-hint">${T.newSession.endpointShort(s.gateway.model_alias)}</div>
+      <label>${T.newSession.endpointLabel(s.gateway.model_alias)}</label>
     </div>` : null}
     ${err ? html`<p class="dialog-err">${err}</p>` : null}
     ${ok ? html`<p class="dialog-ok">${ok}</p>` : null}
