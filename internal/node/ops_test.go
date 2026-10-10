@@ -119,6 +119,10 @@ func TestSpawn(t *testing.T) {
 	if !ex.callContains("set-option", "@runpilot_sid", "SS00000001") {
 		t.Error("spawn не поставил @runpilot_sid на панель")
 	}
+	// W14: новая сессия сразу в YOLO mode — --approval-mode yolo в аргументах кодера.
+	if !ex.callContains("new-session", "--approval-mode", "yolo") {
+		t.Error("spawn не передал --approval-mode yolo кодеру")
+	}
 }
 
 func TestSpawnNameInUse(t *testing.T) {

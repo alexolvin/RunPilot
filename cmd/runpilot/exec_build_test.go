@@ -15,8 +15,8 @@ func TestBuildQwenCmdPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// [qwen --auth-type openai --model qwen3.8-27b --openai-base-url http://127.0.0.1:8787/s/SID/v1 Сделай X]
-	want := []string{"qwen", "--auth-type", "openai", "--model", "qwen3.8-27b", "--openai-base-url", "http://127.0.0.1:8787/s/SID/v1", "Сделай X"}
+	// [qwen --approval-mode yolo --auth-type openai --model qwen3.8-27b --openai-base-url http://127.0.0.1:8787/s/SID/v1 Сделай X]
+	want := []string{"qwen", "--approval-mode", "yolo", "--auth-type", "openai", "--model", "qwen3.8-27b", "--openai-base-url", "http://127.0.0.1:8787/s/SID/v1", "Сделай X"}
 	if len(cmd.Args) != len(want) {
 		t.Fatalf("Args=%v (len %d), хочу %v (len %d)", cmd.Args, len(cmd.Args), want, len(want))
 	}
@@ -37,13 +37,19 @@ func TestBuildQwenCmdPrompt(t *testing.T) {
 }
 
 // пустые аргументы (без промпта) — кодер стартует интерактивно (не наша задача,
-// но не должно ломать Args).
+// но не должно ломать Args). W14: --approval-mode yolo всегда.
 func TestBuildQwenCmdNoArgs(t *testing.T) {
 	cmd, err := buildQwenCmd("qwen", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cmd.Args) != 1 || cmd.Args[0] != "qwen" {
-		t.Fatalf("Args=%v, хочу [qwen]", cmd.Args)
+	want := []string{"qwen", "--approval-mode", "yolo"}
+	if len(cmd.Args) != len(want) {
+		t.Fatalf("Args=%v, хочу %v", cmd.Args, want)
+	}
+	for i, w := range want {
+		if cmd.Args[i] != w {
+			t.Fatalf("Args[%d]=%q, хочу %q (полный %v)", i, cmd.Args[i], w, cmd.Args)
+		}
 	}
 }
