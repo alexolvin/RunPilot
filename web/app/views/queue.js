@@ -139,12 +139,16 @@ export function QueuePage() {
 
   const shownRunning = running.slice(0, UI.queueWorkMax);
 
-  // «Очередь» — снапшот (разовый GET). Показываем только те строки, чья live-
-  // сессия ещё в QUEUED: ушедшие в запуск (RUNNING/DISPATCHING) уже в «В работе»,
-  // снятые (IDLE) и закрытые (GONE) исключаем — иначе дублируем при переходе.
+  // «Очередь» — снапшот (разовый GET). Показываем строки, чья live-сессия
+  // ещё в QUEUED (команда для запуска) ИЛИ удерживается (held_request=true):
+  // удержание — сессия из терминала, слота нет, состояние IDLE; до её выдачи
+  // аренды (RUNNING) она нигде else не видна. Ушедшие в запуск
+  // (RUNNING/DISPATCHING) уже в «В работе», снятые (IDLE без held) и закрытые
+  // (GONE) исключаем — иначе дублируем при переходе.
   const queuedRows = queueRows.filter((row) => {
     const x = s.sessions.find((y) => y.sid === row.sid);
-    return !!x && x.state === 'QUEUED';
+    if (!x) return false;
+    return x.state === 'QUEUED' || row.held;
   });
 
   return html`<div class="page">

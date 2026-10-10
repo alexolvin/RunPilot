@@ -95,7 +95,8 @@ func newServeCmd() *cobra.Command {
 				logWriter = rw
 				logCloser = rw
 			}
-			log := slog.New(slog.NewJSONHandler(logWriter, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			enrich := logx.NewSessEnrich(slog.NewJSONHandler(logWriter, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			log := slog.New(enrich)
 			defer logCloser.Close()
 			dbPath, err := cfg.DBPath()
 			if err != nil {
@@ -133,6 +134,7 @@ func newServeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			enrich.SetStore(st)
 			defer func() { _ = st.Close() }()
 			// v2 раздел 4: рабочие настройки — слой БД поверх defaults;
 			// серверы — из таблицы server (если в БД есть).
