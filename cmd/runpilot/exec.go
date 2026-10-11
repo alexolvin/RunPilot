@@ -293,7 +293,7 @@ func buildQwenCmd(command string, args []string, env map[string]string) (*exec.C
 	// Pdeathsig=SIGKILL (Linux): когда exec-процесс умирает (kill -9), ядро
 	// тут же убивает кодера — осиротевший qwen не репарентится в init и не
 	// продолжает держать запрос/подключение к шлюзу.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
+	cmd.SysProcAttr = coderSysProcAttr()
 	return cmd, nil
 }
 
