@@ -45,6 +45,24 @@ func TestStripBase64(t *testing.T) {
 	}
 }
 
+// M2b: chatContent — content + reasoning (модель-raisoner).
+func TestChatContent(t *testing.T) {
+	// Ответ в reasoning, content null.
+	body := []byte(`{"choices":[{"message":{"content":null,"reasoning":"число 818228"}}]}`)
+	if got := chatContent(body); !strings.Contains(got, "818228") {
+		t.Fatalf("reasoning не извлечён: %q", got)
+	}
+	// Ответ в content.
+	body = []byte(`{"choices":[{"message":{"content":"42","reasoning":""}}]}`)
+	if got := chatContent(body); !strings.Contains(got, "42") {
+		t.Fatalf("content не извлечён: %q", got)
+	}
+	// Пустой ответ.
+	if got := chatContent([]byte(`{"choices":[]}`)); got != "" {
+		t.Fatalf("пустой ответ должен быть '': %q", got)
+	}
+}
+
 // M3: evalStatus — HTTP 200 = PASS, иначе FAIL с телом.
 func TestEvalStatus(t *testing.T) {
 	if r := evalStatus(http.StatusOK, []byte(`{}`)); !r.OK {

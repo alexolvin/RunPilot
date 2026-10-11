@@ -203,19 +203,23 @@ func (s *Server) cleanupProbeSession(si string) {
 	_ = s.store.SetSessionState(si, model.SessionGone, "", s.clk.Now())
 }
 
-// chatContent — choices[0].message.content из ответа chat/completions.
+// chatContent — choices[0].message из ответа chat/completions: content +
+// reasoning (модель-raisoner пишет ответ/рассуждение в reasoning, content
+// может быть null или обрезан по max_tokens).
 func chatContent(respBody []byte) string {
 	var parsed struct {
 		Choices []struct {
 			Message struct {
-				Content string `json:"content"`
+				Content   string `json:"content"`
+				Reasoning string `json:"reasoning"`
 			} `json:"message"`
 		} `json:"choices"`
 	}
 	if json.Unmarshal(respBody, &parsed) != nil || len(parsed.Choices) == 0 {
 		return ""
 	}
-	return parsed.Choices[0].Message.Content
+	m := parsed.Choices[0].Message
+	return m.Content + "\n" + m.Reasoning
 }
 
 // stripBase64 — убрать base64-контейнеры из тела (артефакт без медиа):

@@ -108,7 +108,7 @@ const (
 	// mediaProbeTimeout — таймаут генерирующего запроса пробы (модель читает
 	// медиа и отвечает; запас на 20 картинок / 2 видео).
 	mediaProbeTimeout = 120 * time.Second
-	// mediaProbeMaxTokens — потолок ответа пробы (модель читает число и
-	// отвечает коротко).
-	mediaProbeMaxTokens = 64
+	// mediaProbeMaxTokens — потолок ответа пробы: модель-raisoner пишет
+	// рассуждение + ответ; запас, чтобы ответ не обрезался по max_tokens.
+	mediaProbeMaxTokens = 512
 )
