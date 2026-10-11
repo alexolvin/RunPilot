@@ -1,5 +1,5 @@
 # HANDOFF
-Обновлено: 2026-10-11 (W15: медиа через RunPilot — этап 3: объявление модальностей сессиям, координатор+узлы на f491879)
+Обновлено: 2026-10-11 (W15: медиа через RunPilot — этапы 3-6 завершены; координатор+узлы на f491879; тег v0.1.0)
 
 ## W15 — медиа через RunPilot → учёт версий → GitHub (2026-10-11)
 
@@ -89,10 +89,20 @@
   f491879 (переписать system-settings.json живых сессий при смене пула).
 - Выкат: координатор + 3 узла (3p14-aaa, vzu5-big, vzu5-claw) на f491879.
 
-### Этапы 4–6 — в работе
-4. Живая приёмка (реальный Qwen Code + реальные серверы).
-5. Учёт версий (git-тег, make release, CHANGELOG).
-6. GitHub (CI, release, push).
+### Этап 5 — учёт версий — `7a40122`
+- Единственный источник — annotated git-тег vMAJOR.MINOR.PATCH.
+- Бинарник: `debug.ReadBuildInfo().Main.Version` (git-тег), коммит —
+  vcs.revision. ldflags/VERSION/short-hash убраны.
+- `runpilot version`: версия (тег) + коммит (полный хеш).
+- `make release BUMP=patch|minor|major` — annotated git-тег.
+- CHANGELOG.md, docs/RELEASING.md.
+- Первый тег: v0.1.0.
+
+### Этап 6 — GitHub — `57abda4`
+- `.github/workflows/release.yml`: тег v* → build (linux/amd64, darwin/amd64,
+  darwin/arm64) + GitHub Release (3 архива + SHA256SUMS).
+- README: секция «Versions and releases».
+- Осталось: push (git push origin main --tags) + приёмка (CI/Release, sha256).
 
 ## W13 — планирование и отображение (2026-10-10) — `9015c96` + `50d3d16`
 
