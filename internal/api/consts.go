@@ -111,7 +111,4 @@ const (
 	// mediaProbeMaxTokens — потолок ответа пробы (модель читает число и
 	// отвечает коротко).
 	mediaProbeMaxTokens = 64
-	// loopbackIP — host_ip сессии пробы: запрос шлёт сам координатор (127.0.0.1),
-	// проверка шлюза remoteIP(r)==sess.HostIP требует совпадения.
-	loopbackIP = "127.0.0.1"
 )

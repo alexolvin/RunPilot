@@ -23,6 +23,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -147,9 +148,15 @@ func (s *Server) probeChat(serverName string, body []byte) (int, []byte, error) 
 	if err != nil {
 		return 0, nil, err
 	}
+	// host_ip сессии = хост шлюза: запрос шлёт сам координатор, проверка шлюза
+	// remoteIP(r)==sess.HostIP требует IP источника (host из gateway_url).
+	gwHost, err := gatewayHost(s.cfg.Coordinator.GatewayURL)
+	if err != nil {
+		return 0, nil, err
+	}
 	now := s.clk.Now()
 	rec := store.SessionRecord{
-		SID: si, Name: "mediaprobe-" + si, Host: "", HostIP: loopbackIP,
+		SID: si, Name: "mediaprobe-" + si, Host: "", HostIP: gwHost,
 		Profile: "qwen", Kind: model.KindJob,
 		State: model.SessionIdle, StateChangedAt: now,
 		Class: model.ClassHigh,
@@ -177,6 +184,15 @@ func (s *Server) probeChat(serverName string, body []byte) (int, []byte, error) 
 	defer resp.Body.Close()
 	respBody, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, respBody, nil
+}
+
+// gatewayHost — хост из gateway_url (IP источника запроса шлюза).
+func gatewayHost(gwURL string) (string, error) {
+	u, err := url.Parse(gwURL)
+	if err != nil {
+		return "", fmt.Errorf("gateway_url: %w", err)
+	}
+	return u.Hostname(), nil
 }
 
 // cleanupProbeSession — снять аренду + GONE (как завершение JOB).
