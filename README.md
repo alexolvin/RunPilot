@@ -260,6 +260,25 @@ go test -race ./...   # full test suite
 All four must pass. The linters enforce hygiene rules, including that no real
 hostnames or private CGNAT addresses leak into the code.
 
+## Versions and releases
+
+Version source: annotated git tag `vMAJOR.MINOR.PATCH` (single source).
+The binary reads its version from `debug.ReadBuildInfo().Main.Version`
+(Go VCS stamping): tagged commit → tag, otherwise → `dev`.
+
+```sh
+make release BUMP=patch    # v0.1.0 → v0.1.1
+make release BUMP=minor    # v0.1.0 → v0.2.0
+make release BUMP=major    # v0.1.0 → v1.0.0
+```
+
+Push the tag (`git push origin main --tags`) — GitHub Actions
+(`.github/workflows/release.yml`) builds binaries for linux/amd64,
+darwin/amd64, darwin/arm64 and creates a GitHub Release with archives
++ SHA256SUMS.
+
+See [docs/RELEASING.md](docs/RELEASING.md) and [CHANGELOG.md](CHANGELOG.md).
+
 ## Documentation
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — components, invariants, automata
