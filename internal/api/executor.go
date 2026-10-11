@@ -184,8 +184,8 @@ func (e *apiExecutor) Compress(ctx context.Context, sid string) (command.Outcome
 func (e *apiExecutor) Spawn(context.Context, command.SpawnRequest) (command.Outcome, error) {
 	return unimpl("new")
 }
-func (e *apiExecutor) RestartAgent(context.Context, string) (command.Outcome, error) {
-	return unimpl("restart-agent")
+func (e *apiExecutor) RestartAgent(ctx context.Context, sid string) (command.Outcome, error) {
+	return e.s.CmdRestart(ctx, sid)
 }
 func (e *apiExecutor) KillAgent(context.Context, string) (command.Outcome, error) {
 	return unimpl("kill-agent")

@@ -386,6 +386,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/sessions/{t}/unhold", s.handleUnhold)
 	mux.HandleFunc("POST /api/v1/sessions/{t}/auto-enqueue", s.handleAutoEnqueue)
 	mux.HandleFunc("POST /api/v1/sessions/{t}/cancel", s.handleCancel)
+	// W15 этап 3: перезапуск кодера (только IDLE, --continue).
+	mux.HandleFunc("POST /api/v1/sessions/{sid}/restart", s.handleRestart)
 	mux.HandleFunc("POST /api/v1/pause", s.handlePause)
 	mux.HandleFunc("POST /api/v1/resume", s.handleResume)
 	// v2 (W7, 6.2): аварийная остановка + снятие.

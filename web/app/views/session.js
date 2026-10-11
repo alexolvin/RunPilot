@@ -53,6 +53,7 @@ function actionList(sess) {
   // GONE: команд нет — только «Удалить запись» (ниже, в actions-секции).
   if (st === 'GONE') return a;
   if (st === 'IDLE' || st === 'HOLD') a.push({ line: '/enqueue', label: T.session.a.enqueue, v: 'secondary' });
+  if (st === 'IDLE') a.push({ line: '/restart-agent', label: T.session.a.restart, v: 'secondary' });
   if (st === 'QUEUED') {
     a.push({ line: '/dequeue', label: T.session.a.dequeue, v: 'secondary' });
     a.push({ line: '/requeue', label: T.session.a.requeue, v: 'secondary' });
