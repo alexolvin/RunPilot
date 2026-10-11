@@ -1,11 +1,12 @@
 package main
 
-// buildVersionInfo — версия из debug.ReadBuildInfo().Main.Version (git-тег)
-// + vcs.revision (коммит). Тест собирает реальный бинарник (go build ставит
+// buildVersionInfo — версия из VERSION файла (embed, формат YYYY.N.R) +
+// vcs.revision (коммит). Тест собирает реальный бинарник (go build ставит
 // VCS-stamping) и сверяет вывод `runpilot version`.
 
 import (
 	"debug/buildinfo"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -19,24 +20,24 @@ func TestBuildVersionBinary(t *testing.T) {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
 
+	// Version — из VERSION файла (embed в бинарник при сборке).
+	wantVersion := "dev"
+	if data, err := os.ReadFile("VERSION"); err == nil {
+		if v := strings.TrimSpace(string(data)); v != "" {
+			wantVersion = v
+		}
+	}
+
+	// Commit — vcs.revision.
 	bi, err := buildinfo.ReadFile(bin)
 	if err != nil {
 		t.Fatalf("buildinfo.ReadFile: %v", err)
 	}
-	var rev, modified string
+	var rev string
 	for _, s := range bi.Settings {
-		switch s.Key {
-		case "vcs.revision":
+		if s.Key == "vcs.revision" {
 			rev = s.Value
-		case "vcs.modified":
-			modified = s.Value
 		}
-	}
-	_ = modified // не используется в новой логике
-
-	wantVersion := bi.Main.Version
-	if wantVersion == "" || wantVersion == "(devel)" {
-		wantVersion = "dev"
 	}
 
 	out, err := exec.Command(bin, "version").Output()
@@ -48,7 +49,7 @@ func TestBuildVersionBinary(t *testing.T) {
 		t.Fatalf("runpilot version: пустой вывод")
 	}
 	if lines[0] != wantVersion {
-		t.Fatalf("runpilot version=%q, хочу %q (Main.Version=%q)", lines[0], wantVersion, bi.Main.Version)
+		t.Fatalf("runpilot version=%q, хочу %q", lines[0], wantVersion)
 	}
 	if len(lines) >= 2 && rev != "" {
 		if lines[1] != rev {

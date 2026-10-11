@@ -556,7 +556,7 @@ export const T = {
   units: {
     slot: 'слот',
     pct: '%',
-    tokS: 'ток/с',
+    tokS: 'т/с',
     mb: 'МБ',
     w: 'Вт',
     ms: 'мс',

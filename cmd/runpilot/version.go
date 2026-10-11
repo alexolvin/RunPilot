@@ -2,23 +2,36 @@ package main
 
 import (
 	"debug/buildinfo"
+	_ "embed"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
 
-// VersionInfo — версия (git-тег) + коммит (vcs.revision).
+// VERSION — человекочитаемый номер версии (формат <год>.<номер обновления в
+// году>.<коррекция>), единственный источник строки версии. Обновляется
+// оператором при каждом релизе.
+//
+//go:embed VERSION
+var versionFile string
+
+// VersionInfo — версия (VERSION файл) + коммит (vcs.revision).
 type VersionInfo struct {
 	Version string
 	Commit  string
 }
 
-// buildVersionInfo — версия из debug.ReadBuildInfo().Main.Version (git-тег,
-// единственный источник; ldflags и short-hash как источники убраны, W15).
-// Коммит — vcs.revision (полный хеш).
+// buildVersionInfo — версия из VERSION файла (формат YYYY.N.R), коммит —
+// vcs.revision (полный хеш).
 func buildVersionInfo() VersionInfo {
 	var vi VersionInfo
+	v := strings.TrimSpace(versionFile)
+	if v == "" {
+		v = "dev"
+	}
+	vi.Version = v
 	exe, err := os.Executable()
 	if err != nil {
 		return vi
@@ -27,12 +40,6 @@ func buildVersionInfo() VersionInfo {
 	if err != nil {
 		return vi
 	}
-	// Version — git-тег (vMAJOR.MINOR.PATCH); «(devel)» → «dev».
-	v := bi.Main.Version
-	if v == "" || v == "(devel)" {
-		v = "dev"
-	}
-	vi.Version = v
 	for _, s := range bi.Settings {
 		if s.Key == "vcs.revision" {
 			vi.Commit = s.Value

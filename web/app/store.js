@@ -296,6 +296,10 @@ export const actions = {
     if (ev.kind === 'SESSION_STATE' && ev.sid && pl.to) {
       patch.sessions = S.sessions.map((s) =>
         s.sid === ev.sid ? { ...s, state: pl.to } : s);
+      // Слоты серверов (slots_info в карточке) зависят от занятости сессий:
+      // без ресинка подпись «занят <сессия>» в карточке сервера устаревает до
+      // ручного обновления страницы. Срез свежий — slots_info актуален.
+      if (!S.resyncing) doResync();
     } else if (ev.kind === 'HOLD' && ev.sid && pl.reason) {
       patch.sessions = S.sessions.map((s) =>
         s.sid === ev.sid ? { ...s, hold_reason: pl.reason } : s);

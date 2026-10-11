@@ -43,7 +43,7 @@ export function Sidebar() {
       <div class="brand-mark"></div>
       <div>
         <div class="brand-name">${T.brand.name}</div>
-        ${s.session.version ? html`<div class="brand-sub">v${s.session.version}</div>` : null}
+        ${s.session.version ? html`<div class="brand-sub">${s.session.version}</div>` : null}
       </div>
     </div>
     <nav class="nav" aria-label=${T.topbar.menu}>
