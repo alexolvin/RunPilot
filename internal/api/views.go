@@ -56,9 +56,12 @@ type NodeView struct {
 
 // GatewayInfo — эндпоинт шлюза для диалога «Новая сессия» (W9 доп-3c):
 // с каким окружением runpilot запускает кодера и что требуется в конфиге qwen.
+// W15 этап 1: эффективные лимиты тел (max_body_mb / max_buffered_mb).
 type GatewayInfo struct {
-	URL        string `json:"url"`
-	ModelAlias string `json:"model_alias"`
+	URL            string `json:"url"`
+	ModelAlias     string `json:"model_alias"`
+	MaxBodyMB      int    `json:"max_body_mb"`
+	MaxBufferedMB  int    `json:"max_buffered_mb"`
 }
 
 // StateView — срез координатора с действиями сущностей (v2 15.2).

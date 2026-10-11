@@ -326,6 +326,8 @@ type Request struct {
 	TEnd       time.Time
 	HeldMS     int64
 	Error      string
+	// BodyBytes — размер тела запроса, байт (W15 этап 1: поле body_bytes).
+	BodyBytes int64
 }
 
 // Event — событие (раздел 4, схема приложения Б).

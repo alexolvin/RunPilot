@@ -44,9 +44,10 @@ type httpService struct {
 // ReadTimeout = 0: шлюз удерживает генерирующий запрос молча до
 // gateway.hold_max_sec (без байта к клиенту) — клиент на это время не шлёт
 // байты; таймаут чтения оборвал бы удержание. WriteTimeout = 0: длинные
-// SSE-потоки (раздел 6 ТЗ).
-func newHTTPServer(h http.Handler) *http.Server {
-	return &http.Server{Handler: h, ReadTimeout: 0, WriteTimeout: 0}
+// SSE-потоки (раздел 6 ТЗ). readHeader — ReadHeaderTimeout (шлюз — из
+// gateway.read_header_timeout_sec, web/api — 0).
+func newHTTPServer(h http.Handler, readHeader time.Duration) *http.Server {
+	return &http.Server{Handler: h, ReadTimeout: 0, WriteTimeout: 0, ReadHeaderTimeout: readHeader}
 }
 
 // shutdownServices — штатная остановка (K1: SIGTERM): Shutdown всех
@@ -326,8 +327,8 @@ func newServeCmd() *cobra.Command {
 			}
 			// ReadTimeout/WriteTimeout = 0: шлюз удерживает запрос молча до
 			// hold_max_sec; длинные SSE-потоки (раздел 6 ТЗ).
-			newHTTP := func(name string, ln net.Listener, h http.Handler) httpService {
-				return httpService{name, ln, newHTTPServer(h)}
+			newHTTP := func(name string, ln net.Listener, h http.Handler, readHeader time.Duration) httpService {
+				return httpService{name, ln, newHTTPServer(h, readHeader)}
 			}
 
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -340,7 +341,7 @@ func newServeCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("serve: web listen %s: %w", webAddr, err)
 			}
-			webSvc := newHTTP("web", webLn, webSrv.Handler())
+			webSvc := newHTTP("web", webLn, webSrv.Handler(), 0)
 			add(webSvc)
 			log.Info("serve: слушает", "role", "web", "addr", webLn.Addr().String())
 			go func() {
@@ -352,22 +353,24 @@ func newServeCmd() *cobra.Command {
 			// API и шлюз: coordinator.bind может появиться с задержкой (v2 2.3) —
 			// повтор привязки с интервалом bind_retry_sec; веб при этом отвечает.
 			bindRetry := time.Duration(cfg.Coordinator.BindRetrySec) * time.Second
-			retryServe := func(name string, port int, h http.Handler) {
+			retryServe := func(name string, port int, h http.Handler, readHeader time.Duration) {
 				addr := net.JoinHostPort(cfg.Coordinator.Bind, strconv.Itoa(port))
 				ln, err := web.ListenWithRetry(ctx, addr, bindRetry, log)
 				if err != nil {
 					errCh <- fmt.Errorf("serve: %s listen %s: %w", name, addr, err)
 					return
 				}
-				s := newHTTP(name, ln, h)
+				s := newHTTP(name, ln, h, readHeader)
 				add(s)
 				log.Info("serve: слушает", "role", name, "addr", ln.Addr().String())
 				if err := s.srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 					errCh <- fmt.Errorf("%s: %w", name, err)
 				}
 			}
-			go retryServe("api", cfg.Coordinator.APIPort, srv.Handler())
-			go retryServe("gateway", cfg.Coordinator.GatewayPort, gw.Handler())
+			go retryServe("api", cfg.Coordinator.APIPort, srv.Handler(), 0)
+			// Шлюз: ReadHeaderTimeout из gateway.read_header_timeout_sec (W15).
+			go retryServe("gateway", cfg.Coordinator.GatewayPort, gw.Handler(),
+				time.Duration(cfg.Gateway.ReadHeaderTimeoutSec)*time.Second)
 
 			sch.Start(ctx)
 			// W7 (6.5): «сердцебиение» — meta.last_alive_at каждые heartbeat_sec

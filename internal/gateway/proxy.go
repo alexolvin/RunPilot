@@ -301,7 +301,7 @@ func (g *Gateway) serveAttempt(w http.ResponseWriter, r *http.Request, ctx conte
 	}
 	prefail, st := g.doAttempt(w, r, ctx, rest, body, decision, sess.SID)
 	if !prefail {
-		g.recordRequest(sess, decision, rest, st, t0, ctx)
+		g.recordRequest(sess, decision, rest, int64(len(raw)), st, t0, ctx)
 		return
 	}
 	g.resetClientHeaders(w)
@@ -339,7 +339,7 @@ func (g *Gateway) serveAttempt(w http.ResponseWriter, r *http.Request, ctx conte
 		http.Error(w, "bad gateway", http.StatusBadGateway)
 	}
 	// Строка request — за итоговый сервер (ход прошёл здесь).
-	g.recordRequest(sess, next, rest, st2, t0, ctx)
+	g.recordRequest(sess, next, rest, int64(len(raw)), st2, t0, ctx)
 }
 
 // doAttempt — одна попытка; (true, st) = отказ до первого байта.
@@ -401,19 +401,21 @@ func (g *Gateway) resultError(st *attemptState, ctx context.Context) string {
 
 // recordRequest — строка request без токенов (раздел 6 ТЗ): строка
 // request, requests аренды, lease.last_request_end, last_server сессии.
+// bodyBytes — размер тела запроса (W15 этап 1: поле body_bytes).
 func (g *Gateway) recordRequest(sess store.SessionRecord, decision *leaseDecision,
-	rest string, st *attemptState, t0 time.Time, ctx context.Context) {
+	rest string, bodyBytes int64, st *attemptState, t0 time.Time, ctx context.Context) {
 	tEnd := g.clk.Now()
 	req := model.Request{
-		SID:    sess.SID,
-		TurnID: 0, // ходы ведёт планировщик (Э4); в Э3 запрос без хода
-		Server: decision.server.Cfg.Name,
-		Path:   rest,
-		Status: st.statusCode(),
-		TStart: t0,
-		TEnd:   tEnd,
-		HeldMS: decision.heldMS,
-		Error:  g.resultError(st, ctx),
+		SID:       sess.SID,
+		TurnID:    0, // ходы ведёт планировщик (Э4); в Э3 запрос без хода
+		Server:    decision.server.Cfg.Name,
+		Path:      rest,
+		Status:    st.statusCode(),
+		TStart:    t0,
+		TEnd:      tEnd,
+		HeldMS:    decision.heldMS,
+		Error:     g.resultError(st, ctx),
+		BodyBytes: bodyBytes,
 	}
 	if first := st.firstByte(); !first.IsZero() {
 		req.TFirstByte = first
@@ -424,6 +426,7 @@ func (g *Gateway) recordRequest(sess store.SessionRecord, decision *leaseDecisio
 	}
 	_ = g.st.RequestRecord(req)
 	g.metrics.RecordRequest(req.Server, strconv.Itoa(req.Status))
+	g.metrics.RecordBodySize(float64(bodyBytes))
 }
 
 // resetClientHeaders — после поглощённого ответа 502/503/504 заголовки

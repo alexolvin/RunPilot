@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -43,6 +44,8 @@ type Server struct {
 	// lastModel — модель из тела последнего генерирующего запроса
 	// (проверка подмены шлюзом).
 	lastModel string
+	// lastBody — принятое тело запроса побайто (W15 этап 1: deep-equal G1).
+	lastBody []byte
 	// lastAuth — Authorization последнего запроса (проверка ключа шлюза).
 	lastAuth string
 	// lastMaxTokens / lastMaxCompletionTokens — из последнего тела
@@ -191,6 +194,15 @@ func (s *Server) LastAuth() string {
 	return s.lastAuth
 }
 
+// LastBody — принятое тело последнего запроса побайто (W15 этап 1: G1).
+func (s *Server) LastBody() []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]byte, len(s.lastBody))
+	copy(out, s.lastBody)
+	return out
+}
+
 // LastMaxTokens — max_tokens/max_completion_tokens последнего тела.
 func (s *Server) LastMaxTokens() (int, int) {
 	s.mu.Lock()
@@ -276,6 +288,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 // serveCompletion — генерирующий запрос fakellm.
 func (s *Server) serveCompletion(w http.ResponseWriter, r *http.Request) {
+	rawBody, _ := io.ReadAll(r.Body)
 	var body struct {
 		Model             string         `json:"model"`
 		Stream            bool           `json:"stream"`
@@ -283,10 +296,11 @@ func (s *Server) serveCompletion(w http.ResponseWriter, r *http.Request) {
 		MaxCompletionTok  *int           `json:"max_completion_tokens"`
 		StreamOptions     map[string]any `json:"stream_options"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	_ = json.Unmarshal(rawBody, &body)
 
 	s.mu.Lock()
 	s.requests++
+	s.lastBody = rawBody
 	if body.Stream {
 		s.sseRequests++
 	}

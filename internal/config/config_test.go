@@ -87,8 +87,8 @@ var configKeys = []string{
 	"turn", "turn.done_quiet_sec", "turn.done_stable_sec", "turn.tool_hold_max_sec",
 	"turn.approval_hold_max_sec", "turn.unknown_max_sec", "turn.node_lost_release_sec",
 	"turn.auto_enqueue_stable_sec", "turn.kill_grace_sec",
-	"gateway", "gateway.hold_max_sec", "gateway.max_body_mb", "gateway.retry_after_sec",
-	"gateway.max_inflight",
+	"gateway", "gateway.hold_max_sec", "gateway.max_body_mb", "gateway.max_buffered_mb",
+	"gateway.retry_after_sec", "gateway.max_inflight", "gateway.read_header_timeout_sec",
 	"monitor", "monitor.health_interval_sec", "monitor.health_timeout_sec",
 	"monitor.health_down_after", "monitor.health_up_after", "monitor.metrics_interval_sec",
 	"monitor.metrics_timeout_sec", "monitor.rate_window_sec", "monitor.history_window_min",
@@ -233,8 +233,11 @@ func TestGatewayDefaultsWhenAbsent(t *testing.T) {
 	if cfg.Gateway.HoldMaxSec != 3600 {
 		t.Errorf("hold_max_sec = %d, хочу 3600", cfg.Gateway.HoldMaxSec)
 	}
-	if cfg.Gateway.MaxBodyMB != 32 {
-		t.Errorf("max_body_mb = %d, хочу 32", cfg.Gateway.MaxBodyMB)
+	if cfg.Gateway.MaxBodyMB != 128 {
+		t.Errorf("max_body_mb = %d, хочу 128", cfg.Gateway.MaxBodyMB)
+	}
+	if cfg.Gateway.MaxBufferedMB != 1024 {
+		t.Errorf("max_buffered_mb = %d, хочу 1024", cfg.Gateway.MaxBufferedMB)
 	}
 	if cfg.Gateway.RetryAfterSec != 30 {
 		t.Errorf("retry_after_sec = %d, хочу 30", cfg.Gateway.RetryAfterSec)
@@ -255,8 +258,11 @@ func TestGatewayPartialSection(t *testing.T) {
 		t.Errorf("hold_max_sec = %d, хочу 7200", cfg.Gateway.HoldMaxSec)
 	}
 	// Остальные ключи — из defaults.
-	if cfg.Gateway.MaxBodyMB != 32 {
-		t.Errorf("max_body_mb = %d, хочу 32", cfg.Gateway.MaxBodyMB)
+	if cfg.Gateway.MaxBodyMB != 128 {
+		t.Errorf("max_body_mb = %d, хочу 128", cfg.Gateway.MaxBodyMB)
+	}
+	if cfg.Gateway.MaxBufferedMB != 1024 {
+		t.Errorf("max_buffered_mb = %d, хочу 1024", cfg.Gateway.MaxBufferedMB)
 	}
 	if cfg.Gateway.RetryAfterSec != 30 {
 		t.Errorf("retry_after_sec = %d, хочу 30", cfg.Gateway.RetryAfterSec)

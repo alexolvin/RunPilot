@@ -12,11 +12,13 @@ import (
 //   - aqm_gateway_requests_total{server,code} — counter
 //   - aqm_gateway_hold_seconds — histogram
 //   - aqm_gateway_overhead_seconds — histogram
+//   - aqm_gateway_request_body_bytes — histogram (W15 этап 1)
 type Metrics struct {
-	mu       sync.Mutex
-	requests map[string]int64 // "server|code" → count
-	hold     []float64        // hold durations in seconds
-	overhead []float64        // overhead durations in seconds
+	mu        sync.Mutex
+	requests  map[string]int64 // "server|code" → count
+	hold      []float64        // hold durations in seconds
+	overhead  []float64        // overhead durations in seconds
+	bodySizes []float64        // request body sizes in bytes (W15)
 }
 
 func NewMetrics() *Metrics {
@@ -46,6 +48,13 @@ func (m *Metrics) RecordOverhead(seconds float64) {
 	m.overhead = append(m.overhead, seconds)
 }
 
+// RecordBodySize — aqm_gateway_request_body_bytes (W15 этап 1), байт.
+func (m *Metrics) RecordBodySize(bytes float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.bodySizes = append(m.bodySizes, bytes)
+}
+
 // Handler — HTTP-обработчик /metrics (Prometheus text format).
 func (m *Metrics) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -66,30 +75,34 @@ func (m *Metrics) Handler() http.Handler {
 			}
 		}
 
-		m.writeHistogram(w, "aqm_gateway_hold_seconds", m.hold)
-		m.writeHistogram(w, "aqm_gateway_overhead_seconds", m.overhead)
+		m.writeHistogram(w, "aqm_gateway_hold_seconds", m.hold, metricBuckets)
+		m.writeHistogram(w, "aqm_gateway_overhead_seconds", m.overhead, metricBuckets)
+		m.writeHistogram(w, "aqm_gateway_request_body_bytes", m.bodySizes, bodySizeBuckets)
 	})
 }
 
 var metricBuckets = []float64{bucket001, bucket005, bucket01, bucket05, bucket1, bucket5, bucket10, bucket30, bucket60, bucket300, bucket600, bucket3600}
 
-func (m *Metrics) writeHistogram(w http.ResponseWriter, name string, values []float64) {
+// bodySizeBuckets — бакеты гистограммы размера тела (W15 этап 1), байт.
+var bodySizeBuckets = []float64{bodyBucket1KB, bodyBucket10KB, bodyBucket100KB, bodyBucket1MB, bodyBucket10MB, bodyBucket100MB, bodyBucket128MB}
+
+func (m *Metrics) writeHistogram(w http.ResponseWriter, name string, values []float64, buckets []float64) {
 	fmt.Fprintf(w, "# TYPE %s histogram\n", name)
 	if len(values) == 0 {
 		return
 	}
-	counts := make([]int, len(metricBuckets))
+	counts := make([]int, len(buckets))
 	sum := 0.0
 	for _, v := range values {
 		sum += v
-		for i, b := range metricBuckets {
+		for i, b := range buckets {
 			if v <= b {
 				counts[i]++
 			}
 		}
 	}
 	cumulative := 0
-	for i, b := range metricBuckets {
+	for i, b := range buckets {
 		cumulative += counts[i]
 		fmt.Fprintf(w, "%s_bucket{le=%q} %d\n", name, fmt.Sprintf("%.2f", b), cumulative)
 	}

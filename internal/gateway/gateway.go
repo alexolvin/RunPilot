@@ -101,6 +101,11 @@ type Gateway struct {
 	// обрывается последний удерживаемый запрос этой sid.
 	hm2       sync.Mutex
 	heldCount map[string]int
+
+	// Сумма тел в памяти шлюза (проксируемые + удержанные), байт (W15 этап 1).
+	// Превышение gateway.max_buffered_mb → 503 runpilot_gateway_busy.
+	bufMu    sync.Mutex
+	buffered int64
 }
 
 // FaultReporter — приём отказа класса OOM/ENGINE_DEAD (раздел 7.1 С4/С5):
@@ -277,15 +282,30 @@ func (g *Gateway) handleGenerative(w http.ResponseWriter, r *http.Request, sess 
 	raw, err := io.ReadAll(r.Body)
 	_ = r.Body.Close()
 	if err != nil {
-		status := http.StatusBadRequest
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
-			status = http.StatusRequestEntityTooLarge
+			size := r.ContentLength
+			if size <= limit {
+				size = limit + 1
+			}
+			g.writeBodyTooLarge(w, size)
+			g.metrics.RecordRequest("", strconv.Itoa(http.StatusRequestEntityTooLarge))
+			return
 		}
-		http.Error(w, err.Error(), status)
-		g.metrics.RecordRequest("", strconv.Itoa(status))
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		g.metrics.RecordRequest("", strconv.Itoa(http.StatusBadRequest))
 		return
 	}
+
+	// W15 этап 1: сумма тел в памяти (gateway.max_buffered_mb) → 503
+	// runpilot_gateway_busy. Удержание не создаётся; память тела
+	// освобождаем при выходе из обработчика (defer).
+	if !g.tryBumpBuffered(int64(len(raw))) {
+		g.writeGatewayBusy(w)
+		g.metrics.RecordRequest("", strconv.Itoa(http.StatusServiceUnavailable))
+		return
+	}
+	defer g.unBumpBuffered(int64(len(raw)))
 
 	// П.3: debug-лог параметров запроса (без содержимого, правило 7).
 	g.logRequestParams(sess.SID, raw)
@@ -371,6 +391,23 @@ func (g *Gateway) writeMode503(w http.ResponseWriter, code, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusServiceUnavailable)
 	fmt.Fprintf(w, `{"error":{"message":"%s","type":"server_error","code":"%s"}}`, message, code)
+}
+
+// writeBodyTooLarge — 413 (W15 этап 1): тело runpilot_body_too_large, побайтно.
+// sizeBytes — фактический размер тела (Content-Length).
+func (g *Gateway) writeBodyTooLarge(w http.ResponseWriter, sizeBytes int64) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusRequestEntityTooLarge)
+	_, _ = io.WriteString(w, g.cfg.Gateway.BodyTooLargeMessage(sizeBytes))
+}
+
+// writeGatewayBusy — 503 (W15 этап 1): переполнение gateway.max_buffered_mb.
+// Retry-After = gateway.retry_after_sec; код runpilot_gateway_busy.
+func (g *Gateway) writeGatewayBusy(w http.ResponseWriter) {
+	w.Header().Set("Retry-After", strconv.Itoa(g.cfg.Gateway.RetryAfterSec))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_, _ = fmt.Fprintf(w, `{"error":{"message":"runpilot: gateway buffered limit exceeded","type":"server_error","code":"runpilot_gateway_busy"}}`)
 }
 
 // logRequestParams — П.3: debug-лог параметров запроса (без содержимого,
@@ -470,6 +507,31 @@ func (g *Gateway) unBumpTotalInflight() {
 	g.im.Lock()
 	g.total--
 	g.im.Unlock()
+}
+
+// tryBumpBuffered — учесть тело в памяти; false, если сумма тел превысила
+// gateway.max_buffered_mb (W15 этап 1). n = 0 — без учёта (лимит не задан).
+func (g *Gateway) tryBumpBuffered(n int64) bool {
+	g.bufMu.Lock()
+	defer g.bufMu.Unlock()
+	if g.cfg.Gateway.MaxBufferedMB > 0 && g.buffered+n > g.cfg.Gateway.MaxBufferedBytes() {
+		return false
+	}
+	g.buffered += n
+	return true
+}
+
+func (g *Gateway) unBumpBuffered(n int64) {
+	g.bufMu.Lock()
+	g.buffered -= n
+	g.bufMu.Unlock()
+}
+
+// BufferedBytes — текущая сумма тел в памяти (диагностика/тесты).
+func (g *Gateway) BufferedBytes() int64 {
+	g.bufMu.Lock()
+	defer g.bufMu.Unlock()
+	return g.buffered
 }
 
 func (g *Gateway) bumpInflight(sid, server string) {

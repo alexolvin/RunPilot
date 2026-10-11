@@ -21,11 +21,12 @@ func (s *Store) RequestRecord(r model.Request) error {
 	return s.QueueWrite(func(tx *sql.Tx) error {
 		if _, err := tx.Exec(`
 INSERT INTO request (sid, turn_id, server, path, status, t_start,
-	t_first_byte, t_end, held_ms, error)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	t_first_byte, t_end, held_ms, error, body_bytes)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			r.SID, r.TurnID, r.Server, r.Path, r.Status,
 			r.TStart.UTC().Format(time.RFC3339Nano), first,
-			r.TEnd.UTC().Format(time.RFC3339Nano), r.HeldMS, r.Error); err != nil {
+			r.TEnd.UTC().Format(time.RFC3339Nano), r.HeldMS, r.Error,
+			r.BodyBytes); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(`
@@ -60,7 +61,7 @@ VALUES (?, 0, '', '', 0, ?, '', ?, ?, ?)`,
 func (s *Store) RequestList(sid string, limit int) ([]model.Request, error) {
 	rows, err := s.db.Query(`
 SELECT id, sid, turn_id, server, path, status, t_start, t_first_byte,
-	t_end, held_ms, error
+	t_end, held_ms, error, body_bytes
 FROM request WHERE sid = ?
 ORDER BY t_start DESC, id DESC LIMIT ?`, sid, limit)
 	if err != nil {
@@ -72,7 +73,7 @@ ORDER BY t_start DESC, id DESC LIMIT ?`, sid, limit)
 		var r model.Request
 		var tStart, tFirst, tEnd string
 		if err := rows.Scan(&r.ID, &r.SID, &r.TurnID, &r.Server, &r.Path,
-			&r.Status, &tStart, &tFirst, &tEnd, &r.HeldMS, &r.Error); err != nil {
+			&r.Status, &tStart, &tFirst, &tEnd, &r.HeldMS, &r.Error, &r.BodyBytes); err != nil {
 			return nil, err
 		}
 		r.TStart, _ = time.Parse(time.RFC3339Nano, tStart)
@@ -125,14 +126,14 @@ ORDER BY t_start`, ts(since))
 }
 
 const requestCols = `id, sid, turn_id, server, path, status, t_start, t_first_byte,
-t_end, held_ms, error`
+t_end, held_ms, error, body_bytes`
 
 // scanRequest — строка request из строки БД (ErrNotFound при отсутствии).
 func scanRequest(row interface{ Scan(...any) error }) (*model.Request, error) {
 	var r model.Request
 	var tStart, tFirst, tEnd string
 	if err := row.Scan(&r.ID, &r.SID, &r.TurnID, &r.Server, &r.Path, &r.Status,
-		&tStart, &tFirst, &tEnd, &r.HeldMS, &r.Error); err != nil {
+		&tStart, &tFirst, &tEnd, &r.HeldMS, &r.Error, &r.BodyBytes); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}

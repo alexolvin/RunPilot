@@ -58,10 +58,12 @@ func Defaults() *Config {
 			KillGraceSec:         10,
 		},
 		Gateway: Gateway{
-			HoldMaxSec:    3600,
-			MaxBodyMB:     32,
-			RetryAfterSec: 30,
-			MaxInflight:   256,
+			HoldMaxSec:           3600,
+			MaxBodyMB:            128,
+			MaxBufferedMB:        1024,
+			RetryAfterSec:        30,
+			MaxInflight:          256,
+			ReadHeaderTimeoutSec: 30,
 		},
 		Monitor: Monitor{
 			HealthIntervalSec:  5,

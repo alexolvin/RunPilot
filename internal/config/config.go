@@ -145,16 +145,32 @@ type Turn struct {
 }
 
 type Gateway struct {
-	HoldMaxSec    int `yaml:"hold_max_sec"`
-	MaxBodyMB     int `yaml:"max_body_mb"`
-	RetryAfterSec int `yaml:"retry_after_sec"`
-	MaxInflight   int `yaml:"max_inflight"`
+	HoldMaxSec           int `yaml:"hold_max_sec"`
+	MaxBodyMB            int `yaml:"max_body_mb"`
+	MaxBufferedMB        int `yaml:"max_buffered_mb"`
+	RetryAfterSec        int `yaml:"retry_after_sec"`
+	MaxInflight          int `yaml:"max_inflight"`
+	ReadHeaderTimeoutSec int `yaml:"read_header_timeout_sec"`
 }
 
 // MaxBodyBytes — gateway.max_body_mb в байтах (раздел 6 ТЗ).
 // Константа живёт здесь, а не в шлюзе: в internal/gateway запрещены
 // числовые литералы кроме 0 и 1 (строгое правило 2).
 func (g Gateway) MaxBodyBytes() int64 { return int64(g.MaxBodyMB) * mib }
+
+// MaxBufferedBytes — gateway.max_buffered_mb в байтах (сумма тел в памяти
+// шлюза: проксируемые и удержанные).
+func (g Gateway) MaxBufferedBytes() int64 { return int64(g.MaxBufferedMB) * mib }
+
+// BodyTooLargeMessage — тело 413 (код runpilot_body_too_large), побайтно.
+// sizeBytes — фактический размер тела (Content-Length). nMiB — округление в
+// большую сторону (тело больше лимита нацелом).
+func (g Gateway) BodyTooLargeMessage(sizeBytes int64) string {
+	nMiB := (sizeBytes + mib - 1) / mib
+	return fmt.Sprintf(
+		`{"error":{"message":"runpilot: request body %d MiB exceeds gateway.max_body_mb=%d","type":"invalid_request_error","code":"runpilot_body_too_large"}}`,
+		nMiB, g.MaxBodyMB)
+}
 
 // mib — мегабайт в двоичном счёте.
 const mib = kibi * kibi
@@ -416,8 +432,10 @@ func (c *Config) Validate() error {
 		"turn.auto_enqueue_stable_sec":    c.Turn.AutoEnqueueStableSec,
 		"gateway.hold_max_sec":            c.Gateway.HoldMaxSec,
 		"gateway.max_body_mb":             c.Gateway.MaxBodyMB,
+		"gateway.max_buffered_mb":         c.Gateway.MaxBufferedMB,
 		"gateway.retry_after_sec":         c.Gateway.RetryAfterSec,
 		"gateway.max_inflight":            c.Gateway.MaxInflight,
+		"gateway.read_header_timeout_sec": c.Gateway.ReadHeaderTimeoutSec,
 		"monitor.health_interval_sec":     c.Monitor.HealthIntervalSec,
 		"monitor.health_timeout_sec":      c.Monitor.HealthTimeoutSec,
 		"monitor.health_down_after":       c.Monitor.HealthDownAfter,

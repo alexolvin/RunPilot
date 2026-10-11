@@ -723,9 +723,12 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		view.Servers = s.sched.ServersView()
 	}
 	// W9 доп-3c: эндпоинт шлюза для диалога «Новая сессия».
+	// W15 этап 1: эффективные лимиты тел.
 	view.Gateway = GatewayInfo{
-		URL:        s.cfg.Coordinator.GatewayURL,
-		ModelAlias: s.cfg.Profiles.Qwen.ModelAlias,
+		URL:           s.cfg.Coordinator.GatewayURL,
+		ModelAlias:    s.cfg.Profiles.Qwen.ModelAlias,
+		MaxBodyMB:     s.cfg.Gateway.MaxBodyMB,
+		MaxBufferedMB: s.cfg.Gateway.MaxBufferedMB,
 	}
 	// 8.3 X1: «вне runpilot» — живые UNMANAGED-панели узлов.
 	view.Unmanaged = st.Unmanaged

@@ -7,21 +7,27 @@ import (
 
 // transformBody — обработка тела генерирующего запроса (раздел 6 ТЗ):
 // подмена model, ограничение max_tokens/max_completion_tokens сверху
-// server.max_output_tokens. Тело прочитано целиком; всё остальное
-// (включая stream_options от клиента) проходит без изменений.
+// server.max_output_tokens. Декодирование только в map[string]json.RawMessage:
+// всё остальное (массивы content, image_url, video_url, неизвестные поля)
+// проходит побайто без изменений. Типизированные структуры сообщений
+// в шлюзе запрещены.
 func transformBody(raw []byte, model string, maxOutput int) ([]byte, error) {
-	var doc map[string]any
+	var doc map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("gateway: тело запроса: %w", err)
 	}
-	doc["model"] = model
+	modelJSON, err := json.Marshal(model)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: model: %w", err)
+	}
+	doc["model"] = modelJSON
 	for _, key := range []string{"max_tokens", "max_completion_tokens"} {
 		v, ok := doc[key]
 		if !ok {
 			continue
 		}
-		n, ok := numberAsInt(v)
-		if !ok {
+		var n int
+		if err := json.Unmarshal(v, &n); err != nil {
 			continue
 		}
 		if n <= 0 {
@@ -34,7 +40,11 @@ func transformBody(raw []byte, model string, maxOutput int) ([]byte, error) {
 		// 0 в max_output_tokens = без лимита (W9: сервер, созданный без
 		// явного max_output_tokens, не должен обнулять max_* клиента).
 		if maxOutput > 0 && n > maxOutput {
-			doc[key] = maxOutput
+			b, err := json.Marshal(maxOutput)
+			if err != nil {
+				return nil, fmt.Errorf("gateway: %s: %w", key, err)
+			}
+			doc[key] = b
 		}
 	}
 	out, err := json.Marshal(doc)
@@ -42,19 +52,6 @@ func transformBody(raw []byte, model string, maxOutput int) ([]byte, error) {
 		return nil, fmt.Errorf("gateway: сборка тела: %w", err)
 	}
 	return out, nil
-}
-
-// numberAsInt — JSON-число (в map[string]any — float64) → int.
-func numberAsInt(v any) (int, bool) {
-	f, ok := v.(float64)
-	if !ok {
-		return 0, false
-	}
-	n := int(f)
-	if float64(n) != f {
-		return 0, false
-	}
-	return n, true
 }
 
 // isGenerativePath — генерирующие пути (раздел 6 ТЗ): только они

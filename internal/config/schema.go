@@ -134,10 +134,14 @@ func Schema() []SettingField {
 			"Максимум удержания запроса без слота в шлюзе.", ApplyNewRequest),
 		intField("gateway.max_body_mb", "MB", "Шлюз", "Макс тела запроса",
 			"Максимальный размер тела запроса шлюза.", ApplyNewRequest),
+		intField("gateway.max_buffered_mb", "MB", "Шлюз", "Макс буфера тел",
+			"Сумма тел в памяти шлюза (проксируемые и удержанные).", ApplyNewRequest),
 		intField("gateway.retry_after_sec", "s", "Шлюз", "Retry-After",
 			"Значение Retry-After при отказе шлюза.", ApplyNewRequest),
 		intField("gateway.max_inflight", "", "Шлюз", "Макс одновременных",
 			"Максимум одновременных запросов в шлюзе.", ApplyNewRequest),
+		intField("gateway.read_header_timeout_sec", "s", "Шлюз", "Таймаут заголовков",
+			"ReadHeaderTimeout сервера шлюза (ReadTimeout = 0).", ApplyNewRequest),
 
 		// Мониторинг (раздел 4.4: со следующего тика).
 		intField("monitor.health_interval_sec", "s", "Мониторинг", "Интервал здоровья",

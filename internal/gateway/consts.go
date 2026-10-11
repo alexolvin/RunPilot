@@ -26,4 +26,13 @@ const (
 	bucket300  = 300.0
 	bucket600  = 600.0
 	bucket3600 = 3600.0
+
+	// Бакеты гистограммы размера тела запроса (W15 этап 1), байт.
+	bodyBucket1KB   = 1024
+	bodyBucket10KB  = 10240
+	bodyBucket100KB = 102400
+	bodyBucket1MB   = 1048576
+	bodyBucket10MB  = 10485760
+	bodyBucket100MB = 104857600
+	bodyBucket128MB = 134217728
 )
