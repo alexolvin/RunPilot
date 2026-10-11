@@ -1,5 +1,5 @@
 # HANDOFF
-Обновлено: 2026-10-11 (W15: медиа через RunPilot — этапы 3-6 завершены; координатор+узлы на f491879; тег v0.1.0)
+Обновлено: 2026-10-11 (W15: медиа через RunPilot — все этапы завершены; тег v0.1.0, GitHub Release создан; координатор+узлы на 2d2359d)
 
 ## W15 — медиа через RunPilot → учёт версий → GitHub (2026-10-11)
 
@@ -98,11 +98,17 @@
 - CHANGELOG.md, docs/RELEASING.md.
 - Первый тег: v0.1.0.
 
-### Этап 6 — GitHub — `57abda4`
+### Этап 6 — GitHub — `57abda4` + `940c2d4` + `2d2359d`
 - `.github/workflows/release.yml`: тег v* → build (linux/amd64, darwin/amd64,
   darwin/arm64) + GitHub Release (3 архива + SHA256SUMS).
 - README: секция «Versions and releases».
-- Осталось: push (git push origin main --tags) + приёмка (CI/Release, sha256).
+- `940c2d4`: Pdeathsig за build-tag (cross-compile для darwin).
+- `2d2359d`: go vet — cancelCtx2 не бросаем (hold_fix_test).
+- Push: main + тег v0.1.0. CI ✓, Release ✓.
+- GitHub Release v0.1.0: 3 архива + SHA256SUMS.
+  https://github.com/alexolvin/RunPilot/releases/tag/v0.1.0
+- linux/amd64: sha256 b57bdd3a..., `runpilot version` → v0.1.0.
+- Выкат: координатор + узлы на 2d2359d (vzu5-big отключён).
 
 ## W13 — планирование и отображение (2026-10-10) — `9015c96` + `50d3d16`
 
