@@ -160,7 +160,8 @@ func TestResultErrorCancelCause(t *testing.T) {
 
 	// Клиентский обрыв: parent (r.Context()) завершается первым, cause = context.Canceled.
 	parentCtx, cancelParent := context.WithCancel(context.Background())
-	ctx2, _ := context.WithCancelCause(parentCtx)
+	ctx2, cancelCtx2 := context.WithCancelCause(parentCtx)
+	defer cancelCtx2(context.Canceled)
 	cancelParent() // parent done → ctx2 done, cause = parent's cause (context.Canceled)
 	if got := g.resultError(st, ctx2); got != "CLIENT_GONE" {
 		t.Errorf("клиентский обрыв: resultError=%q, хочу CLIENT_GONE", got)
