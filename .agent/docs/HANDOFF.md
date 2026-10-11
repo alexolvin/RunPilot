@@ -1,5 +1,5 @@
 # HANDOFF
-Обновлено: 2026-10-11 (W15: медиа через RunPilot — этапы 0–1: диагностика + шлюз пропускает медиа; deploy 97c76ac, координатор на 97c76ac)
+Обновлено: 2026-10-11 (W15: медиа через RunPilot — этап 2: модальности серверов + окно контекста, пробы 3p14+vzu5 (video на обоих, image нет — лимит vLLM 8<20); координатор на fbfc427)
 
 ## W15 — медиа через RunPilot → учёт версий → GitHub (2026-10-11)
 
@@ -54,7 +54,17 @@
   координатора (mediaProbes).
 - Тесты M1–M5 (media_probe_test.go): inOrder, stripBase64, evalStatus,
   evalProbe, mediaProbeAllowed. Ворота: go test -race + staticcheck + lint — 0.
-- Пробы на 3p14 + vzu5 — в работе (deploy + запуск).
+- Пробы (`docs/evidence/W15/probes.md`), оба сервера через шлюз (пин, неявная аренда):
+  - vzu5: P-image PASS (275114), P-many-image FAIL (400, лимит 8<20), P-video
+    PASS (65,85,85), P-many-video PASS → input_modalities=[video].
+  - 3p14: P-image FAIL (HTTP 200, модель прочитала 50103 вместо 569163 — ошибка
+    чтения, не vLLM), P-many-image FAIL (400, лимит 8<20), P-video PASS
+    (13,50,81), P-many-video PASS → input_modalities=[video].
+  - Итог: video установлен на обоих (обе пробы PASS). image не установлен на
+    обоих — vLLM `--limit-mm-per-prompt {"image":8,"video":4}`, P-many-image
+    (N=20) всегда 400.
+  - max_model_len=262144 на обоих (монитор из /v1/models, на карточке).
+  - Координатор на fbfc427 (deploy; до этого 97c76ac).
 
 ### Этапы 3–6 — в работе
 3. Объявление модальностей сессиям Qwen Code (system-settings.json).
