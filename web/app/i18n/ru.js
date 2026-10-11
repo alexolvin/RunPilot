@@ -358,9 +358,7 @@ export const T = {
     state: 'Состояние',
     // W15: входные модальности + окно контекста (max_model_len).
     modalities: 'Модальности',
-    modalityImage: 'изображение',
-    modalityVideo: 'видео',
-    contextWindow: 'Окно контекста',
+    contextWindow: 'Мощность',
     ctxTokens: (n) => (n > 0 ? String(n) : '—'),
     // W13 этап 2: состояние каждого слота; мини-карточка — «свободно/всего».
     freeOf: (f, t) => `${f}/${t}`,
