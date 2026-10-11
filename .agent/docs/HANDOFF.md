@@ -1,5 +1,5 @@
 # HANDOFF
-Обновлено: 2026-10-11 (W15: медиа через RunPilot — этап 2: модальности серверов + окно контекста, пробы 3p14+vzu5 (video на обоих, image нет — лимит vLLM 8<20); координатор на fbfc427)
+Обновлено: 2026-10-11 (W15: медиа через RunPilot — этап 3: объявление модальностей сессиям, координатор+узлы на f491879)
 
 ## W15 — медиа через RunPilot → учёт версий → GitHub (2026-10-11)
 
@@ -85,7 +85,9 @@
 - Тесты: system_settings_test.go (S1–S5: modalitiesObject, systemSettingsDoc,
   writeSystemSettings 0600, deleteSystemSettings, applySystemSettingsEnv).
   Ворота: go test -race + staticcheck + lint — 0.
-- Коммиты: 684bbf1 (ядро), c4f3544 (перезапуск).
+- Коммиты: 684bbf1 (ядро), c4f3544 (перезапуск), f2cb166 (пуш при смене пула),
+  f491879 (переписать system-settings.json живых сессий при смене пула).
+- Выкат: координатор + 3 узла (3p14-aaa, vzu5-big, vzu5-claw) на f491879.
 
 ### Этапы 4–6 — в работе
 4. Живая приёмка (реальный Qwen Code + реальные серверы).
