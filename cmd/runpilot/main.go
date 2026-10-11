@@ -11,12 +11,12 @@ import (
 	"runpilot/internal/config"
 )
 
-// version — по умолчанию из buildinfo (buildVersion); подставляется через
-// -ldflags "-X main.version=..." (имеет приоритет).
-var version = versionDev
+// versionInfo — версия (git-тег) + коммит (vcs.revision); единственный
+// источник — debug.ReadBuildInfo (W15: ldflags и short-hash убраны).
+var versionInfo VersionInfo
 
 // buildTimeUnix — commit timestamp (vcs.time) из buildinfo, unix-сек; 0 если
-// не из git-дерева (e2e с -X main.version). Для детекта отката при self-update
+// не из git-дерева. Для детекта отката при self-update
 // (W12: откат на более старую версию — только с downgrade=true).
 var buildTimeUnix int64
 
@@ -42,9 +42,9 @@ func buildTime() int64 {
 }
 
 func main() {
-	version = buildVersion()
+	versionInfo = buildVersionInfo()
 	buildTimeUnix = buildTime()
-	root := newRoot(version)
+	root := newRoot(versionInfo.Version)
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "runpilot:", err)
 		switch {

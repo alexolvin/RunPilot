@@ -73,8 +73,6 @@ const (
 	// bootstrap-конфиге узла они не заданы (не пороги ТЗ).
 	defKillGraceSec  = 5
 	defHeartbeatSec  = 5
-	// versionShortHashLen — длина короткого хеша коммита в версии (buildinfo).
-	versionShortHashLen = 7
 	// defFlapsSince — окно flaps по умолчанию (10 мин).
 	defFlapsSince = "10m"
 )

@@ -8,49 +8,49 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// versionDev — версия без vcs-информации (buildinfo нет / не из git-дерева).
-const versionDev = "0.0.0-dev"
+// VersionInfo — версия (git-тег) + коммит (vcs.revision).
+type VersionInfo struct {
+	Version string
+	Commit  string
+}
 
-// buildVersion — версия из debug.ReadBuildInfo: короткий хеш vcs.revision,
-// суффикс «-dirty» при vcs.modified=true. Переопределение
-// -ldflags "-X main.version=..." имеет приоритет.
-func buildVersion() string {
-	if version != versionDev {
-		return version
-	}
+// buildVersionInfo — версия из debug.ReadBuildInfo().Main.Version (git-тег,
+// единственный источник; ldflags и short-hash как источники убраны, W15).
+// Коммит — vcs.revision (полный хеш).
+func buildVersionInfo() VersionInfo {
+	var vi VersionInfo
 	exe, err := os.Executable()
 	if err != nil {
-		return version
+		return vi
 	}
 	bi, err := buildinfo.ReadFile(exe)
 	if err != nil {
-		return version
+		return vi
 	}
-	var rev, modified string
+	// Version — git-тег (vMAJOR.MINOR.PATCH); «(devel)» → «dev».
+	v := bi.Main.Version
+	if v == "" || v == "(devel)" {
+		v = "dev"
+	}
+	vi.Version = v
 	for _, s := range bi.Settings {
-		switch s.Key {
-		case "vcs.revision":
-			rev = s.Value
-		case "vcs.modified":
-			modified = s.Value
+		if s.Key == "vcs.revision" {
+			vi.Commit = s.Value
+			break
 		}
 	}
-	if len(rev) < versionShortHashLen {
-		return version
-	}
-	v := rev[:versionShortHashLen]
-	if modified == "true" {
-		v += "-dirty"
-	}
-	return v
+	return vi
 }
 
-func newVersionCmd(version string) *cobra.Command {
+func newVersionCmd(vi VersionInfo) *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Версия runpilot",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println(version)
+			fmt.Println(vi.Version)
+			if vi.Commit != "" {
+				fmt.Println(vi.Commit)
+			}
 		},
 	}
 }

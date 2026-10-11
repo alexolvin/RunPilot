@@ -118,7 +118,7 @@ func newServeCmd() *cobra.Command {
 			// v2 раздел 4.8: первый старт переносит рабочие секции и серверы
 			// из config.yaml в БД (копии файлов, откат при ошибке; второй
 			// запуск — no-op). Конфиг переписывается в bootstrap-форму.
-			if mig, err := store.MigrateFromYAML(dbPath, resolvedPath, version, clk); err != nil {
+			if mig, err := store.MigrateFromYAML(dbPath, resolvedPath, versionInfo.Version, clk); err != nil {
 				return fmt.Errorf("serve: миграция настроек: %w", err)
 			} else if !mig.Skipped {
 				log.Info("serve: настройки перенесены из YAML в БД",
@@ -127,7 +127,7 @@ func newServeCmd() *cobra.Command {
 			}
 			// v2 (раздел 6.6): копия БД перед миграцией схемы.
 			if cur, exists, err := store.SchemaVersionOf(dbPath); err == nil && exists && cur < store.LatestMigrationVersion() {
-				if b, berr := backup.PreMigrationBackup(dbPath, version, clk.Now()); berr == nil && b != "" {
+				if b, berr := backup.PreMigrationBackup(dbPath, versionInfo.Version, clk.Now()); berr == nil && b != "" {
 					log.Info("serve: копия БД перед миграцией", "backup", b)
 				}
 			}
@@ -155,13 +155,13 @@ func newServeCmd() *cobra.Command {
 			}
 			hub := api.NewHub(clk)
 			srv := api.NewServer(cfg, st, hub, clk, log)
-			srv.SetVersion(version)
+			srv.SetVersion(versionInfo.Version)
 			srv.SetBuildTime(buildTimeUnix)
 			// v2 раздел 2.1: веб-слушатель — те же маршруты /api/v1/*,
 			// cookie-аутентификация + CSRF (отдельной логики данных нет).
 			webSrv := web.New(cfg, st, srv.Routes(), clk, log)
 			webSrv.SetToken(os.Getenv(cfg.Coordinator.TokenEnv))
-			webSrv.SetVersion(version)
+			webSrv.SetVersion(versionInfo.Version)
 			// Подключение узла (14.2): /enroll/<token>/… публично и на вебе
 			// (curl -fsSL … | bash с чистой машины не имеет cookie веба).
 			webSrv.SetEnrollHandler(srv.EnrollHandler())
@@ -387,7 +387,7 @@ func newServeCmd() *cobra.Command {
 			if cfg.Coordinator.EmbeddedNode {
 				go embeddedNode(ctx, srv, hub, cfg, prof, clk, log)
 			}
-			log.Info("serve: координатор запущен", "version", version)
+			log.Info("serve: координатор запущен", "version", versionInfo.Version)
 
 			select {
 			case <-ctx.Done():

@@ -2,7 +2,7 @@ GO ?= go
 TMPDIR ?= /tmp
 STATICCHECK ?= $(shell command -v staticcheck 2>/dev/null || echo "go run honnef.co/go/tools/cmd/staticcheck@latest")
 
-.PHONY: check vet staticcheck test build lint lint-literals lint-web lint-hosts node-upgrade-line vendor-web icons screenshots visualcheck
+.PHONY: check vet staticcheck test build lint lint-literals lint-web lint-hosts node-upgrade-line vendor-web icons screenshots visualcheck e2e-e4 release
 
 check: vet staticcheck test lint
 
@@ -76,6 +76,33 @@ screenshots:
 # commit = manifest и предок HEAD. Использование: make visualcheck STAGE=W3
 visualcheck:
 	$(GO) run ./tools/visualcheck -stage $(STAGE) -evidence docs/evidence
+
+# W15: учёт версий — git-тег vMAJOR.MINOR.PATCH (единственный источник).
+# make release BUMP=patch|minor|major [MESSAGE="..."]
+release:
+	@bump="$(BUMP)"; \
+	if [ -z "$$bump" ]; then echo "нужен BUMP=patch|minor|major" >&2; exit 1; fi; \
+	case "$$bump" in patch|minor|major) ;; *) echo "BUMP: patch|minor|major" >&2; exit 1;; esac; \
+	cur=$$(git describe --tags --abbrev=0 2>/dev/null || echo ""); \
+	if [ -z "$$cur" ]; then \
+	  case "$$bump" in \
+	    patch) new="v0.1.0";; \
+	    minor) new="v0.1.0";; \
+	    major) new="v1.0.0";; \
+	  esac; \
+	else \
+	  cur=$${cur#v}; \
+	  IFS=. read -r maj min pat <<< "$$cur"; \
+	  case "$$bump" in \
+	    patch) pat=$$((pat+1));; \
+	    minor) min=$$((min+1)); pat=0;; \
+	    major) maj=$$((maj+1)); min=0; pat=0;; \
+	  esac; \
+	  new="v$$maj.$$min.$$pat"; \
+	fi; \
+	echo "Текущая: ${cur:-—}, новая: $$new"; \
+	git tag -a "$$new" -m "${MESSAGE:-Release $$new}" && \
+	echo "Тег $$new создан. Бинарник подберёт версию из buildinfo при сборке."
 
 # Э4 e2e: 2×fakellm (по 1 слоту), 6×mockcoder × 3 хода. Стенд — координатор
 # со встроенным узлом (tmux-сокет e2e, не default). Бинарники в STAND_DIR.

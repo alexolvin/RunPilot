@@ -11,14 +11,14 @@ var (
 	resolvedPath string
 )
 
-func newRoot(version string) *cobra.Command {
+func newRoot(ver string) *cobra.Command {
 	var cfgPath string
 	root := &cobra.Command{
 		Use:           "runpilot",
 		Short:         "RunPilot: очередь Qwen Code-кодеров в tmux по слотам локальных AI-серверов",
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Version:       version,
+		Version:       ver,
 		// Без аргументов — сводка: режим, ходы, очередь, URL веба (v2 раздел 1).
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runSummary()
@@ -54,7 +54,7 @@ func newRoot(version string) *cobra.Command {
 		newExecCmd(),
 		newTmuxSetupCmd(),
 		newDoctorCmd(),
-		newVersionCmd(version),
+		newVersionCmd(versionInfo),
 		newFixtureCmd(),
 		newLsCmd(),
 		newQCmd(),

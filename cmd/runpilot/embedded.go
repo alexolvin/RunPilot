@@ -68,7 +68,7 @@ func embeddedNode(ctx context.Context, srv *api.Server, hub *api.Hub,
 		// источником их соединений становится этот адрес — шлюз сверяет его
 		// с host_ip сессии (remoteIP == sess.HostIP).
 		HostIP:            cfg.Coordinator.Bind,
-		RUNPILOTVersion:   version,
+		RUNPILOTVersion:   versionInfo.Version,
 		TmuxVersion: node.TmuxVersion(ctx, ex),
 		OS:          node.OS(),
 		Sockets:     cfg.Node.TmuxSockets,
