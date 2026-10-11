@@ -58,6 +58,10 @@ type ServerRow struct {
 	Used     int             `json:"used"`
 	SlotInfo []ServerSlotRow `json:"slots_info"`
 
+	// W15: входные модальности + окно контекста (max_model_len).
+	InputModalities []string `json:"input_modalities,omitempty"`
+	MaxModelLen     int      `json:"max_model_len,omitempty"`
+
 	// Метрики (раздел 10 ТЗ).
 	GPU   *int     `json:"gpu,omitempty"`     // утилизация, max по картам, %
 	Power *int     `json:"power,omitempty"`   // мощность, сумма по картам, Вт
@@ -192,6 +196,7 @@ func (s *Scheduler) ServersView() []ServerRow {
 	for _, sv := range servers {
 		row := ServerRow{
 			Name: sv.Name, Priority: sv.Priority, State: string(sv.State), Slots: sv.Slots,
+			InputModalities: sv.InputModalities, MaxModelLen: sv.MaxModelLen,
 			GPU: sv.GPUPct, Power: sv.Power,
 			KV: sv.KV, GEN: sv.GenTokS, EXT: sv.Ext, Missing: sv.Missing,
 			Removing: s.serverRemoving[sv.Name],

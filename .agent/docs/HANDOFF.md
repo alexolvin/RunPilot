@@ -1,5 +1,66 @@
 # HANDOFF
-Обновлено: 2026-10-10 (W13: этапы 7–9 — маршрут кодера через аргументы, предпроверка 409, X-RunPilot-SID (direct), диалог с авто-именем, project_dir_match, pin/prefer, имена моделей; deploy dfed163; все узлы на dfed163)
+Обновлено: 2026-10-11 (W15: медиа через RunPilot — этапы 0–1: диагностика + шлюз пропускает медиа; deploy 97c76ac, координатор на 97c76ac)
+
+## W15 — медиа через RunPilot → учёт версий → GitHub (2026-10-11)
+
+### Этап 0 — диагностика (`docs/evidence/W15/diag.md`)
+- Живые сессии qwen: C66PZQ88PA (BotBoss), E4MHXQHSBY — cmdline и environ
+  корректны (`--auth-type openai --model "qwen3.8-27b (RunPilot)"`
+  `--openai-base-url http://100.124.155.106:8787/s/<sid>/v1`). PASS.
+- 100.126.222.23:8004 — из `~/.qwen/settings.json` → `modelProviders.openai-vzu5[0].baseUrl`
+  (операторский провайдер; к причине не относится).
+- Серверы: 3p14 UP (1 слот, external), vzu5 DOWN (1 слот, free).
+- Шлюз до правок: тело в `map[string]any`, max_body_mb=32, ReadHeaderTimeout=0.
+
+### Этап 1 — шлюз пропускает медиа — `97c76ac`
+- `transformBody` → `map[string]json.RawMessage`: подменяет только
+  model/max_tokens/max_completion_tokens; медиа (image_url/video_url) и
+  неизвестные поля — побайто (типовизированные структуры в шлюзе запрещены).
+- Лимиты: `gateway.max_body_mb=128`, новый `gateway.max_buffered_mb=1024`
+  (сумма тел в памяти; превышение → 503 runpilot_gateway_busy + Retry-After).
+  Превышение max_body_mb → 413 runpilot_body_too_large (тело побайтно).
+- ReadHeaderTimeout из `gateway.read_header_timeout_sec` (defaults.go=30);
+  ReadTimeout=0.
+- `body_bytes` в строке request (миграция 020) + гистограмма
+  aqm_gateway_request_body_bytes в /metrics.
+- /api/v1/state: gateway.max_body_mb=128, max_buffered_mb=1024 (устаревший
+  32 из БД снят — значение из defaults.go).
+- Тесты G1–G5 (media_test.go): deep-equal тела (прямой+удержание, stream+
+  non-stream), 413/503, медленное тело, 0 ";base64," в БД. Все PASS.
+- Ворота: go test -race ./... + staticcheck + make lint — 0.
+- Выкат 97c76ac (vcs.modified=false): deploy-coordinator.sh, бэкап
+  runpilot.bak-20261011T135409Z. Координатор на 97c76ac. Узлы vzu5-big/claw
+  на dfed163 (обновить перед этапом 3).
+
+### Этап 2 — модальности серверов + окно контекста (код)
+- `config.Server.InputModalities` (подмножество {image, video}, пусто по
+  умолчанию; валидация в Validate()). Новой миграции нет (сервер — JSON-блоб).
+- `media.probe_many_images` (defaults.go=20 = screenshotTriggerThreshold
+  Qwen Code) — N картинок в P-many-image.
+- Окно контекста: монитор уже читает max_model_len из /v1/models (ctxObserver,
+  serve.go); теперь выводится на карточку: ServerView.MaxModelLen →
+  ServerRow.max_model_len → веб (карточка + детальная). InputModalities тоже в
+  ServerRow.
+- Веб: карточка сервера (модальности + окно контекста), детальная (Stat),
+  мастер (поле «Входные модальности»), i18n.
+- Медиа-пробы (`internal/api/media_probe.go`, `POST /api/v1/servers/{name}/
+  media-probe`): ffmpeg drawtext (DejaVu) → PNG (6-значное число) + 6-с mp4
+  (три 2-значных по 2 с). Пул-сервер — сессия с пином, шлюз выдаёт неявную
+  аренду пин-сервера. P-image/P-video (ответ содержит число) + P-many-image
+  (N=20 → 200) + P-many-video (2 → 200). Ответ vLLM на FAIL — со статусом и
+  телом без base64.
+- Установка input_modalities (PATCH) — только по PASS обеих проб модальности;
+  иначе 400 MODALITY_NO_PASS с ответом vLLM. Результат проб — в памяти
+  координатора (mediaProbes).
+- Тесты M1–M5 (media_probe_test.go): inOrder, stripBase64, evalStatus,
+  evalProbe, mediaProbeAllowed. Ворота: go test -race + staticcheck + lint — 0.
+- Пробы на 3p14 + vzu5 — в работе (deploy + запуск).
+
+### Этапы 3–6 — в работе
+3. Объявление модальностей сессиям Qwen Code (system-settings.json).
+4. Живая приёмка (реальный Qwen Code + реальные серверы).
+5. Учёт версий (git-тег, make release, CHANGELOG).
+6. GitHub (CI, release, push).
 
 ## W13 — планирование и отображение (2026-10-10) — `9015c96` + `50d3d16`
 

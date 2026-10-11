@@ -44,7 +44,16 @@ export function ServerCard(props) {
         <span class="metric-k">${T.servers.gen}</span>
         <span class="metric-v">${s.missing ? T.units.none : fmtTokS(s.gen_tok_s)}</span>
       </div>
+      <div class="metric">
+        <span class="metric-k">${T.servers.contextWindow}</span>
+        <span class="metric-v">${T.servers.ctxTokens(s.max_model_len)}</span>
+      </div>
     </div>
+    ${s.input_modalities && s.input_modalities.length
+      ? html`<div class="server-card-slots">
+          ${s.input_modalities.map((m) => html`<span class="slot-chip" data-state="free">${T.servers['modality' + m.charAt(0).toUpperCase() + m.slice(1)]}</span>`)}
+        </div>`
+      : null}
     ${s.slots_info && s.slots_info.length
       ? html`<div class="server-card-slots">
           ${s.slots_info.map((sl) => html`<span class="slot-chip" data-state=${sl.state}>${slotStateLabel(meta, sl)}</span>`)}

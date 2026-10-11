@@ -98,8 +98,8 @@ var configKeys = []string{
 	"limits.max_pane_snapshot_bytes", "limits.token_min_len",
 	"servers", "servers.name", "servers.priority", "servers.slots", "servers.accept",
 	"servers.health_url", "servers.metrics_url", "servers.max_output_tokens",
-	"servers.first_byte_timeout_sec", "servers.require_direct", "servers.upstreams",
-	"servers.upstreams.openai", "servers.upstreams.openai.url", "servers.upstreams.openai.model",
+	"servers.first_byte_timeout_sec", "servers.require_direct", "servers.input_modalities",
+	"servers.upstreams", "servers.upstreams.openai", "servers.upstreams.openai.url", "servers.upstreams.openai.model",
 	"servers.upstreams.openai.key_env",
 	"profiles", "profiles.qwen", "profiles.qwen.model_alias", "profiles.qwen.command", "profiles.qwen.client_timeout_sec",
 	"notify", "notify.telegram", "notify.telegram.bot_token_env", "notify.telegram.chat_ids",
@@ -127,6 +127,7 @@ var configKeys = []string{
 	"external", "external.detect", "external.kill_grace_sec",
 	"jobs", "jobs.slots", "jobs.heartbeat_sec", "jobs.heartbeat_timeout_sec", "jobs.wait_max_default_sec",
 	"backup", "backup.daily_at_utc", "backup.keep",
+	"media", "media.probe_many_images",
 	"log", "log.path", "log.max_mb", "log.backups",
 }
 

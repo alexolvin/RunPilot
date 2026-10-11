@@ -226,6 +226,7 @@ func newServeCmd() *cobra.Command {
 			ctxObs := &ctxObserver{}
 			mon.SetContextObserver(ctxObs)
 			srv.SetMinContextWindow(ctxObs.Min)
+			srvs.ctx = ctxObs // W15: max_model_len на карточке сервера
 			// v2 (S4/S5): отказы OOM/ENGINE_DEAD — шлюз → монитор (окно
 			// отказов + карантин); SERVER_FAULT → журнал.
 			gw.SetFaultReporter(mon)
@@ -408,6 +409,7 @@ type gwServers struct {
 	gw  *gateway.Servers
 	mon *monitor.Monitor
 	hub *api.Hub
+	ctx *ctxObserver // W15: max_model_len по серверам
 }
 
 func (a *gwServers) List() []scheduler.ServerView {
@@ -415,11 +417,15 @@ func (a *gwServers) List() []scheduler.ServerView {
 	out := make([]scheduler.ServerView, 0, len(all))
 	for _, s := range all {
 		v := scheduler.ServerView{
-			Name:     s.Cfg.Name,
-			Priority: s.Cfg.Priority,
-			Slots:    s.Cfg.Slots,
-			Accept:   s.Cfg.Accept,
-			State:    s.State(),
+			Name:            s.Cfg.Name,
+			Priority:        s.Cfg.Priority,
+			Slots:           s.Cfg.Slots,
+			Accept:          s.Cfg.Accept,
+			State:           s.State(),
+			InputModalities: s.Cfg.InputModalities,
+		}
+		if a.ctx != nil {
+			v.MaxModelLen = a.ctx.Len(s.Cfg.Name)
 		}
 		if a.mon != nil {
 			sm := a.mon.Sample(s.Cfg.Name)
@@ -512,6 +518,14 @@ func (o *ctxObserver) Min() int {
 		}
 	}
 	return min
+}
+
+// Len — известный max_model_len конкретного сервера (0 — ещё неизвестен;
+// W15: показывается на карточке сервера).
+func (o *ctxObserver) Len(name string) int {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.byName[name]
 }
 
 // heartbeatLoop — W7 (6.5): meta.last_alive_at каждые interval (монотонные

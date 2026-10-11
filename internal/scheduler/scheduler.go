@@ -36,6 +36,10 @@ type ServerView struct {
 	Accept   []string
 	State    model.ServerState
 
+	// W15: входные модальности (конфиг) + max_model_len (монитор, /v1/models).
+	InputModalities []string
+	MaxModelLen     int
+
 	// Э6 (раздел 10 ТЗ): метрики монитора; nil = «—» в TUI.
 	Running *int     // vllm:num_requests_running
 	Waiting *int     // vllm:num_requests_waiting

@@ -111,6 +111,11 @@ type Server struct {
 	warnedVerMu sync.Mutex
 	warnedVer   map[string]bool
 
+	// mediaProbes — W15: результаты медиа-проб по серверам (установка
+	// input_modalities только по PASS). Пусто — пробы не выполнялись.
+	probeMu     sync.Mutex
+	mediaProbes map[string]*mediaProbeResult
+
 	// undoQueue — отмена массовой операции (O5): снимок до «Очистить очередь»
 	// (вернуть записи) / «Вернуть все» (снова в HOLD) + дедлайн web.undo_sec.
 	undoMu      sync.Mutex
@@ -364,6 +369,8 @@ func (s *Server) Routes() http.Handler {
 	// v2 (W6, 5.1/5.2): серверы — мастер, удаление, управление.
 	mux.HandleFunc("POST /api/v1/servers", s.handleServerCreate)
 	mux.HandleFunc("POST /api/v1/servers/probe", s.handleServerProbe)
+	// W15: медиа-пробы (P-image/P-video/P-many-*) через шлюз (аренда пин-сервера).
+	mux.HandleFunc("POST /api/v1/servers/{name}/media-probe", s.handleMediaProbe)
 	mux.HandleFunc("GET /api/v1/servers_flaps", s.handleServerFlaps)
 	mux.HandleFunc("GET /api/v1/servers/{name}", s.handleServerGet)
 	mux.HandleFunc("PATCH /api/v1/servers/{name}", s.handleServerPatch)

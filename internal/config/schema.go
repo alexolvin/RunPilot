@@ -237,6 +237,11 @@ func Schema() []SettingField {
 		intField("backup.keep", "", "Копии", "Хранить копий",
 			"Число хранимых ежедневных копий.", ApplyNextTick),
 
+		// Медиа (цикл W15).
+		intField("media.probe_many_images", "", "Медиа", "Картинок в P-many-image",
+			"Число картинок в одном запросе медиа-пробы P-many-image "+
+				"(= model.chatCompression.screenshotTriggerThreshold Qwen Code).", ApplyNextTick),
+
 		// Веб (раздел 4.4: для новых соединений и сессий браузера).
 		intField("web.session_ttl_days", "days", "Веб", "TTL сессии браузера",
 			"Жизнь сессии браузера.", ApplyNewConn),

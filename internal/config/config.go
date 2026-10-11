@@ -52,6 +52,14 @@ type Config struct {
 	External External `yaml:"external"`
 	Jobs     Jobs     `yaml:"jobs"`
 	Backup   Backup   `yaml:"backup"`
+	Media    Media    `yaml:"media"`
+}
+
+// Media — параметры медиа-проб (цикл W15). ProbeManyImages — N картинок в
+// одном запросе P-many-image; значение = model.chatCompression.
+// screenshotTriggerThreshold Qwen Code (20) — максимум, который кодер шлёт.
+type Media struct {
+	ProbeManyImages int `yaml:"probe_many_images"`
 }
 
 // Log — параметры ротации лога координатора.
@@ -211,7 +219,11 @@ type Server struct {
 	MaxOutputTokens     int       `yaml:"max_output_tokens"`
 	FirstByteTimeoutSec int       `yaml:"first_byte_timeout_sec"`
 	RequireDirect       bool      `yaml:"require_direct"`
-	Upstreams           Upstreams `yaml:"upstreams"`
+	// InputModalities — входные модальности сервера (подмножество {image,
+	// video}); пусто по умолчанию. Ставится только по PASS медиа-проб (этап
+	// 2 цикла W15); установка без PASS отклоняется с ответом vLLM.
+	InputModalities []string    `yaml:"input_modalities"`
+	Upstreams       Upstreams   `yaml:"upstreams"`
 }
 
 type Upstreams struct {
@@ -502,6 +514,7 @@ func (c *Config) Validate() error {
 		"retention.notifications_days":   c.Retention.NotificationsDays,
 		"retention.external_days":        c.Retention.ExternalDays,
 		"backup.keep":                    c.Backup.Keep,
+		"media.probe_many_images":        c.Media.ProbeManyImages,
 	}
 	for name, v := range positive {
 		if v <= 0 {
@@ -571,6 +584,11 @@ func (c *Config) Validate() error {
 		for _, a := range s.Accept {
 			if a != "resume" && a != "high" && a != "normal" && a != "low" {
 				problems = append(problems, s.Name+": accept содержит "+a)
+			}
+		}
+		for _, m := range s.InputModalities {
+			if m != "image" && m != "video" {
+				problems = append(problems, s.Name+": input_modalities содержит "+m)
 			}
 		}
 		if s.Upstreams.OpenAI.URL == "" || s.Upstreams.OpenAI.Model == "" || s.Upstreams.OpenAI.KeyEnv == "" {

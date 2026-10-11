@@ -82,4 +82,36 @@ const (
 
 	// distVersionTimeout — таймаут `<dist> version` (W12: защита от stale dist).
 	distVersionTimeout = 10 * time.Second
+
+	// Медиа-пробы (цикл W15, этап 2). Генерация — ffmpeg drawtext (DejaVu).
+	// mediaProbeFontPath — шрифт для чисел на кадре (системный DejaVu).
+	mediaProbeFontPath = "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf"
+	// mediaProbeNum6Min / mediaProbeNum6Range — 6-значное число в P-image
+	// (100000..999999).
+	mediaProbeNum6Min    = 100000
+	mediaProbeNum6Range  = 900000
+	// mediaProbeNum2Min / mediaProbeNum2Range — 2-значное число в P-video
+	// (10..99), три числа по 2 с.
+	mediaProbeNum2Min   = 10
+	mediaProbeNum2Range = 90
+	// mediaProbeNumSegs / mediaProbeSegSec — число сегментов в mp4 и длительность
+	// каждого (3 × 2 с = 6 с): сегмент i занимает [i*SegSec, (i+1)*SegSec).
+	mediaProbeNumSegs = 3
+	mediaProbeSegSec  = 2
+	// mediaProbePNGW / mediaProbePNGH / mediaProbeFontSize — кадр PNG/кадр mp4.
+	mediaProbePNGW   = 400
+	mediaProbePNGH   = 200
+	mediaProbeFontSize = 100
+	// mediaProbeMP4Sec / mediaProbeMP4FPS — длительность и fps mp4 (6 с, 5 fps).
+	mediaProbeMP4Sec = 6
+	mediaProbeMP4FPS = 5
+	// mediaProbeTimeout — таймаут генерирующего запроса пробы (модель читает
+	// медиа и отвечает; запас на 20 картинок / 2 видео).
+	mediaProbeTimeout = 120 * time.Second
+	// mediaProbeMaxTokens — потолок ответа пробы (модель читает число и
+	// отвечает коротко).
+	mediaProbeMaxTokens = 64
+	// loopbackIP — host_ip сессии пробы: запрос шлёт сам координатор (127.0.0.1),
+	// проверка шлюза remoteIP(r)==sess.HostIP требует совпадения.
+	loopbackIP = "127.0.0.1"
 )

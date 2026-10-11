@@ -96,6 +96,9 @@ function normServer(s) {
     ext: s.ext, slots_info: s.slots_info || [],
     removing: s.removing || false,
     missing: s.metrics_missing || false,
+    // W15: входные модальности + окно контекста (max_model_len).
+    input_modalities: s.input_modalities || [],
+    max_model_len: s.max_model_len || 0,
   };
 }
 function normNode(n) {

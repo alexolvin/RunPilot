@@ -78,6 +78,11 @@ function ServerDetail({ name }) {
       <${Stat} label=${T.servers.gen} value=${server.missing ? T.units.none : fmtTokS(server.gen_tok_s)} />
       <${Stat} label=${T.servers.power}
         value=${server.power == null ? T.units.none : fmtW(server.power)} />
+      <${Stat} label=${T.servers.contextWindow} value=${T.servers.ctxTokens(server.max_model_len)} />
+      <${Stat} label=${T.servers.modalities}
+        value=${server.input_modalities && server.input_modalities.length
+          ? server.input_modalities.join(', ')
+          : T.units.none} />
     </div>
     <${Section} title=${sparkTitle}>
       ${hist.length
@@ -156,6 +161,7 @@ function serverBody(v) {
   return {
     Name: v.name, Priority: Number(v.priority) || W6.defaultPriority, Slots: Number(v.slots) || 1,
     Accept: v.accept.split(',').map((x) => x.trim()).filter(Boolean),
+    InputModalities: v.modalities.split(',').map((x) => x.trim()).filter(Boolean),
     HealthURL: v.health, MetricsURL: v.metrics,
     Upstreams: { OpenAI: { URL: v.upUrl, Model: v.model, KeyEnv: v.keyEnv } },
   };
@@ -166,6 +172,7 @@ function serverPatchBody(v) {
     priority: Number(v.priority), slots: Number(v.slots),
     health_url: v.health, metrics_url: v.metrics,
     accept: v.accept.split(',').map((x) => x.trim()).filter(Boolean),
+    input_modalities: v.modalities.split(',').map((x) => x.trim()).filter(Boolean),
     upstreams: { openai: { url: v.upUrl, model: v.model, key_env: v.keyEnv } },
   };
 }
@@ -173,6 +180,7 @@ function serverPatchBody(v) {
 const EMPTY_WIZARD = {
   name: '', priority: '10', slots: '1', health: '', metrics: '',
   upUrl: '', model: '', keyEnv: '', accept: 'resume,high,normal,low',
+  modalities: '',
 };
 
 function wizardFromConfig(c) {
@@ -182,6 +190,7 @@ function wizardFromConfig(c) {
     slots: String(c.Slots || '1'), health: c.HealthURL || '', metrics: c.MetricsURL || '',
     upUrl: o.URL || '', model: o.Model || '', keyEnv: o.KeyEnv || '',
     accept: (c.Accept || []).join(', '),
+    modalities: (c.InputModalities || []).join(', '),
   };
 }
 
@@ -308,6 +317,10 @@ function ServerWizard({ onClose, server }) {
         <div class="field">
           <label>${T.servers.wAccept}<input value=${v.accept} onInput=${set('accept')} /></label>
           <div class="field-err field-hint">${T.servers.wAcceptHint}</div>
+        </div>
+        <div class="field">
+          <label>${T.servers.wModalities}<input value=${v.modalities} placeholder="image, video" onInput=${set('modalities')} /></label>
+          <div class="field-err field-hint">${T.servers.wModalitiesHint}</div>
         </div>
       </div>`}
     ${probe ? html`<p class=${probeOk ? 'dialog-ok' : 'dialog-err'}>

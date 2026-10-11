@@ -182,6 +182,11 @@ func Defaults() *Config {
 			DailyAtUTC: "03:00",
 			Keep:       7,
 		},
+		Media: Media{
+			// N картинок в P-many-image = model.chatCompression.
+			// screenshotTriggerThreshold Qwen Code (максимум, который шлёт кодер).
+			ProbeManyImages: 20,
+		},
 		Log: Log{
 			Path:    "~/.local/share/runpilot/coordinator.log",
 			MaxMB:   10,

@@ -355,6 +355,12 @@ export const T = {
     gen: 'Генерация',
     power: 'Мощность',
     state: 'Состояние',
+    // W15: входные модальности + окно контекста (max_model_len).
+    modalities: 'Модальности',
+    modalityImage: 'изображение',
+    modalityVideo: 'видео',
+    contextWindow: 'Окно контекста',
+    ctxTokens: (n) => (n > 0 ? String(n) : '—'),
     // W13 этап 2: состояние каждого слота; мини-карточка — «свободно/всего».
     freeOf: (f, t) => `${f}/${t}`,
     slotFree: 'свободен',
@@ -389,6 +395,8 @@ export const T = {
     wUpKeyEnvPh: 'VLLM_API_KEY',
     wAccept: 'Классы (accept)',
     wAcceptHint: 'через запятую: resume, high, normal, low',
+    wModalities: 'Входные модальности',
+    wModalitiesHint: 'устанавливается только по PASS медиа-проб',
     wSave: 'Создать сервер',
     wSaveEdit: 'Сохранить',
     wTesting: 'Проверка…',

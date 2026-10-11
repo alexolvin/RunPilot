@@ -99,6 +99,7 @@ func (s *Server) handleServerPatch(w http.ResponseWriter, r *http.Request) {
 		MaxOutputTokens *int         `json:"max_output_tokens"`
 		RequireDirect   *bool        `json:"require_direct"`
 		Accept          []string     `json:"accept"`
+		InputModalities []string     `json:"input_modalities"`
 		Upstreams       *patchUpstms `json:"upstreams"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
@@ -125,6 +126,21 @@ func (s *Server) handleServerPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if patch.Accept != nil {
 		cur.Accept = patch.Accept
+	}
+	if patch.InputModalities != nil {
+		// W15: установка модальности только по PASS медиа-проб; иначе —
+		// отклонение с ответом vLLM (статус + тело без base64).
+		if err := s.mediaProbeAllowed(name, cur.InputModalities, patch.InputModalities); err != nil {
+			var f *mediaProbeFailure
+			if errors.As(err, &f) {
+				httpError(w, http.StatusBadRequest, "MODALITY_NO_PASS",
+					"модальность "+f.Modality+": "+f.Body)
+			} else {
+				httpError(w, http.StatusBadRequest, "MODALITY_NO_PASS", err.Error())
+			}
+			return
+		}
+		cur.InputModalities = patch.InputModalities
 	}
 	if u := patch.Upstreams; u != nil && u.OpenAI != nil {
 		if u.OpenAI.URL != nil {
