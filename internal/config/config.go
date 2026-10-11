@@ -319,6 +319,9 @@ type Node struct {
 	// ProjectDirMatch — подстрока для фильтра каталогов в диалоге (W13 этап 8).
 	// Пусто — все каталоги project_roots.
 	ProjectDirMatch string `yaml:"project_dir_match"`
+	// StateDir — каталог состояния узла (W15 этап 3): per-сессии
+	// <state_dir>/qwen/<sid>/system-settings.json (модальности + контекст).
+	StateDir string `yaml:"state_dir"`
 }
 
 // Faults — параметры обработки отказов серверов (v2 раздел 4.2).

@@ -143,6 +143,9 @@ func (n *Node) spawn(ctx context.Context, m proto.Msg) (*Reply, error) {
 		}
 	}
 	env := n.coderEnv(m.Env)
+	// W15 этап 3: per-сессии system-settings.json (модальности пула + контекст)
+	// → кодер разрешает read_file медиа и объявляет реальный контекст.
+	n.applySystemSettingsEnv(env, m.SID, m.InputModalities, m.ContextWindow)
 	args := []string{"new-session", "-d", "-s", m.Name, "-c", m.Dir}
 	for _, k := range sortedEnvKeys(env) {
 		args = append(args, "-e", k+"="+env[k])
@@ -223,6 +226,8 @@ func (n *Node) listDirs(ctx context.Context, m proto.Msg) (*Reply, error) {
 
 func (n *Node) respawn(ctx context.Context, socket string, m proto.Msg) (*Reply, error) {
 	env := n.coderEnv(m.Env)
+	// W15 этап 3: per-сессии system-settings.json (respawn — тот же SID).
+	n.applySystemSettingsEnv(env, m.SID, m.InputModalities, m.ContextWindow)
 	args := []string{"respawn-pane", "-k", "-t", m.PaneID}
 	for _, k := range sortedEnvKeys(env) {
 		args = append(args, "-e", k+"="+env[k])

@@ -233,6 +233,10 @@ type Msg struct {
 	// пишет его в settings.model.generationConfig.contextWindowSize, чтобы
 	// qwen объявлял реальный контекст, а не гадание по имени (1000k).
 	ContextWindow int `json:"context_window,omitempty"`
+	// W15 этап 3: входные модальности пула (пересечение input_modalities всех
+	// серверов) — узел пишет в settings.model.generationConfig.modalities
+	// ({"image":bool,"video":bool}), чтобы qwen разрешал read_file медиа.
+	InputModalities []string `json:"input_modalities,omitempty"`
 
 	// node_health (14.4): {tmux_version, qwen_path, qwen_version,
 	// disk_free_mb, time}. TmuxVersion/QwenPath/QwenVersion/DiskFreeMB — те же

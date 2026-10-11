@@ -155,6 +155,7 @@ func Defaults() *Config {
 			HealthIntervalSec:   15,
 			ProjectRootsDefault: []string{"~"},
 			ProjectDirMatch:     "",
+			StateDir:            "~/.local/share/runpilot/node",
 		},
 		Faults: Faults{
 			WindowSec:       300,

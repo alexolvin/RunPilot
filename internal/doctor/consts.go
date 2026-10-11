@@ -11,6 +11,8 @@ const (
 	tmuxVersionFields = 2
 	// secretFileMode — ожидаемый режим конфигов/БД (0600).
 	secretFileMode = 0o600
+	// stateDirPerm — режим каталога состояния узла (W15 этап 3, qwen_system_settings).
+	stateDirPerm = 0o700
 	// foundListMax — сколько найденных имён показывать в списке.
 	foundListMax = 5
 	// statusRedirectLow/High — диапазон HTTP-кодов редиректов [300, 400).

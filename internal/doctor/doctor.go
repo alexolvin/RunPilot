@@ -182,6 +182,7 @@ func RoleChecks(r Role) []Check {
 			{Name: "tmux", Run: checkTmux},
 			{Name: "qwen_command", Run: checkQwenCommand},
 			{Name: "qwen_settings", Run: checkQwenSettings},
+			{Name: "qwen_system_settings", Run: checkQwenSystemSettings},
 			{Name: "qwen_timeout_guard", Run: checkQwenTimeoutGuard},
 			{Name: "coder_timeout_env", Run: checkCoderTimeoutEnv},
 			{Name: "coder_out_of_queue", Run: checkCoderOutOfQueue},
@@ -627,6 +628,49 @@ func checkQwenSettings(ctx *Context) Result {
 			fmt.Sprintf("selectedType=openai, modelProviders: %d эндов без коллизии (шлюз по умолчанию, переключение в /model)", providers))
 	}
 	return result("qwen_settings", PASS, "selectedType=openai, modelProviders пуст (кодер через шлюз)")
+}
+
+// checkQwenSystemSettings — per-сессии system-settings.json (W15 этап 3):
+// node.state_dir задан и writable (тестовая запись mode 0600, затем удаление).
+func checkQwenSystemSettings(ctx *Context) Result {
+	const check = "qwen_system_settings"
+	if ctx.Cfg == nil {
+		return result(check, WARN, "конфиг не загружен")
+	}
+	raw := ctx.Cfg.Node.StateDir
+	if raw == "" {
+		return result(check, FAIL, "node.state_dir не задан")
+	}
+	dir := expandTildeDoctor(raw)
+	// Тестовая запись: <state_dir>/qwen/doctor-test/system-settings.json.
+	testSID := "doctor-test"
+	testDir := filepath.Join(dir, "qwen", testSID)
+	testPath := filepath.Join(testDir, "system-settings.json")
+	defer os.RemoveAll(testDir)
+	if err := os.MkdirAll(testDir, stateDirPerm); err != nil {
+		return result(check, FAIL, dir+": каталог не создаётся: "+err.Error())
+	}
+	if err := os.WriteFile(testPath, []byte("{}"), secretFileMode); err != nil {
+		return result(check, FAIL, testPath+": запись: "+err.Error())
+	}
+	fi, err := os.Stat(testPath)
+	if err != nil {
+		return result(check, FAIL, testPath+": "+err.Error())
+	}
+	if fi.Mode().Perm() != secretFileMode {
+		return result(check, FAIL, testPath+": mode "+fi.Mode().Perm().String()+", хочу 0600")
+	}
+	return result(check, PASS, dir)
+}
+
+// expandTildeDoctor — ~ → $HOME (doctor не импортирует node).
+func expandTildeDoctor(s string) string {
+	if strings.HasPrefix(s, "~") {
+		if home, err := homeDir(); err == nil {
+			return filepath.Join(home, strings.TrimPrefix(s, "~"))
+		}
+	}
+	return s
 }
 
 // checkQwenCommand — путь к кодеру (profiles.qwen.command): пусто — command

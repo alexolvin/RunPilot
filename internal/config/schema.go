@@ -287,6 +287,8 @@ func Schema() []SettingField {
 			"Корни проектов по умолчанию для нового узла.", ApplyNextTick),
 		stringField("node.project_dir_match", "", "Узлы", "Фильтр каталогов",
 			"Подстрока для фильтра каталогов в диалоге (пусто — все).", ApplyNewSession),
+		stringField("node.state_dir", "", "Узлы", "Каталог состояния",
+			"Каталог per-сессии system-settings.json (<state_dir>/qwen/<sid>/).", ApplyNextTick),
 
 		// Подключение узлов.
 		intField("enroll.token_ttl_min", "min", "Подключение", "TTL токена",

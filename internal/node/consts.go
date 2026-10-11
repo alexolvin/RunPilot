@@ -13,6 +13,11 @@ const (
 	// binFilePerm — права загруженного бинарника self-update (14.2): исполняемый.
 	binFilePerm = 0o755
 
+	// systemSettingsDirPerm / systemSettingsFilePerm — права per-сессии
+	// system-settings.json (W15 этап 3): каталог 0700, файл 0600.
+	systemSettingsDirPerm  = 0o700
+	systemSettingsFilePerm = 0o600
+
 	// scanInitBuf — начальный буфер сканера (64 KiB).
 	scanInitBuf = 64 * 1024
 	// procScanMaxBuf — макс. буфер processTable (4 MiB).

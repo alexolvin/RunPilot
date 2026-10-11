@@ -434,6 +434,8 @@ func (n *Node) cycle(ctx context.Context, send func(proto.Msg) error) error {
 				if err := send(gm); err != nil {
 					return err
 				}
+				// W15 этап 3: GONE → удалить per-сессии system-settings.json.
+				n.deleteSystemSettings(ps.info.SID)
 			}
 			n.snap.forget(id)
 		}

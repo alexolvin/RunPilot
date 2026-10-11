@@ -311,6 +311,37 @@ func (s *Server) MinContextWindow() int {
 	return s.minContextFn()
 }
 
+// IntersectionModalities — пересечение input_modalities всех серверов пула
+// (W15 этап 3): сессия может мигрировать на любой сервер, поэтому кодеру
+// объявляются только модальности, поддерживаемые ВСЕМИ серверами. Порядок
+// фиксированный (image, video) для стабильного system-settings.json.
+func (s *Server) IntersectionModalities() []string {
+	servers := s.cfg.Servers
+	if len(servers) == 0 {
+		return nil
+	}
+	// Пересечение: модальность в результате, если есть во всех серверах.
+	common := map[string]bool{"image": true, "video": true}
+	for _, sv := range servers {
+		have := map[string]bool{}
+		for _, m := range sv.InputModalities {
+			have[m] = true
+		}
+		for _, m := range []string{"image", "video"} {
+			if !have[m] {
+				common[m] = false
+			}
+		}
+	}
+	var out []string
+	for _, m := range []string{"image", "video"} {
+		if common[m] {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
 // SetServerDrain — drain/undrain сервера (Э5); шлюз меняет состояние,
 // планировщик узнаёт через Servers.OnChange.
 func (s *Server) SetServerDrain(fn func(name string, on bool) error) { s.serverDrain = fn }
@@ -947,6 +978,8 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 	cfgMsg.GatewayURL = s.cfg.Coordinator.GatewayURL
 	// item 3: размер контекста (min по серверам) → contextWindowSize.
 	cfgMsg.ContextWindow = s.MinContextWindow()
+	// W15 этап 3: модальности пула (пересечение) → modalities кодера.
+	cfgMsg.InputModalities = s.IntersectionModalities()
 	if err := lc.WriteJSON(cfgMsg); err != nil {
 		s.log.Warn("api: node: config (hello-ответ): "+err.Error(), "host", host)
 		return
