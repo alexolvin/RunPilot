@@ -66,8 +66,28 @@
   - max_model_len=262144 на обоих (монитор из /v1/models, на карточке).
   - Координатор на fbfc427 (deploy; до этого 97c76ac).
 
-### Этапы 3–6 — в работе
-3. Объявление модальностей сессиям Qwen Code (system-settings.json).
+### Этап 3 — объявление модальностей сессиям Qwen Code (system-settings.json)
+- Координатор: `IntersectionModalities()` (пересечение input_modalities всех
+  серверов) + `MinContextWindow()` (min max_model_len) → spawn msg
+  (InputModalities + ContextWindow) + config msg (hello + смена пула).
+- Узел: `node.state_dir` (default ~/.local/share/runpilot/node); per-сессии
+  `<state_dir>/qwen/<sid>/system-settings.json` mode 0600 (override:
+  model.generationConfig.modalities {"image":bool,"video":bool} +
+  contextWindowSize). Coder env: QWEN_CODE_SYSTEM_SETTINGS_PATH = файл,
+  QWEN_CODE_SYSTEM_DEFAULTS_PATH = ~/.qwen/settings.json (если есть).
+  Запись на spawn/respawn, удаление на GONE (pane_gone).
+- Перезапуск кодера: `restart-agent` (API POST /sessions/{sid}/restart, CLI,
+  веб-кнопка) — только IDLE, respawn-pane + --continue (кодер возобновляет
+  диалог). Нужен после смены пула.
+- Смена пула (сервер create/patch/delete → смена подписи пула) → пуш config
+  всем узлам (переписать system-settings.json).
+- doctor (role node): qwen_system_settings (state_dir задан + writable, mode 0600).
+- Тесты: system_settings_test.go (S1–S5: modalitiesObject, systemSettingsDoc,
+  writeSystemSettings 0600, deleteSystemSettings, applySystemSettingsEnv).
+  Ворота: go test -race + staticcheck + lint — 0.
+- Коммиты: 684bbf1 (ядро), c4f3544 (перезапуск).
+
+### Этапы 4–6 — в работе
 4. Живая приёмка (реальный Qwen Code + реальные серверы).
 5. Учёт версий (git-тег, make release, CHANGELOG).
 6. GitHub (CI, release, push).

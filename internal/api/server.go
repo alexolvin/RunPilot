@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -64,6 +65,13 @@ type Server struct {
 	// неизвестен (0 → узел не меняет contextWindowSize). Ставится до
 	// подключения узлов; чтение — в обработчиках (обёртка thread-safe).
 	minContextFn func() int
+
+	// poolSig — подпись пула (W15 этап 3): «modalities|contextWindow». При
+	// смене (сервер добавлен/удалён/модальности/контекст) — пуш config всем
+	// узлам (переписать per-сессии system-settings.json). Чтение/запись под
+	// poolSigMu.
+	poolSig   string
+	poolSigMu sync.Mutex
 
 	// pusher — п.6(c): пуш set_status/set_summary координатор → узлы. Ставится
 	// из serve.go (после планировщика); nil — пуш выключен (тесты без пушера).
@@ -340,6 +348,36 @@ func (s *Server) IntersectionModalities() []string {
 		}
 	}
 	return out
+}
+
+// poolSignature — текущая подпись пула: «modalities|contextWindow».
+func (s *Server) poolSignature() string {
+	return strings.Join(s.IntersectionModalities(), ",") + "|" + strconv.Itoa(s.MinContextWindow())
+}
+
+// maybePushPoolConfig — W15 этап 3: при смене пула (модальности/контекст)
+// пуш config всем узлам (переписать per-сессии system-settings.json). Вызвать
+// после изменения серверов (create/patch/delete) и на смене контекста.
+func (s *Server) maybePushPoolConfig() {
+	sig := s.poolSignature()
+	s.poolSigMu.Lock()
+	changed := s.poolSig != sig
+	s.poolSig = sig
+	s.poolSigMu.Unlock()
+	if !changed {
+		return
+	}
+	cfgMsg := proto.New(proto.KindConfig)
+	cfgMsg.ModelAlias = s.cfg.Profiles.Qwen.ModelAlias
+	cfgMsg.GatewayURL = s.cfg.Coordinator.GatewayURL
+	cfgMsg.ContextWindow = s.MinContextWindow()
+	cfgMsg.InputModalities = s.IntersectionModalities()
+	for _, n := range s.hub.Nodes() {
+		if err := s.hub.PushToHost(n.Host, cfgMsg); err != nil {
+			s.log.Warn("api: пуш config (смена пула): "+err.Error(), "host", n.Host)
+		}
+	}
+	s.log.Info("api: смена пула — пуш config узлам", "sig", sig)
 }
 
 // SetServerDrain — drain/undrain сервера (Э5); шлюз меняет состояние,

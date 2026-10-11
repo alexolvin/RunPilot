@@ -208,6 +208,8 @@ func (s *Server) FinalizeServerRemoval(name string) {
 	}
 	s.removeCfgServer(name)
 	s.log.Info("api: сервер удалён", "server", name)
+	// W15 этап 3: смена пула (сервер удалён) → пуш config узлам.
+	s.maybePushPoolConfig()
 }
 
 // markServerRemoving — дренаж (новые ходы не выдаются) + пометка «удаляется».
@@ -226,6 +228,8 @@ func (s *Server) applyServerConfig(c config.Server) {
 		_ = s.serverReg.AddOrUpdate(c)
 	}
 	s.setCfgServer(c)
+	// W15 этап 3: смена пула (модальности) → пуш config узлам.
+	s.maybePushPoolConfig()
 }
 
 // serverUsed — активные ходы сервера (из вида планировщика).
