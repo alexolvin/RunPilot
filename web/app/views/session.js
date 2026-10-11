@@ -189,7 +189,7 @@ export function SessionPage() {
 
   return html`<div class="page session-card">
     <div class="sc-head">
-      <${Button} variant="text" label=${'← ' + T.session.back} onClick=${() => navigate('sessions')} />
+      <${Button} variant="text" label=${T.session.back} onClick=${() => navigate('sessions')} />
       <div class="sc-title">
         <span class="sc-name">${sess.name}</span>
         <${Badge} tone=${tone} label=${sessionStateLabel(s.meta, sess.state)} dot=${true} />

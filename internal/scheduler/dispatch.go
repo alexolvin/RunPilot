@@ -31,7 +31,9 @@ func grantable(e model.QueueEntry, sess store.SessionRecord) bool {
 		}
 		return false
 	}
-	return sess.State == model.SessionQueued
+	// DETACHED: аренда снята в ходе — при свободном слоте ре-выдаём
+	// (иначе сессия стаит в «Выполняется без слота» до нового запроса).
+	return sess.State == model.SessionQueued || sess.State == model.SessionDetached
 }
 
 func (s *Scheduler) tickGrant(now time.Time) {

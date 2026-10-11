@@ -1,15 +1,15 @@
-// Строка сессии в списках (В работе / Требуют внимания / Сессии): имя, узел,
-// состояние (+ why.text), pin/prefer + кнопка снятия. Тон — state-style (9.4).
+// Строка сессии в списках (В работе / Очередь / Внимание / Сессии): имя, узел,
+// состояние (+ why.text), pin/prefer + кнопка снятия. Пиктограмма состояния
+// (StateIcon) + кнопки-иконки (IconButton). Тон — state-style (9.4).
 // why — уже локализованный текст (labels.whyText) или пусто. actions — кнопки
-// справа (Остановить, Отозвать, …), onDelete — удаление GONE-записи.
+// справа [{icon, variant, onClick, loading, title}], onDelete — удаление GONE.
 import { html } from '../html.js';
-import { stateColorVar } from '../state-style.js';
 import { sessionStateLabel } from '../labels.js';
 import { T } from '../i18n/ru.js';
 import { post } from '../api.js';
 import { actions } from '../store.js';
-import { Badge } from './badge.js';
-import { Button } from './button.js';
+import { StateIcon } from './state-icon.js';
+import { IconButton } from './icon-button.js';
 import { navigate } from '../router.js';
 
 export function SessionRow(props) {
@@ -17,8 +17,7 @@ export function SessionRow(props) {
   const meta = props.meta;
   const why = props.why || '';
   const onDelete = props.onDelete || null;
-  const listActions = props.actions || []; // [{label, variant, onClick, loading}]
-  const tone = stateColorVar(s.state);
+  const listActions = props.actions || []; // [{icon, variant, onClick, loading, title}]
 
   const unpin = () => {
     post('/api/v1/sessions/' + s.sid + '/unpin', {})
@@ -39,13 +38,13 @@ export function SessionRow(props) {
       ${why ? html`<span class="srow-why">${why}</span>` : null}
     </div>
     <div class="srow-side">
-      <${Badge} tone=${tone} label=${sessionStateLabel(meta, s.state)} dot=${true} />
-      ${listActions.map((a) => html`<${Button} variant=${a.variant || 'secondary'}
-        label=${a.label} loading=${a.loading || false}
+      <${StateIcon} state=${s.state} title=${sessionStateLabel(meta, s.state)} />
+      ${listActions.map((a) => html`<${IconButton} variant=${a.variant || 'secondary'}
+        icon=${a.icon} title=${a.title || ''} loading=${a.loading || false}
         onClick=${(e) => { e.stopPropagation(); a.onClick(); }} />`)}
-      ${hasConstraint ? html`<${Button} variant="secondary" label=${T.a.unpin}
+      ${hasConstraint ? html`<${IconButton} variant="secondary" icon="x" title=${T.a.unpin}
         onClick=${(e) => { e.stopPropagation(); unpin(); }} />` : null}
-      ${onDelete ? html`<${Button} variant="danger" label=${T.session.a.deleteRow}
+      ${onDelete ? html`<${IconButton} variant="danger" icon="x" title=${T.session.a.deleteRow}
         onClick=${(e) => { e.stopPropagation(); onDelete(); }} />` : null}
     </div>
   </div>`;

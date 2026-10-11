@@ -12,10 +12,10 @@ import { UI, LAUNCH, FMT, W6 } from '../constants.js';
 import { ServerCard } from '../components/server-card.js';
 import { SessionRow } from '../components/session-row.js';
 import { EmptyState } from '../components/empty-state.js';
-import { Stat } from '../components/stat.js';
 import { Section, SectionEmpty } from '../components/section.js';
 import { Badge } from '../components/badge.js';
 import { Button } from '../components/button.js';
+import { IconButton } from '../components/icon-button.js';
 
 // W13 этап 2: причины по серверам строки очереди → «3p14: внешняя нагрузка (1) · vzu5: занят PhoneBroker».
 function serverReasonsText(sr) {
@@ -58,7 +58,6 @@ function clearQueue() {
 export function QueuePage() {
   const s = useStore();
   const [queueRows, setQueueRows] = useState([]);
-  const [mon, setMon] = useState(null);
   // Раздел постановки в очереди: остановка (Esc) — сверка реальной остановки
   // по активности (состояние сессии), не по факту отправки. sid → 'stopping'|…
   const [stopping, setStopping] = useState({});
@@ -66,10 +65,9 @@ export function QueuePage() {
   const queueRowsRef = useRef(queueRows);
 
   useEffect(() => {
-    // Строки очереди и сводка дня — разовый GET (не live). Внешние кодеры —
+    // Строки очереди — разовый GET (не live). Внешние кодеры —
     // из store (s.externals), обновляются по SSE EXTERNALS (live, без поллинга).
     get('/api/v1/queue').then((r) => { if (r.ok && r.data) setQueueRows(r.data); });
-    get('/api/v1/monitoring').then((r) => { if (r.ok && r.data) setMon(r.data); });
   }, []);
   useEffect(() => { sessionsRef.current = s.sessions; }, [s.sessions]);
   useEffect(() => { queueRowsRef.current = queueRows; }, [queueRows]);
@@ -128,6 +126,7 @@ export function QueuePage() {
   const isPrompt = (x) => { const p = s.panes[x.sid]; return !!p && p.state === 'PROMPT'; };
   const running = s.sessions.filter((x) => (x.state === 'RUNNING' || x.state === 'DISPATCHING') && !isPrompt(x));
   const hold = s.sessions.filter((x) => x.state === 'HOLD' || isPrompt(x));
+  const idleSessions = s.sessions.filter((x) => x.state === 'IDLE');
   const hasAny = s.servers.length > 0 || s.sessions.length > 0;
 
   if (!hasAny) {
@@ -158,23 +157,13 @@ export function QueuePage() {
         : html`<${SectionEmpty} text=${T.empty.servers.text} />`}
     </${Section}>
 
-    <${Section} title=${T.queue.today}>
-      ${mon && mon.turns_24h
-        ? html`<div class="stat-grid">
-            <${Stat} label=${T.queue.turns} value=${String(mon.turns_24h.turns)} />
-            <${Stat} label=${T.queue.ok} value=${String(mon.turns_24h.ok)} />
-            <${Stat} label=${T.queue.error} value=${String(mon.turns_24h.error)} />
-            <${Stat} label=${T.queue.duration} value=${fmtDur(mon.turns_24h.avg_duration_sec)} />
-          </div>`
-        : html`<${SectionEmpty} text=${T.empty.monitoring.text} />`}
-    </${Section}>
-
     <${Section} title=${T.queue.work} count=${running.length}>
       ${shownRunning.length
         ? html`<div class="srow-list">
             ${shownRunning.map((x) => SessionRow({ s: x, meta: s.meta, actions: [
               {
-                label: stopping[x.sid] === 'stopping' ? T.session.stopping
+                icon: 'x',
+                title: stopping[x.sid] === 'stopping' ? T.session.stopping
                   : stopping[x.sid] === 'done' ? T.session.stopDone
                   : stopping[x.sid] === 'failed' ? T.session.stopFailed
                   : T.session.stop,
@@ -197,7 +186,7 @@ export function QueuePage() {
               const why = whyText(s.meta, 'ineligible', row.why);
               const srs = serverReasonsText(row.server_reasons);
               const cTone = stateColorVar(String(row.class).toUpperCase());
-              return html`<div class="srow qrow">
+              return html`<div class="srow qrow" onClick=${() => navigate('sessions', row.sid)}>
                 <span class="qrow-pos">${row.rank}</span>
                 <div class="srow-main">
                   <span class="srow-name" title=${row.sid}>${row.session}</span>
@@ -209,10 +198,10 @@ export function QueuePage() {
                   ${row.held ? html`<${Badge} tone="var(--color-warning)" label=${T.queue.held} />` : null}
                   <${Badge} tone=${cTone} label=${classLabel(s.meta, row.class)} />
                   ${row.held && row.held_since ? html`<${HeldTimer} since=${row.held_since} />` : null}
-                  <span class="qrow-wait">${row.wait_sec} ${T.units.sec}</span>
-                  <${Button} variant="secondary" label=${T.session.editLaunch}
+                  <span class="qrow-wait">${row.wait_sec}${T.units.sec}</span>
+                  <${IconButton} variant="secondary" icon="file-text" title=${T.session.editLaunch}
                     onClick=${(e) => { e.stopPropagation(); navigate('sessions', row.sid); }} />
-                  <${Button} variant="danger" label=${T.session.withdraw}
+                  <${IconButton} variant="danger" icon="x" title=${T.session.withdraw}
                     onClick=${(e) => { e.stopPropagation(); withdrawRow(row.sid); }} />
                 </div>
               </div>`;
@@ -233,6 +222,14 @@ export function QueuePage() {
           </div>`
         : html`<${SectionEmpty} text=${T.queue.emptyAttention} />`}
     </${Section}>
+
+    ${idleSessions.length
+      ? html`<${Section} title=${T.queue.free} count=${idleSessions.length}>
+          <div class="srow-list">
+            ${idleSessions.map((x) => SessionRow({ s: x, meta: s.meta }))}
+          </div>
+        </${Section}>`
+      : null}
 
     ${s.externals.length
       ? html`<${Section} title=${T.externals.title} count=${s.externals.length}>

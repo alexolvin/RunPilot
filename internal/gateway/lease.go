@@ -332,6 +332,8 @@ func (g *Gateway) sessionGrantedEvents(sess store.SessionRecord) {
 		g.applySessionEvent(sess, model.EvStartConfirmed)
 	case model.SessionDetached:
 		g.applySessionEvent(sess, model.EvResumeRequest)
+	case model.SessionHold:
+		g.applySessionEvent(sess, model.EvResumeRequest)
 	}
 }
 

@@ -712,6 +712,19 @@ func (s *Scheduler) sessionEvent(sess store.SessionRecord, ev model.SessionEvent
 	if to == model.SessionHold && hold != "" {
 		s.event(model.KindHold, sess.SID, "", map[string]any{"reason": string(hold)})
 	}
+	// DETACHED: аренда снята в ходе — ставим в очередь (RESUME), чтобы при
+	// свободном слоте планировщик ре-выдал (иначе стаит в «без слота»).
+	if to == model.SessionDetached {
+		if _, err := s.st.QueueGet(sess.SID); err != nil {
+			_ = s.st.QueueUpsert(model.QueueEntry{
+				SID:        sess.SID,
+				Class:      model.ClassResume,
+				EnqueuedAt: s.clk.Now(),
+				Constraint: model.Constraint{Kind: sess.ConstraintKind, Server: sess.ConstraintServer},
+				Mode:       model.QueueModeResume,
+			})
+		}
+	}
 }
 
 // event — запись события (приложение Б ТЗ). TS — свежий снимок часов; для

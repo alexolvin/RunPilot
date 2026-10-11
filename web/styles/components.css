@@ -407,6 +407,11 @@
 .qrow-wait{font-size:var(--font-size-xs);color:var(--color-text-muted);font-family:var(--font-mono)}
 /* п.6: таймер удержания (now − held_since) рядом с бейджем HELD. */
 .qrow-held{font-size:var(--font-size-xs);color:var(--color-warning);font-family:var(--font-mono);white-space:nowrap}
+/* Пиктограмма состояния (замена текстового бейджа). */
+.state-icon{display:inline-flex;align-items:center;justify-content:center;flex:none}
+/* Кнопка-иконка (замена текстовой кнопки в строках списков). */
+.btn--icon{padding:6px;min-height:32px;min-width:32px}
+.btn--icon .icon{width:18px;height:18px}
 
 /* ---- Детальная страница (сервер/узел) ---- */
 .detail-head{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-5)}

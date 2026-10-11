@@ -93,6 +93,7 @@ var sessionTransitions = []Transition{
 	{SessionRunning, EvTurnDone, SessionIdle},              // ход завершён OK
 	{SessionRunning, EvLeaseRevoked, SessionDetached},      // аренда снята в ходе
 	{SessionDetached, EvResumeRequest, SessionRunning},     // новый запрос хода
+	{SessionHold, EvResumeRequest, SessionRunning},         // активность на шлюзе: вывод из HOLD
 	{SessionDetached, EvIdleNoError, SessionIdle},          // панель IDLE без ошибки
 	{SessionRunning, EvErrorRetryable, SessionQueued},      // ошибка, attempts ≤ max
 	{SessionRunning, EvErrorFatal, SessionHold},            // ошибка, attempts > max

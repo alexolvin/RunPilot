@@ -15,6 +15,7 @@ import { EmptyState } from '../components/empty-state.js';
 import { Stat } from '../components/stat.js';
 import { Badge } from '../components/badge.js';
 import { Button } from '../components/button.js';
+import { IconButton } from '../components/icon-button.js';
 import { Dialog } from '../components/dialog.js';
 import { Section, SectionEmpty } from '../components/section.js';
 import { navigate } from '../router.js';
@@ -29,7 +30,7 @@ export function ServersPage() {
   return html`<div class="page">
     <div class="page-head-row">
       <h2 class="detail-title">${s.servers.length + ' ' + T.pages.servers.toLowerCase()}</h2>
-      <${Button} variant="primary" label=${T.servers.add} onClick=${() => setWizard(true)} />
+      <${IconButton} variant="primary" icon="plus" title=${T.servers.add} onClick=${() => setWizard(true)} />
     </div>
     ${s.servers.length
       ? html`<div class="card-grid">${s.servers.map((sr) => ServerCard({ server: sr, meta: s.meta }))}</div>`
