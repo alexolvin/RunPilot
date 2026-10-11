@@ -377,6 +377,13 @@ func (n *Node) config(ctx context.Context, m proto.Msg) (*Reply, error) {
 	if m.GatewayURL != "" {
 		n.SetGatewayURL(m.GatewayURL)
 	}
+	// W15 этап 3: смена пула (модальности/контекст) → переписать per-сессии
+	// system-settings.json живых сессий (перезапуск кодера — пользователю).
+	if m.InputModalities != nil || m.ContextWindow > 0 {
+		for _, sid := range n.snap.LiveSIDs() {
+			n.writeSystemSettings(sid, m.InputModalities, m.ContextWindow)
+		}
+	}
 	return &Reply{CmdID: m.CmdID, Result: ResSent}, nil
 }
 

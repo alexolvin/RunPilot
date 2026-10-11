@@ -2,6 +2,7 @@ package node
 
 import (
 	"strings"
+	"sync"
 	"time"
 
 	"runpilot/internal/clock"
@@ -39,6 +40,7 @@ type snapshotter struct {
 	// W13 этап 4); обязан быть < snapshot_max_age_sec (инвариант загрузки).
 	pulseInterval time.Duration
 
+	mu    sync.Mutex
 	panes map[string]*paneSnap // по pane_id
 }
 
@@ -54,6 +56,8 @@ func newSnapshotter(clk clock.Clock, agentVer string, pulseInterval time.Duratio
 // sync сравнивает результат съёмки с предыдущим и возвращает true,
 // если нужно отправить сообщение pane (смена состояния, хеша или ввода).
 func (s *snapshotter) sync(info PaneInfo, st detect.State, hash uint64, input string, now time.Time) (proto.Pane, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	ps := s.panes[info.PaneID]
 	if ps == nil {
 		ps = &paneSnap{info: info}
@@ -85,6 +89,8 @@ func (s *snapshotter) sync(info PaneInfo, st detect.State, hash uint64, input st
 // pulse — время пульса наступило, хотя состояние не менялось (Busy-панель:
 // период из конфига, W13 этап 4).
 func (s *snapshotter) pulse(info PaneInfo, now time.Time) (proto.Pane, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	ps := s.panes[info.PaneID]
 	if ps == nil || now.Sub(ps.sentAt) < s.pulseInterval {
 		return proto.Pane{}, false
@@ -97,6 +103,8 @@ func (s *snapshotter) pulse(info PaneInfo, now time.Time) (proto.Pane, bool) {
 // хотя состояние не менялось (W13 этап 4) — иначе снимок устаревает
 // (snapshot_max_age_sec). Обновляет sentAt и возвращает сообщение.
 func (s *snapshotter) heartbeat(info PaneInfo, now time.Time) (proto.Pane, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	ps := s.panes[info.PaneID]
 	if ps == nil {
 		return proto.Pane{}, false
@@ -106,7 +114,22 @@ func (s *snapshotter) heartbeat(info PaneInfo, now time.Time) (proto.Pane, bool)
 }
 
 // forget удаляет панель из состояния (панель исчезла).
-func (s *snapshotter) forget(paneID string) { delete(s.panes, paneID) }
+func (s *snapshotter) forget(paneID string) { s.mu.Lock(); defer s.mu.Unlock(); delete(s.panes, paneID) }
+
+// LiveSIDs — SIDs живых управляемых панелей (W15 этап 3: смена пула →
+// переписать per-сессии system-settings.json). Чтение под мьютексом (конфиг-
+// хэндлер в отдельном горутины от скан-цикла).
+func (s *snapshotter) LiveSIDs() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []string
+	for _, ps := range s.panes {
+		if ps != nil && ps.info.SID != "" {
+			out = append(out, ps.info.SID)
+		}
+	}
+	return out
+}
 
 // paneMsg — сообщение pane для координатора.
 func paneMsg(info PaneInfo, st detect.State, hash uint64, input string, stableSince time.Time, agentVer string) proto.Pane {
