@@ -210,6 +210,13 @@ func Defaults() *Config {
 			InputWaitSec:         120,
 			MaxAutoCycles:        30,
 		},
+		LlmAssist: LlmAssist{
+			Class:         "default",
+			MaxTokens:     512,
+			TimeoutSec:    60,
+			MaxInputKB:    64,
+			MinQuoteChars: 8,
+		},
 		Browser: Browser{
 			ChromePath:         "/usr/bin/google-chrome",
 			XvfbPath:           "/usr/bin/Xvfb",

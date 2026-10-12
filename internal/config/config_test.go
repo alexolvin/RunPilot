@@ -135,6 +135,8 @@ var configKeys = []string{
 	"relay.question_template", "relay.oversize_note_template", "relay.min_send_interval_sec",
 	"relay.send_confirm_sec", "relay.answer_timeout_min", "relay.answer_stable_sec",
 	"relay.input_wait_sec", "relay.max_auto_cycles",
+	"llm_assist", "llm_assist.class", "llm_assist.max_tokens", "llm_assist.timeout_sec",
+	"llm_assist.max_input_kb", "llm_assist.min_quote_chars",
 	"browser", "browser.chrome_path", "browser.xvfb_path", "browser.display",
 	"browser.screen", "browser.profile_dir", "browser.max_tabs",
 	"browser.page_load_timeout_sec", "browser.idle_stop_min", "browser.view_jpeg_quality",

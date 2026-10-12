@@ -284,6 +284,18 @@ func Schema() []SettingField {
 		intField("relay.max_auto_cycles", "", "Связь", "Макс. автоциклов",
 			"Предохранитель: циклов подряд без действий оператора.", ApplyNextTick),
 
+		// Помощник LLM связи (ТЗ Relay, раздел 13).
+		stringField("llm_assist.class", "", "Помощник LLM", "Класс модели",
+			"Класс модели шлюза для вызовов помощника связи.", ApplyNextTick),
+		intField("llm_assist.max_tokens", "", "Помощник LLM", "Лимит токенов",
+			"Лимит токенов ответа помощника.", ApplyNextTick),
+		intField("llm_assist.timeout_sec", "s", "Помощник LLM", "Таймаут вызова",
+			"Таймаут одного вызова помощника.", ApplyNextTick),
+		intField("llm_assist.max_input_kb", "KB", "Помощник LLM", "Обрезка входа",
+			"Обрезка входа с конца (КБ).", ApplyNextTick),
+		intField("llm_assist.min_quote_chars", "", "Помощник LLM", "Мин. длина quote",
+			"Минимальная длина quote (проверка подстроки).", ApplyNextTick),
+
 		// Браузер координатора (ТЗ Relay, раздел 8/16).
 		stringField("browser.chrome_path", "", "Браузер", "Путь к Chrome",
 			"Абсолютный путь к Google Chrome.", ApplyNextTick),

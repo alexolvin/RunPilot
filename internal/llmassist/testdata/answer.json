@@ -1,0 +1,24 @@
+{
+  "cases": [
+    {"name": "block_0", "answer": "0: [text] Ответ агенту:\n1: [code] Сделай шаг 2.", "llm": "{\"block\": 1}", "want_block": 1},
+    {"name": "block_1", "answer": "0: [text] Вступление.\n1: [text] Ответ агенту:\n2: [code] Шаг 2.", "llm": "{\"block\": 2}", "want_block": 2},
+    {"name": "block_last", "answer": "0: [text] a\n1: [code] x\n2: [text] агенту\n3: [code] Финал.", "llm": "{\"block\": 3}", "want_block": 3},
+    {"name": "quote", "answer": "Продолжай со вторым шагом и проверь тесты.", "llm": "{\"quote\": \"вторым шагом\"}", "want_quote": "вторым шагом"},
+    {"name": "null", "answer": "Просто подтверждение, без задания.", "llm": "null", "want_null": true},
+    {"name": "block_2", "answer": "0: [text] a\n1: [text] b\n2: [code] Задача.", "llm": "{\"block\": 2}", "want_block": 2},
+    {"name": "block_3", "answer": "0: [text] a\n1: [text] b\n2: [text] c\n3: [code] Задача.", "llm": "{\"block\": 3}", "want_block": 3},
+    {"name": "quote_2", "answer": "Нужно исправить ошибку в модуле оплаты и перезалить.", "llm": "{\"quote\": \"модуле оплаты\"}", "want_quote": "модуле оплаты"},
+    {"name": "null_2", "answer": "Всё хорошо, действий не требуется.", "llm": "null", "want_null": true},
+    {"name": "block_4", "answer": "0: [text] a\n1: [text] b\n2: [text] c\n3: [text] d\n4: [code] Задача.", "llm": "{\"block\": 4}", "want_block": 4},
+    {"name": "quote_cyr", "answer": "Сфокусируйся на рефакторинге сервиса аутентификации.", "llm": "{\"quote\": \"рефакторинге сервиса\"}", "want_quote": "рефакторинге сервиса"},
+    {"name": "block_5", "answer": "0: [text] a\n1: [text] b\n2: [text] c\n3: [text] d\n4: [text] e\n5: [code] Задача.", "llm": "{\"block\": 5}", "want_block": 5},
+    {"name": "quote_3", "answer": "Добавь покрытие тестами для нового эндпоинта.", "llm": "{\"quote\": \"покрытие тестами\"}", "want_quote": "покрытие тестами"},
+    {"name": "null_3", "answer": "Отчёт принят, вопросов нет.", "llm": "null", "want_null": true},
+    {"name": "block_6", "answer": "0: [text] a\n1: [text] b\n2: [text] c\n3: [text] d\n4: [text] e\n5: [text] f\n6: [code] Задача.", "llm": "{\"block\": 6}", "want_block": 6},
+    {"name": "quote_4", "answer": "Обнови зависимости и прогони линтер.", "llm": "{\"quote\": \"Обнови зависимости\"}", "want_quote": "Обнови зависимости"},
+    {"name": "block_7", "answer": "0: [text] a\n1: [text] b\n2: [text] c\n3: [text] d\n4: [text] e\n5: [text] f\n6: [text] g\n7: [code] Задача.", "llm": "{\"block\": 7}", "want_block": 7},
+    {"name": "quote_5", "answer": "Подготовь черновик релизных заметок.", "llm": "{\"quote\": \"релизных заметок\"}", "want_quote": "релизных заметок"},
+    {"name": "null_4", "answer": "Принято, продолжаю в том же режиме.", "llm": "null", "want_null": true},
+    {"name": "block_8", "answer": "0: [text] a\n1: [text] b\n2: [text] c\n3: [text] d\n4: [text] e\n5: [text] f\n6: [text] g\n7: [text] h\n8: [code] Задача.", "llm": "{\"block\": 8}", "want_block": 8}
+  ]
+}

@@ -52,9 +52,10 @@ type Config struct {
 	External External `yaml:"external"`
 	Jobs     Jobs     `yaml:"jobs"`
 	Backup   Backup   `yaml:"backup"`
-	Media    Media    `yaml:"media"`
-	Relay    Relay    `yaml:"relay"`
-	Browser  Browser  `yaml:"browser"`
+	Media     Media     `yaml:"media"`
+	Relay     Relay     `yaml:"relay"`
+	Browser   Browser   `yaml:"browser"`
+	LlmAssist LlmAssist `yaml:"llm_assist"`
 }
 
 // Browser — параметры браузера координатора (ТЗ Relay, раздел 8/16):
@@ -110,6 +111,17 @@ type Relay struct {
 // screenshotTriggerThreshold Qwen Code (20) — максимум, который кодер шлёт.
 type Media struct {
 	ProbeManyImages int `yaml:"probe_many_images"`
+}
+
+// LlmAssist — помощник LLM связи (ТЗ Relay §13). Вызов — через шлюз под
+// JOB-арендой relay-assist, temperature 0; строгий JSON, невалидный → 1 повтор
+// → HOLD(LLM_INVALID).
+type LlmAssist struct {
+	Class          string `yaml:"class"`           // класс модели шлюза
+	MaxTokens      int    `yaml:"max_tokens"`      // лимит токенов ответа
+	TimeoutSec     int    `yaml:"timeout_sec"`     // таймаут одного вызова
+	MaxInputKB     int    `yaml:"max_input_kb"`    // обрезка входа с конца (КБ)
+	MinQuoteChars  int    `yaml:"min_quote_chars"` // мин. длина quote (проверка)
 }
 
 // Log — параметры ротации лога координатора.

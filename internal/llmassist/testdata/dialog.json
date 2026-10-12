@@ -1,0 +1,24 @@
+{
+  "cases": [
+    {"name": "option_0", "questions": "1. Какой подход выбрать?\n  0. A\n  1. B", "answer": "Выбирай подход A.", "llm": "[{\"option\": 0}]", "want": [{"option": 0}]},
+    {"name": "option_1", "questions": "1. Формат?\n  0. JSON\n  1. YAML", "answer": "Используй YAML.", "llm": "[{\"option\": 1}]", "want": [{"option": 1}]},
+    {"name": "multi_two", "questions": "1. Модули (multi)?\n  0. auth\n  1. pay\n  2. ui", "answer": "Обнови auth и pay.", "llm": "[{\"options\": [0, 1]}]", "want": [{"options": [0, 1]}]},
+    {"name": "quote_free", "questions": "1. Что сделать дальше?", "answer": "Продолжи с рефакторингом парсера.", "llm": "[{\"quote\": \"рефакторингом парсера\"}]", "want": [{"quote": "рефакторингом парсера"}]},
+    {"name": "option_2", "questions": "1. Стратегия?\n  0. X\n  1. Y\n  2. Z", "answer": "Бери Z.", "llm": "[{\"option\": 2}]", "want": [{"option": 2}]},
+    {"name": "two_q_option", "questions": "1. A или B?\n  0. A\n  1. B\n2. Быстро или надёжно?\n  0. Быстро\n  1. Надёжно", "answer": "B и надёжно.", "llm": "[{\"option\": 1}, {\"option\": 1}]", "want": [{"option": 1}, {"option": 1}]},
+    {"name": "multi_three", "questions": "1. Слой (multi)?\n  0. api\n  1. db\n  2. cache\n  3. ui", "answer": "Тронь api, db и cache.", "llm": "[{\"options\": [0, 1, 2]}]", "want": [{"options": [0, 1, 2]}]},
+    {"name": "quote_2", "questions": "1. Детали?", "answer": "Добавь индекс на таблицу orders.", "llm": "[{\"quote\": \"индекс на таблицу\"}]", "want": [{"quote": "индекс на таблицу"}]},
+    {"name": "option_0_2", "questions": "1. Локаль?\n  0. ru\n  1. en", "answer": "Оставь ru.", "llm": "[{\"option\": 0}]", "want": [{"option": 0}]},
+    {"name": "two_q_mixed", "questions": "1. Формат?\n  0. JSON\n  1. YAML\n2. Сжимать?\n  0. Да\n  1. Нет", "answer": "YAML, без сжатия.", "llm": "[{\"option\": 1}, {\"option\": 1}]", "want": [{"option": 1}, {"option": 1}]},
+    {"name": "multi_one", "questions": "1. Тэги (multi)?\n  0. bug\n  1. feat\n  2. docs", "answer": "Пометь как feat.", "llm": "[{\"options\": [1]}]", "want": [{"options": [1]}]},
+    {"name": "quote_cyr", "questions": "1. Замечание?", "answer": "Учитывай кавычки в именах полей.", "llm": "[{\"quote\": \"кавычки в именах\"}]", "want": [{"quote": "кавычки в именах"}]},
+    {"name": "option_1_2", "questions": "1. Режим?\n  0. dev\n  1. prod", "answer": "Запускай в prod.", "llm": "[{\"option\": 1}]", "want": [{"option": 1}]},
+    {"name": "two_q_option0", "questions": "1. A/B?\n  0. A\n  1. B\n2. X/Y?\n  0. X\n  1. Y", "answer": "A и X.", "llm": "[{\"option\": 0}, {\"option\": 0}]", "want": [{"option": 0}, {"option": 0}]},
+    {"name": "multi_pair", "questions": "1. Сервисы (multi)?\n  0. gw\n  1. api\n  2. worker\n  3. cron", "answer": "Перезапусти gw и worker.", "llm": "[{\"options\": [0, 2]}]", "want": [{"options": [0, 2]}]},
+    {"name": "quote_3", "questions": "1. Что учесть?", "answer": "Сверь хеш после вставки.", "llm": "[{\"quote\": \"Сверь хеш\"}]", "want": [{"quote": "Сверь хеш"}]},
+    {"name": "option_2_2", "questions": "1. Приоритет?\n  0. низкий\n  1. средний\n  2. высокий", "answer": "Высокий.", "llm": "[{\"option\": 2}]", "want": [{"option": 2}]},
+    {"name": "three_q", "questions": "1. a?\n  0. 1\n  1. 2\n2. b?\n  0. 1\n  1. 2\n3. c?\n  0. 1\n  1. 2", "answer": "2, 1 и 2.", "llm": "[{\"option\": 1}, {\"option\": 0}, {\"option\": 1}]", "want": [{"option": 1}, {"option": 0}, {"option": 1}]},
+    {"name": "multi_all", "questions": "1. Всё (multi)?\n  0. a\n  1. b\n  2. c", "answer": "Включи всё.", "llm": "[{\"options\": [0, 1, 2]}]", "want": [{"options": [0, 1, 2]}]},
+    {"name": "quote_4", "questions": "1. Инструкция?", "answer": "Прогони миграции перед деплоем.", "llm": "[{\"quote\": \"Прогони миграции\"}]", "want": [{"quote": "Прогони миграции"}]}
+  ]
+}

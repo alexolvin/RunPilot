@@ -1,0 +1,24 @@
+{
+  "cases": [
+    {"name": "report_last", "messages": ["Делаю файл.", "Готово, отчёт: создан step1.md"], "llm": "{\"start\": 1}", "want_start": 1},
+    {"name": "report_mid", "messages": ["Начал.", "Готово, отчёт: всё сделано.", "Дополнение."], "llm": "{\"start\": 1}", "want_start": 1},
+    {"name": "no_report", "messages": ["Думаю.", "Делаю."], "llm": "{\"start\": null}", "want_start": null},
+    {"name": "single_report", "messages": ["Готово, отчёт хода."], "llm": "{\"start\": 0}", "want_start": 0},
+    {"name": "report_0", "messages": ["Отчёт: готово.", "Продолжаю."], "llm": "{\"start\": 0}", "want_start": 0},
+    {"name": "report_2", "messages": ["Шаг 1.", "Шаг 2.", "Готово, отчёт."], "llm": "{\"start\": 2}", "want_start": 2},
+    {"name": "report_3", "messages": ["a", "b", "c", "Отчёт: готово."], "llm": "{\"start\": 3}", "want_start": 3},
+    {"name": "report_4", "messages": ["a", "b", "c", "d", "Отчёт."], "llm": "{\"start\": 4}", "want_start": 4},
+    {"name": "no_report_2", "messages": ["Делаю.", "Продолжаю.", "Ещё."], "llm": "{\"start\": null}", "want_start": null},
+    {"name": "report_cyr", "messages": ["Работаю.", "Готово, отчёт выполнен."], "llm": "{\"start\": 1}", "want_start": 1},
+    {"name": "report_long_turn", "messages": ["m0", "m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "Отчёт: всё готово."], "llm": "{\"start\": 10}", "want_start": 10},
+    {"name": "report_5", "messages": ["a", "b", "c", "d", "e", "Готово."], "llm": "{\"start\": 5}", "want_start": 5},
+    {"name": "report_6", "messages": ["a", "b", "c", "d", "e", "f", "Отчёт."], "llm": "{\"start\": 6}", "want_start": 6},
+    {"name": "report_7", "messages": ["a", "b", "c", "d", "e", "f", "g", "Готово, отчёт."], "llm": "{\"start\": 7}", "want_start": 7},
+    {"name": "no_report_3", "messages": ["thinking", "doing", "more"], "llm": "{\"start\": null}", "want_start": null},
+    {"name": "report_8", "messages": ["a", "b", "c", "d", "e", "f", "g", "h", "Отчёт."], "llm": "{\"start\": 8}", "want_start": 8},
+    {"name": "report_9", "messages": ["a", "b", "c", "d", "e", "f", "g", "h", "i", "Готово."], "llm": "{\"start\": 9}", "want_start": 9},
+    {"name": "report_10", "messages": ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "Отчёт."], "llm": "{\"start\": 10}", "want_start": 10},
+    {"name": "report_11", "messages": ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "Готово, отчёт."], "llm": "{\"start\": 11}", "want_start": 11},
+    {"name": "no_report_4", "messages": ["work in progress", "still working"], "llm": "{\"start\": null}", "want_start": null}
+  ]
+}
