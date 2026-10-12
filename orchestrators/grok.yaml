@@ -1,0 +1,7 @@
+# Профиль Grok (ТЗ Relay §9). R6: предварительный — url_regex для регистрации
+# сайта (связь сессии с чатом); селекторы DOM и JS-экстракторы — по фикстурам
+# (R6, после логина оператора в живом профиле сессии).
+name: grok
+url_regex: '^https://grok\.com/project/[^/?#]+\?[^#]*\bchat=(?P<chat>[0-9a-fA-F-]+)'
+login_url_regex: '^/login$'
+normalize: 'collapse'
