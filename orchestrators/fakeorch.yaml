@@ -1,0 +1,20 @@
+# Профиль тестового двойника оркестратора (ТЗ Relay §9, §17).
+# Селекторы соответствуют DOM cmd/runpilot-fakeorch.
+name: fakeorch
+url_regex: '^http://[^/]+/chat/(?P<chat>[^/?#]+)'
+login_url_regex: '^/login$'
+logged_out_selector: '#login-form'
+logged_in_selector: '#composer'
+composer_selector: '#composer'
+send_button_selector: '#send'
+file_input_selector: '#files'
+attachment_chip_selector: '.chip'
+uploading_selector: '.chip.uploading'
+generating_selector: '.generating'
+user_message_selector: '.msg.user'
+assistant_message_selector: '.msg.assistant'
+code_block_selector: '.msg code'
+text_block_selector: '.msg .block'
+rate_limit_regex: 'FAKEORCH_RATE_LIMIT'
+error_regex: 'FAKEORCH_ERROR'
+normalize: 'collapse'

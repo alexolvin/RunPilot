@@ -24,6 +24,27 @@ var AllSessionStates = []SessionState{
 	SessionRunning, SessionDetached, SessionHold, SessionGone,
 }
 
+// RelayState — состояния автомата связи (ТЗ Relay §5).
+type RelayState string
+
+const (
+	RelayOff          RelayState = "OFF"
+	RelayArmed        RelayState = "ARMED"
+	RelayCollecting   RelayState = "COLLECTING"
+	RelaySending      RelayState = "SENDING"
+	RelayWaitingAnswer RelayState = "WAITING_ANSWER"
+	RelayDelivering   RelayState = "DELIVERING"
+	RelayNeedsLogin   RelayState = "NEEDS_LOGIN"
+	RelayHold         RelayState = "HOLD"
+	RelayDone         RelayState = "DONE"
+)
+
+// AllRelayStates — все состояния автомата связи.
+var AllRelayStates = []RelayState{
+	RelayOff, RelayArmed, RelayCollecting, RelaySending,
+	RelayWaitingAnswer, RelayDelivering, RelayNeedsLogin, RelayHold, RelayDone,
+}
+
 // SessionKind — вид сессии (v2 разделы 2.4/2.5): PANE — кодер в tmux-панели
 // (проверки панели действуют), JOB — задание cron (runpilot exec, без панели).
 const (

@@ -56,24 +56,29 @@ type SessionRecord struct {
 	// сессии (R0 ТЗ Relay §3). Передаётся кодеру как --session-id; при
 	// перезапуске — --resume <uuid>. Запись Qwen Code: <uuid>.jsonl.
 	QwenSessionID string
+	// OrchURL — ссылка на чат оркестратора (R2 ТЗ Relay §4). Пусто = связи нет.
+	OrchURL string
+	// RelayEnabled — включена ли связь (R2 ТЗ Relay §4).
+	RelayEnabled bool
 }
 
 const sessionCols = `sid, name, host, host_ip, tmux_session, window, pane_id,
 profile, agent_version, kind, state, state_changed_at, hold_reason, class,
 constraint_kind, constraint_server, auto_enqueue, last_server,
 last_turn_end, last_migrated_from, attempts, created_at, launch_command,
-exec_pid, exec_starttime, exec_pgid, qwen_session_id`
+exec_pid, exec_starttime, exec_pgid, qwen_session_id, orch_url, relay_enabled`
 
 func scanSession(row interface{ Scan(...any) error }) (SessionRecord, error) {
 	var r SessionRecord
 	var state, hold, kind, ckind, changed, turnEnd, created string
-	var auto int
+	var auto, relayEnabled int
 	var class int
 	err := row.Scan(&r.SID, &r.Name, &r.Host, &r.HostIP, &r.TmuxSession, &r.Window,
 		&r.PaneID, &r.Profile, &r.AgentVersion, &kind, &state, &changed, &hold,
 		&class, &ckind, &r.ConstraintServer, &auto, &r.LastServer,
 		&turnEnd, &r.LastMigratedFrom, &r.Attempts, &created, &r.LaunchCommand,
-		&r.ExecPID, &r.ExecStarttime, &r.ExecPGID, &r.QwenSessionID)
+		&r.ExecPID, &r.ExecStarttime, &r.ExecPGID, &r.QwenSessionID,
+		&r.OrchURL, &relayEnabled)
 	if err == nil {
 		r.Class = model.QueueClass(class)
 	}
@@ -85,6 +90,7 @@ func scanSession(row interface{ Scan(...any) error }) (SessionRecord, error) {
 	r.HoldReason = model.HoldReason(hold)
 	r.ConstraintKind = model.ConstraintKind(ckind)
 	r.AutoEnqueue = auto == 1
+	r.RelayEnabled = relayEnabled == 1
 	r.StateChangedAt, _ = time.Parse(time.RFC3339Nano, changed)
 	r.LastTurnEnd, _ = time.Parse(time.RFC3339Nano, turnEnd)
 	r.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
@@ -106,15 +112,30 @@ func (s *Store) CreateSession(r SessionRecord) error {
 			agent_version, kind, state, state_changed_at, hold_reason, class,
 			constraint_kind, constraint_server, auto_enqueue, last_server,
 			last_turn_end, last_migrated_from, attempts, created_at,
-			launch_command, exec_pid, exec_starttime, exec_pgid, qwen_session_id
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			launch_command, exec_pid, exec_starttime, exec_pgid, qwen_session_id,
+			orch_url, relay_enabled
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			r.SID, r.Name, r.Host, r.HostIP, r.TmuxSession, r.Window, r.PaneID,
 			r.Profile, r.AgentVersion, r.Kind, r.State, ts(r.StateChangedAt),
 			r.HoldReason, int(r.Class), r.ConstraintKind, r.ConstraintServer,
 			boolInt(r.AutoEnqueue), r.LastServer, ts(r.LastTurnEnd),
 			r.LastMigratedFrom, r.Attempts, ts(r.CreatedAt), r.LaunchCommand,
-			r.ExecPID, r.ExecStarttime, r.ExecPGID, r.QwenSessionID)
+			r.ExecPID, r.ExecStarttime, r.ExecPGID, r.QwenSessionID,
+			r.OrchURL, boolInt(r.RelayEnabled))
 		return err
+	})
+}
+
+// SetSessionOrchLink — связь с проектом (R2 ТЗ Relay §4): URL чата + вкл/выкл.
+// Пустой URL и relay_enabled=false → связь снята (relay_link удаляется).
+func (s *Store) SetSessionOrchLink(sid, orchURL string, enabled bool) error {
+	return s.DoWrite(func(tx *sql.Tx) error {
+		res, err := tx.Exec(`UPDATE session SET orch_url = ?, relay_enabled = ? WHERE sid = ?`,
+			orchURL, boolInt(enabled), sid)
+		if err != nil {
+			return err
+		}
+		return requireRows(res)
 	})
 }
 
