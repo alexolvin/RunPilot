@@ -18,21 +18,23 @@ func newBrowserCmd() *cobra.Command {
 	return cmd
 }
 
-// newBrowserOpenCmd — `runpilot browser open <url>`: запускает браузер и
-// открывает вкладку; печатает ссылку на окно живого просмотра.
+// newBrowserOpenCmd — `runpilot browser open <session> <url>`: запускает Xvfb
+// и открывает вкладку сессии в её профиле (своя авторизация); печатает ссылку
+// на окно живого просмотра.
 func newBrowserOpenCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
-		Use:   "open <url>",
-		Short: "Запустить браузер и открыть вкладку",
-		Args:  cobra.ExactArgs(1),
+		Use:   "open <session> <url>",
+		Short: "Запустить браузер и открыть вкладку сессии",
+		Args:  cobra.ExactArgs(twoArgs),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := newAPIClient()
 			var res struct {
 				Tab     string `json:"tab"`
 				ViewURL string `json:"view_url"`
 			}
-			if _, err := c.Do("POST", "/api/v1/browser/tabs", map[string]string{"url": args[0]}, &res); err != nil {
+			body := map[string]string{"session": args[0], "url": args[1]}
+			if _, err := c.Do("POST", "/api/v1/browser/tabs", body, &res); err != nil {
 				return err
 			}
 			if jsonOut {

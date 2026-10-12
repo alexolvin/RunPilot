@@ -42,7 +42,7 @@ func TestViewScreencast(t *testing.T) {
 	if err := b.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	id, err := b.OpenTab(context.Background(), writeViewPage(t))
+	id, err := b.OpenTab(context.Background(), "sess-view", writeViewPage(t))
 	if err != nil {
 		t.Fatalf("OpenTab: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestViewClickInsertText(t *testing.T) {
 	if err := b.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	id, err := b.OpenTab(context.Background(), writeViewPage(t))
+	id, err := b.OpenTab(context.Background(), "sess-click", writeViewPage(t))
 	if err != nil {
 		t.Fatalf("OpenTab: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestViewOpenCloseGoroutines(t *testing.T) {
 	if err := b.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	id, err := b.OpenTab(context.Background(), writeViewPage(t))
+	id, err := b.OpenTab(context.Background(), "sess-goroutine", writeViewPage(t))
 	if err != nil {
 		t.Fatalf("OpenTab: %v", err)
 	}

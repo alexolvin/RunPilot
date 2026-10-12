@@ -1,7 +1,14 @@
 // Package browser — константы (таблица R2): периоды, права, пути.
 package browser
 
-import "time"
+import (
+	"regexp"
+	"time"
+)
+
+// safeSID — допустимые символы ID сессии: sid используется как имя каталога
+// профиля Chrome, поэтому запрещаем разделители и спецсимволы пути.
+var safeSID = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 const (
 	// dirPerm — права каталога профиля Chrome (ТЗ Relay 8.1.2): 0700.

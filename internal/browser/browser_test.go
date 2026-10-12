@@ -28,7 +28,7 @@ func testBrowser(t *testing.T) *Browser {
 	return b
 }
 
-// TestBrowserStartStop — старт Xvfb+Chrome ≤ 10 с, вкладка, стоп (CONTROL R1).
+// TestBrowserStartStop — старт Xvfb+Chrome ≤ 10 с, вкладка сессии, стоп (CONTROL R1).
 func TestBrowserStartStop(t *testing.T) {
 	b := testBrowser(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -39,8 +39,9 @@ func TestBrowserStartStop(t *testing.T) {
 	if !b.Running() {
 		t.Fatal("браузер не запущен")
 	}
-	// Вкладка.
-	id, err := b.OpenTab(context.Background(), "about:blank")
+	// Вкладка сессии (свой профиль, своя авторизация).
+	const sid = "sess-test"
+	id, err := b.OpenTab(context.Background(), sid, "about:blank")
 	if err != nil {
 		t.Fatalf("OpenTab: %v", err)
 	}
@@ -50,8 +51,9 @@ func TestBrowserStartStop(t *testing.T) {
 	if tabs := b.Tabs(); len(tabs) != 1 {
 		t.Fatalf("вкладок = %d, хочу 1", len(tabs))
 	}
-	// Профиль 0700 (CONTROL R1).
-	fi, err := os.Stat(b.cfg.ProfileDir)
+	// Профиль сессии 0700 (CONTROL R1).
+	profile := filepath.Join(b.cfg.ProfileDir, sid)
+	fi, err := os.Stat(profile)
 	if err != nil {
 		t.Fatalf("профиль: %v", err)
 	}
@@ -59,7 +61,10 @@ func TestBrowserStartStop(t *testing.T) {
 		t.Fatalf("права профиля = %o, хочу 0700", fi.Mode().Perm())
 	}
 	// DevTools только на loopback (CONTROL R1: ss -ltnp → 127.0.0.1).
-	host, _, err := net.SplitHostPort(strings.TrimPrefix(devtoolsBase(b.controlURL), httpScheme))
+	b.mu.Lock()
+	ctrl := b.sessions[sid].controlURL
+	b.mu.Unlock()
+	host, _, err := net.SplitHostPort(strings.TrimPrefix(devtoolsBase(ctrl), httpScheme))
 	if err != nil || host != loopbackHost {
 		t.Fatalf("DevTools host = %q (err %v), хочу 127.0.0.1", host, err)
 	}
@@ -70,7 +75,7 @@ func TestBrowserStartStop(t *testing.T) {
 	}
 }
 
-// TestBrowserWatchdogRestore — kill -9 Chrome → сторож восстанавливает ≤ 15 с
+// TestBrowserWatchdogRestore — kill -9 Chrome сессии → сторож восстанавливает ≤ 15 с
 // (CONTROL R1).
 func TestBrowserWatchdogRestore(t *testing.T) {
 	b := testBrowser(t)
@@ -79,8 +84,14 @@ func TestBrowserWatchdogRestore(t *testing.T) {
 	if err := b.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	// kill -9 основного процесса Chrome.
-	pid := b.launcher.PID()
+	const sid = "sess-watch"
+	if _, err := b.OpenTab(context.Background(), sid, "about:blank"); err != nil {
+		t.Fatalf("OpenTab: %v", err)
+	}
+	// kill -9 основного процесса Chrome сессии.
+	b.mu.Lock()
+	pid := b.sessions[sid].launcher.PID()
+	b.mu.Unlock()
 	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil {
 		t.Fatalf("kill: %v", err)
 	}
@@ -88,9 +99,12 @@ func TestBrowserWatchdogRestore(t *testing.T) {
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		b.mu.Lock()
-		alive := b.chromeAlive()
+		var ctrl string
+		if s, ok := b.sessions[sid]; ok {
+			ctrl = s.controlURL
+		}
 		b.mu.Unlock()
-		if alive {
+		if ctrl != "" && b.chromeAlive(ctrl) {
 			return
 		}
 		time.Sleep(500 * time.Millisecond)

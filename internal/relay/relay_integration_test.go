@@ -50,12 +50,12 @@ func startBrowser(t *testing.T, cfg config.Browser) *browser.Browser {
 	return b
 }
 
-// openChat — вкладка с чатом fakeorch.
+// openChat — вкладка с чатом fakeorch (профиль сессии "orch-test").
 func openChat(t *testing.T, b *browser.Browser, url string) *rod.Page {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	id, err := b.OpenTab(ctx, url)
+	id, err := b.OpenTab(ctx, "orch-test", url)
 	if err != nil {
 		t.Fatalf("open tab: %v", err)
 	}

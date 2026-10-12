@@ -184,12 +184,14 @@ type relayCheckResult struct {
 	FileInput bool   `json:"file_input"`
 }
 
-// handleRelayCheck — POST /relay/check {url} (ТЗ Relay §15.3): открыта ли
-// страница, выполнен ли вход, найдены ли поле ввода, кнопка отправки и поле
-// файлов. Без браузера — только проверка сайта и ключа чата.
+// handleRelayCheck — POST /relay/check {session,url} (ТЗ Relay §15.3): открыта
+// ли страница, выполнен ли вход, найдены ли поле ввода, кнопка отправки и поле
+// файлов. Проверка идёт в профиле сессии (своя авторизация). Без браузера —
+// только проверка сайта и ключа чата.
 func (s *Server) handleRelayCheck(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		URL string `json:"url"`
+		Session string `json:"session"`
+		URL     string `json:"url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		httpError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
@@ -208,7 +210,7 @@ func (s *Server) handleRelayCheck(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, res)
 		return
 	}
-	page, err := s.browser.OpenTab(r.Context(), body.URL)
+	page, err := s.browser.OpenTab(r.Context(), body.Session, body.URL)
 	if err != nil {
 		httpError(w, http.StatusBadGateway, "BROWSER", err.Error())
 		return
@@ -218,19 +220,25 @@ func (s *Server) handleRelayCheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, res)
 }
 
-// handleBrowserOpenTab — POST /browser/tabs {url} (ТЗ Relay §8.2): запускает
-// браузер (идемпотентно) и открывает вкладку. Возвращает ID вкладки и ссылку
-// на окно живого просмотра (для входа оператора, §8.3).
+// handleBrowserOpenTab — POST /browser/tabs {session,url} (ТЗ Relay §8.2):
+// запускает Xvfb (идемпотентно) и открывает вкладку сессии в её профиле (своя
+// авторизация). Возвращает ID вкладки (= сессия) и ссылку на окно живого
+// просмотра (для входа оператора, §8.3).
 func (s *Server) handleBrowserOpenTab(w http.ResponseWriter, r *http.Request) {
 	if s.browser == nil {
 		httpError(w, http.StatusServiceUnavailable, "BROWSER_UNAVAILABLE", "браузер недоступен")
 		return
 	}
 	var body struct {
-		URL string `json:"url"`
+		Session string `json:"session"`
+		URL     string `json:"url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		httpError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	if body.Session == "" {
+		httpError(w, http.StatusBadRequest, "BAD_REQUEST", "session обязателен")
 		return
 	}
 	if body.URL == "" {
@@ -243,7 +251,7 @@ func (s *Server) handleBrowserOpenTab(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadGateway, "BROWSER_START", err.Error())
 		return
 	}
-	tabID, err := s.browser.OpenTab(ctx, body.URL)
+	tabID, err := s.browser.OpenTab(ctx, body.Session, body.URL)
 	if err != nil {
 		httpError(w, http.StatusBadGateway, "BROWSER", err.Error())
 		return
