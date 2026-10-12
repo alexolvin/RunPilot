@@ -67,6 +67,7 @@ type Browser struct {
 	Screen       string `yaml:"screen"`
 	ProfileDir   string `yaml:"profile_dir"`
 	MaxTabs      int    `yaml:"max_tabs"`
+	Proxy        string `yaml:"proxy"`
 	PageLoadTimeoutSec int `yaml:"page_load_timeout_sec"`
 	IdleStopMin  int    `yaml:"idle_stop_min"`
 	ViewJPEGQuality   int `yaml:"view_jpeg_quality"`

@@ -224,6 +224,7 @@ func Defaults() *Config {
 			Screen:             "1440x900x24",
 			ProfileDir:         "~/.local/share/runpilot/browser",
 			MaxTabs:            8,
+			Proxy:              "",
 			PageLoadTimeoutSec: 60,
 			IdleStopMin:        30,
 			ViewJPEGQuality:    70,
