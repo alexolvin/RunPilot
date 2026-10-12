@@ -37,6 +37,20 @@ export const T = {
     keyEnter: 'Enter',
   },
 
+  browserView: {
+    title: 'Живой просмотр',
+    done: 'Готово',
+    close: 'Закрыть просмотр',
+    connecting: 'Подключение…',
+    disconnected: 'Соединение закрыто',
+    hint: 'Клик — в точку кадра; ввод — с клавиатуры',
+    errBrowserOff: 'Браузер не запущен',
+    errTab: 'Вкладка не найдена',
+    errScreencast: 'Не удалось запустить трансляцию',
+    errUnavailable: 'Просмотр недоступен',
+    errGeneric: 'Не удалось открыть просмотр',
+  },
+
   login: {
     title: 'RunPilot',
     sub: 'Вход для оператора',
@@ -304,6 +318,9 @@ export const T = {
     screenLive: 'обновляется в реальном времени',
     screenEmpty: 'Экран недоступен (узел офлайн?)',
     openTerminal: 'Открыть терминал',
+    // Живой просмотр вкладки браузера (ТЗ Relay §8).
+    browserView: 'Живой просмотр',
+    browserViewOpen: 'Открыть просмотр',
     connectOutside: 'Подключиться снаружи',
     connectTitle: 'Подключение снаружи',
     connectHint: 'Команда для подключения к этой сессии во внешнем терминале (tmux attach на узле):',

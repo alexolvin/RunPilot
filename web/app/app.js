@@ -13,6 +13,7 @@ import { Banner } from './components/banner.js';
 import { PageView } from './views/pages.js';
 import { NewSessionDialog } from './components/new-session-dialog.js';
 import { TerminalPage } from './components/terminal.js';
+import { BrowserViewPage } from './components/browser-view.js';
 import { Toasts } from './components/toasts.js';
 
 // W6 (11.5): глобальные диалоги (открываются из топбара/карточки).
@@ -49,6 +50,7 @@ export function App() {
     ${BottomTabs()}
     ${DialogHost()}
     ${TerminalPage()}
+    ${BrowserViewPage()}
     ${Toasts()}
   </div>`;
 }

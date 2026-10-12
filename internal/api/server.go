@@ -412,6 +412,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/sessions/{t}/relay/{action}", s.handleRelayAction)
 	mux.HandleFunc("POST /api/v1/relay/check", s.handleRelayCheck)
 	mux.HandleFunc("GET /api/v1/browser", s.handleBrowserGet)
+	mux.HandleFunc("POST /api/v1/browser/tabs", s.handleBrowserOpenTab)
 	// v2 (W6, 13.2): новая сессия из веба + проверка имени.
 	mux.HandleFunc("POST /api/v1/sessions/spawn", s.handleSpawn)
 	mux.HandleFunc("GET /api/v1/sessions/name-check", s.handleNameCheck)

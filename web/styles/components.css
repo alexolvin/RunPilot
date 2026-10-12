@@ -650,3 +650,26 @@
   .term-keyrow{display:flex;flex-wrap:wrap;gap:var(--space-2);padding:var(--space-2) var(--space-3) calc(var(--space-2) + env(safe-area-inset-bottom));background:var(--color-surface);border-top:1px solid var(--color-border)}
   .term-key{flex:1 1 auto}
 }
+
+/* ---- ТЗ Relay §8: живой просмотр вкладки браузера ---- */
+/* Оверлей как у терминала (z-index 70); кадр — <img> (JPEG screencast). */
+.bv-overlay{position:fixed;inset:0;z-index:70;background:var(--color-overlay);display:flex;align-items:center;justify-content:center;padding:var(--space-5)}
+.bv-panel{display:flex;flex-direction:column;overflow:hidden;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-card);box-shadow:var(--shadow-card);max-width:100%;max-height:100%}
+.bv-head{display:flex;align-items:center;gap:var(--space-3);padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--color-border);background:var(--color-surface-muted)}
+.bv-title{margin:0;font-size:var(--font-size-md);font-weight:600;display:flex;align-items:baseline;gap:var(--space-2);min-width:0}
+.bv-tab{font-size:var(--font-size-xs);color:var(--color-text-muted);white-space:nowrap}
+.bv-url{font-size:var(--font-size-xs);color:var(--color-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;max-width:40%}
+.bv-status{font-size:var(--font-size-xs);color:var(--color-text-muted);white-space:nowrap}
+.bv-done{margin-left:auto;border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);cursor:pointer;padding:var(--space-1) var(--space-3);border-radius:var(--radius-control);font-size:var(--font-size-xs);white-space:nowrap}
+.bv-done:hover{background:var(--color-surface-muted)}
+.bv-close{border:0;background:transparent;color:var(--color-text-muted);cursor:pointer;padding:var(--space-1);border-radius:var(--radius-control);display:flex;align-items:center;justify-content:center}
+.bv-close:hover{background:var(--color-surface)}
+.bv-body{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--color-screen-bg);cursor:crosshair}
+.bv-frame{max-width:100%;max-height:100%;object-fit:contain;user-select:none}
+.bv-err{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:var(--space-3);font-size:var(--font-size-sm);color:var(--color-danger-text);text-align:center}
+.bv-hint{position:absolute;bottom:var(--space-3);left:0;right:0;text-align:center;font-size:var(--font-size-xs);color:var(--color-text-muted)}
+@media(max-width:767px){
+  .bv-overlay{padding:0;background:var(--color-screen-bg)}
+  .bv-panel--phone{border:0;border-radius:0;box-shadow:none}
+  .bv-close{min-width:44px;min-height:44px}
+}

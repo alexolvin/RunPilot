@@ -73,6 +73,9 @@ const (
 	// Терминал в браузере (13.4 ТЗ).
 	// ptyOpenTimeout — ожидание pty_open→reply при открытии терминала.
 	ptyOpenTimeout = 10 * time.Second
+
+	// browserStartTimeout — запуск Xvfb + Chrome (первый раз, холодный профиль).
+	browserStartTimeout = 90 * time.Second
 	// termReaperTick — период проверки бездействия терминалов (не порог ТЗ:
 	// кратно меньше типового terminal_idle_min).
 	termReaperTick = 10 * time.Second

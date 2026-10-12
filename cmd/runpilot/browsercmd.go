@@ -1,4 +1,4 @@
-// Команды браузера координатора (ТЗ Relay §15.3): runpilot browser view.
+// Команды браузера координатора (ТЗ Relay §15.3): runpilot browser open/view.
 package main
 
 import (
@@ -13,16 +13,47 @@ func newBrowserCmd() *cobra.Command {
 		Use:   "browser",
 		Short: "Браузер координатора (связи)",
 	}
+	cmd.AddCommand(newBrowserOpenCmd())
 	cmd.AddCommand(newBrowserViewCmd())
 	return cmd
 }
 
-// newBrowserViewCmd — `runpilot browser view`: печатает ссылку на окно.
+// newBrowserOpenCmd — `runpilot browser open <url>`: запускает браузер и
+// открывает вкладку; печатает ссылку на окно живого просмотра.
+func newBrowserOpenCmd() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{
+		Use:   "open <url>",
+		Short: "Запустить браузер и открыть вкладку",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c := newAPIClient()
+			var res struct {
+				Tab     string `json:"tab"`
+				ViewURL string `json:"view_url"`
+			}
+			if _, err := c.Do("POST", "/api/v1/browser/tabs", map[string]string{"url": args[0]}, &res); err != nil {
+				return err
+			}
+			if jsonOut {
+				return printJSON(res)
+			}
+			fmt.Println("tab: " + res.Tab)
+			fmt.Println("view: " + res.ViewURL)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "машиночитаемый вывод")
+	return cmd
+}
+
+// newBrowserViewCmd — `runpilot browser view`: печатает ссылки на окна
+// живого просмотра открытых вкладок.
 func newBrowserViewCmd() *cobra.Command {
 	var jsonOut bool
 	cmd := &cobra.Command{
 		Use:   "view",
-		Short: "Ссылка на окно живого просмотра",
+		Short: "Ссылки на окна живого просмотра",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c := newAPIClient()
@@ -44,9 +75,12 @@ func newBrowserViewCmd() *cobra.Command {
 				fmt.Println("вкладок нет")
 				return nil
 			}
-			base := c.Base()
+			base := cfg.Web.PublicURL
+			if base == "" {
+				base = c.Base()
+			}
 			for _, tab := range res.Tabs {
-				fmt.Println(base + "/api/v1/browser/view?tab=" + tab)
+				fmt.Println(base + "/web/ws/browser/view?tab=" + tab)
 			}
 			return nil
 		},

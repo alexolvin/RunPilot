@@ -21,6 +21,7 @@ import (
 	runpilotweb "runpilot"
 	"runpilot/internal/api"
 	"runpilot/internal/backup"
+	"runpilot/internal/browser"
 	"runpilot/internal/clock"
 	"runpilot/internal/gateway"
 	"runpilot/internal/logx"
@@ -172,6 +173,8 @@ func newServeCmd() *cobra.Command {
 			webSrv.SetTerminalHandler(func(w http.ResponseWriter, r *http.Request, sid, actor string) {
 				srv.TerminalWS(w, r, sid, actor)
 			})
+			// Живой просмотр вкладки (ТЗ Relay §8): /web/ws/browser/view?tab=.
+			webSrv.SetBrowserViewHandler(srv.BrowserViewWS)
 
 			// Шлюз (раздел 6 ТЗ): WriteTimeout = 0 — длинные SSE-потоки.
 			gw, err := gateway.NewGateway(cfg, st, clk, log)
@@ -238,6 +241,10 @@ func newServeCmd() *cobra.Command {
 			srv.SetScheduler(sch)
 			// GONE → отмена идущих запросов sid + аренда после inflight(sid)=0.
 			srv.SetGateway(gw)
+			// ТЗ Relay §8: менеджер Xvfb+Chrome связей. Запускается по требованию
+			// (открытие вкладки / relay check), останавливается при shutdown.
+			br := browser.New(cfg.Browser, log, clk)
+			srv.SetBrowser(br)
 			// П.6(c): пуш строки статуса (set_status/set_summary) координатор
 			// → узлы. Источник текста — планировщик (HeldStatus/SummaryText);
 			// триггер — планировщик зовёт OnStatus после тика и смены состояния
@@ -394,6 +401,7 @@ func newServeCmd() *cobra.Command {
 				// Штатная остановка (K1: SIGTERM): grace по shutdown_grace_sec.
 				shutdownServices(snapshot(),
 					time.Duration(cfg.Coordinator.ShutdownGraceSec)*time.Second, log)
+				br.Stop()
 				log.Info("serve: остановлен")
 				return nil
 			case err := <-errCh:

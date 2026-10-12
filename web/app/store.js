@@ -46,6 +46,8 @@ let S = {
   dialog: null,
   // W8 (13.4): терминал в браузере — открытая панель. sid | null.
   terminal: null,
+  // ТЗ Relay §8: живой просмотр вкладки браузера. {tab, url} | null.
+  browserView: null,
 };
 
 function set(patch) {
@@ -267,6 +269,13 @@ export const actions = {
   },
   closeTerminal() {
     set({ terminal: null });
+  },
+  // ТЗ Relay §8: живой просмотр вкладки браузера.
+  openBrowserView(view) {
+    if (view && view.tab) set({ browserView: view });
+  },
+  closeBrowserView() {
+    set({ browserView: null });
   },
 
   // applyEvent — ЕДИНСТВЕННОЕ место применения SSE-событий к состоянию (R8).

@@ -70,6 +70,9 @@ type Server struct {
 	// termHandler — мост терминала в браузере (13.4 ТЗ): /web/ws/term/{sid}.
 	// nil — терминал недоступен (404). Ставится SetTerminalHandler из serve.
 	termHandler func(w http.ResponseWriter, r *http.Request, sid, actor string)
+	// browserViewHandler — живой просмотр вкладки (ТЗ Relay §8):
+	// /web/ws/browser/view?tab=. nil — просмотр недоступен (404).
+	browserViewHandler func(w http.ResponseWriter, r *http.Request, actor string)
 	// enroll — api.EnrollHandler: /enroll/<token>/… публично (14.2),
 	// nil — подключение узла с веб-слушателя недоступно (404).
 	enroll http.Handler
@@ -111,6 +114,12 @@ func (s *Server) SetTerminalHandler(fn func(w http.ResponseWriter, r *http.Reque
 	s.termHandler = fn
 }
 
+// SetBrowserViewHandler — живой просмотр вкладки (ТЗ Relay §8): GET
+// /web/ws/browser/view?tab= (WS-апгрейд) → fn(w, r, actor).
+func (s *Server) SetBrowserViewHandler(fn func(w http.ResponseWriter, r *http.Request, actor string)) {
+	s.browserViewHandler = fn
+}
+
 // SetEnrollHandler — маршруты подключения узла (14.2): /enroll/<token>/…
 // публично (токен в пути — аутентификация; curl с чистой машины без cookie).
 func (s *Server) SetEnrollHandler(h http.Handler) { s.enroll = h }
@@ -150,6 +159,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /web/sessions", s.cookieAuth(http.HandlerFunc(s.handleSessionsList)))
 	// Терминал в браузере (13.4 ТЗ): WS-апгрейд, cookieAuth + проверка Origin.
 	mux.Handle("/web/ws/term/", s.cookieAuth(http.HandlerFunc(s.handleTerminal)))
+	// Живой просмотр вкладки (ТЗ Relay §8): WS-апгрейд, cookieAuth + Origin.
+	mux.Handle("/web/ws/browser/view", s.cookieAuth(http.HandlerFunc(s.handleBrowserView)))
 	// Подключение узла (14.2): install.sh/runpilot/claim — токен в пути, cookie
 	// веба не требуется (иначе curl -fsSL … | bash с чистой машины → 401).
 	// Отдельный api.EnrollHandler: Routes() /enroll не содержит.
@@ -308,6 +319,21 @@ func (s *Server) handleTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 	sid := strings.TrimPrefix(r.URL.Path, "/web/ws/term/")
 	s.termHandler(w, r, sid, actor(r))
+}
+
+// handleBrowserView — живой просмотр вкладки (ТЗ Relay §8): GET
+// /web/ws/browser/view?tab= (WS-апгрейд). cookieAuth уже прошёл; далее
+// проверка Origin и вызов моста.
+func (s *Server) handleBrowserView(w http.ResponseWriter, r *http.Request) {
+	if s.browserViewHandler == nil {
+		s.webError(w, http.StatusNotFound, "VIEW_UNAVAILABLE", "просмотр недоступен")
+		return
+	}
+	if !s.originAllowed(r) {
+		s.forbidden(w, r)
+		return
+	}
+	s.browserViewHandler(w, r, actor(r))
 }
 
 // originAllowed — Origin запроса совпадает с origin web.public_url. Без Origin

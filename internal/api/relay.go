@@ -5,6 +5,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -215,6 +216,40 @@ func (s *Server) handleRelayCheck(w http.ResponseWriter, r *http.Request) {
 	defer s.browser.CloseTab(page)
 	_ = page
 	writeJSON(w, res)
+}
+
+// handleBrowserOpenTab — POST /browser/tabs {url} (ТЗ Relay §8.2): запускает
+// браузер (идемпотентно) и открывает вкладку. Возвращает ID вкладки и ссылку
+// на окно живого просмотра (для входа оператора, §8.3).
+func (s *Server) handleBrowserOpenTab(w http.ResponseWriter, r *http.Request) {
+	if s.browser == nil {
+		httpError(w, http.StatusServiceUnavailable, "BROWSER_UNAVAILABLE", "браузер недоступен")
+		return
+	}
+	var body struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		httpError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
+		return
+	}
+	if body.URL == "" {
+		httpError(w, http.StatusBadRequest, "BAD_REQUEST", "url обязателен")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), browserStartTimeout)
+	defer cancel()
+	if err := s.browser.Start(ctx); err != nil {
+		httpError(w, http.StatusBadGateway, "BROWSER_START", err.Error())
+		return
+	}
+	tabID, err := s.browser.OpenTab(ctx, body.URL)
+	if err != nil {
+		httpError(w, http.StatusBadGateway, "BROWSER", err.Error())
+		return
+	}
+	view := s.cfg.Web.PublicURL + "/web/ws/browser/view?tab=" + tabID
+	writeJSON(w, map[string]string{"tab": tabID, "view_url": view})
 }
 
 // handleBrowserGet — GET /browser (ТЗ Relay §15.4): состояние и вкладки.
