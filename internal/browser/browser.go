@@ -248,7 +248,9 @@ func (b *Browser) startSessionLocked(ctx context.Context, sid string) (*sessionB
 // конфигурации; ошибка не критична — вкладка открыта, оператор видит состояние
 // в просмотре).
 func (b *Browser) navigate(page *rod.Page, url string) {
-	_ = page.Timeout(b.pageLoadTimeout()).Navigate(url)
+	if err := page.Timeout(b.pageLoadTimeout()).Navigate(url); err != nil {
+		b.log.Warn("browser: навигация не удалась", "url", url, "err", err)
+	}
 }
 
 // pageLoadTimeout — таймаут полной загрузки страницы (browser.page_load_timeout_sec).
