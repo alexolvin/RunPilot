@@ -149,6 +149,20 @@ func (s *Store) SetRelayLinkDelivered(sid, hash string, at time.Time) error {
 	})
 }
 
+// RelayLinkByChat — связь по chat_key ("" если нет). Для проверки
+// ORCH_CHAT_IN_USE (раздел 15.1): один чат — не больше одной связи.
+func (s *Store) RelayLinkByChat(chatKey string) (RelayLink, bool, error) {
+	row := s.DB().QueryRow("SELECT "+relayLinkCols+` FROM relay_link WHERE chat_key = ?`, chatKey)
+	r, err := scanRelayLink(row)
+	if err == sql.ErrNoRows {
+		return RelayLink{}, false, nil
+	}
+	if err != nil {
+		return RelayLink{}, false, err
+	}
+	return r, true, nil
+}
+
 // DeleteRelayLink — снять связь (session GONE или оператор выключил).
 func (s *Store) DeleteRelayLink(sid string) error {
 	return s.DoWrite(func(tx *sql.Tx) error {

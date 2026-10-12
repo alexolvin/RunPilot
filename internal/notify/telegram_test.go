@@ -71,6 +71,9 @@ func (m *mockExec) Auto(_ context.Context, sid string, on bool) (command.Outcome
 func (m *mockExec) Why(_ context.Context, sid string) (command.Outcome, error) {
 	return m.call("Why", sid), nil
 }
+func (m *mockExec) Relay(_ context.Context, sid, action string) (command.Outcome, error) {
+	return m.call("Relay", sid, action), nil
+}
 func (m *mockExec) Paste(_ context.Context, sid, text string, enqueue bool) (command.Outcome, error) {
 	return m.call("Paste", sid, text, enqueue), nil
 }

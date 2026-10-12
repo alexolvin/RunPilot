@@ -167,6 +167,32 @@ func (e *apiExecutor) Why(_ context.Context, sid string) (command.Outcome, error
 	return out, nil
 }
 
+// Relay — /relay <t> on|off|send|deliver|resume (ТЗ Relay §15.2).
+func (e *apiExecutor) Relay(_ context.Context, sid, action string) (command.Outcome, error) {
+	switch action {
+	case "on":
+		if err := e.s.store.SetSessionOrchLink(sid, "", true); err != nil {
+			return outErr("RELAY", err.Error()), nil
+		}
+		return command.Outcome{Code: "OK", Text: "связь включена"}, nil
+	case "off":
+		if err := e.s.store.SetSessionOrchLink(sid, "", false); err != nil {
+			return outErr("RELAY", err.Error()), nil
+		}
+		return command.Outcome{Code: "OK", Text: "связь выключена"}, nil
+	case "send", "deliver", "skip", "resume":
+		rec, err := e.s.store.GetSession(sid)
+		if err != nil || !rec.RelayEnabled || rec.OrchURL == "" {
+			return outErr("RELAY_NOT_LINKED", "связь не настроена"), nil
+		}
+		st := e.s.relayStatusBy(sid)
+		return command.Outcome{Code: "OK", Text: action + ": state=" + st.State,
+			Details: map[string]any{"state": st.State}}, nil
+	default:
+		return outErr("BAD_ARG", "нужно on|off|send|deliver|resume"), nil
+	}
+}
+
 // --- Ввод (R6: только по запросу оператора) ---
 
 func (e *apiExecutor) Paste(ctx context.Context, sid, text string, enqueue bool) (command.Outcome, error) {

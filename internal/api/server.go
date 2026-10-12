@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"runpilot/internal/browser"
 	"runpilot/internal/clock"
 	"runpilot/internal/config"
 	"runpilot/internal/gateway"
@@ -87,6 +88,10 @@ type Server struct {
 	// ТОЛЬКО после inflight(sid)=0. Ставится из serve.go; nil (тесты) →
 	// аренда снимается сразу (releaseOnGone).
 	gw *gateway.Gateway
+
+	// browser — менеджер Xvfb+Chrome связей (ТЗ Relay §8); ставится из
+	// serve.go; nil (тесты) → браузерные проверки возвращают статус.
+	browser *browser.Browser
 
 	// updateOps — асинхронные self-update узлов (W12 7b): id → операция.
 	updateMu  sync.Mutex
@@ -276,6 +281,10 @@ func (s *Server) SetExecRootsPusher(p *ExecRootsPusher) { s.execRootsPusher = p 
 // аренда после inflight(sid)=0). Вызывается из serve.go.
 func (s *Server) SetGateway(gw *gateway.Gateway) { s.gw = gw }
 
+// SetBrowser — менеджер Xvfb+Chrome связей (ТЗ Relay §8, §15.4). Вызывается
+// из serve.go; nil (тесты) → браузерные проверки возвращают статус.
+func (s *Server) SetBrowser(b *browser.Browser) { s.browser = b }
+
 // releaseOnGone — снять аренду сессии при GONE: через шлюз (отменить идущие
 // запросы sid, снять аренду после inflight(sid)=0). Без шлюза (тесты) — сразу.
 func (s *Server) releaseOnGone(sid, reason string) {
@@ -398,6 +407,11 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/run", s.handleRun)
 	mux.HandleFunc("PATCH /api/v1/sessions/{sid}/pane", s.handlePane)
+	mux.HandleFunc("PATCH /api/v1/sessions/{t}", s.handleSessionPatch)
+	mux.HandleFunc("GET /api/v1/sessions/{t}/relay", s.handleRelayGet)
+	mux.HandleFunc("POST /api/v1/sessions/{t}/relay/{action}", s.handleRelayAction)
+	mux.HandleFunc("POST /api/v1/relay/check", s.handleRelayCheck)
+	mux.HandleFunc("GET /api/v1/browser", s.handleBrowserGet)
 	// v2 (W6, 13.2): новая сессия из веба + проверка имени.
 	mux.HandleFunc("POST /api/v1/sessions/spawn", s.handleSpawn)
 	mux.HandleFunc("GET /api/v1/sessions/name-check", s.handleNameCheck)

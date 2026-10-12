@@ -49,6 +49,9 @@ func (m *mockExec) Auto(_ context.Context, sid string, on bool) (Outcome, error)
 	return m.rec("Auto", sid, on), nil
 }
 func (m *mockExec) Why(_ context.Context, sid string) (Outcome, error)         { return m.rec("Why", sid), nil }
+func (m *mockExec) Relay(_ context.Context, sid, action string) (Outcome, error) {
+	return m.rec("Relay", sid, action), nil
+}
 func (m *mockExec) Paste(_ context.Context, sid, text string, enqueue bool) (Outcome, error) {
 	return m.rec("Paste", sid, text, enqueue), nil
 }
@@ -235,6 +238,7 @@ func TestEveryRegistryCommand(t *testing.T) {
 		"approve":       "approve alpha yes",
 		"compress":      "compress alpha",
 		"auto":          "auto alpha on",
+		"relay":         "relay alpha send",
 		"why":           "why alpha",
 		"open":          "open alpha",
 		"term":          "term alpha",

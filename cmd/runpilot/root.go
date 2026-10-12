@@ -73,6 +73,9 @@ func newRoot(ver string) *cobra.Command {
 		newRollbackCmd(),
 		newRestoreCmd(),
 		newUpgradeCmd(),
+		newRelayCmd(),
+		newBrowserCmd(),
+		newOrchCmd(),
 	)
 	root.AddCommand(newQueueCmds()...)
 	return root

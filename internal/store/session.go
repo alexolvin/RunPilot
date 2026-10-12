@@ -135,7 +135,14 @@ func (s *Store) SetSessionOrchLink(sid, orchURL string, enabled bool) error {
 		if err != nil {
 			return err
 		}
-		return requireRows(res)
+		if err := requireRows(res); err != nil {
+			return err
+		}
+		if orchURL == "" && !enabled {
+			_, err = tx.Exec(`DELETE FROM relay_link WHERE sid = ?`, sid)
+			return err
+		}
+		return nil
 	})
 }
 

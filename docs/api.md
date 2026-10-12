@@ -44,6 +44,12 @@
 | POST | `/sessions/{t}/unhold` | — | `204` | Снять hold |
 | POST | `/sessions/{t}/auto-enqueue` | `{on}` | `204` | Автопостановка |
 | POST | `/sessions/{t}/cancel` | — | `204`/`502` | Прервать ход |
+| PATCH | `/sessions/{t}` | `{orch_url, relay_enabled}` | `200 relayStatus` | Связь с проектом (ТЗ Relay §15.4) |
+| GET | `/sessions/{t}/relay` | — | `200 relayStatus` | Статус связи |
+| POST | `/sessions/{t}/relay/{send\|deliver\|skip\|resume}` | — | `200 relayStatus` | Действие связи |
+| POST | `/relay/check` | `{url}` | `200 relayCheck` | Проверить ссылку на чат |
+| GET | `/browser` | — | `200 {running, tabs}` | Состояние браузера |
+| WS | `/browser/view?tab=` | — | JPEG-кадры | Живой просмотр вкладки |
 | POST | `/pause` | `{on}` | `204` | Пауза выдачи |
 | POST | `/resume` | — | `204` | Снять паузу |
 | POST | `/servers/{s}/drain` | `{on}` | `204` | Вывод сервера |

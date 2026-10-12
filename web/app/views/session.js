@@ -11,7 +11,7 @@ import { W6, LAUNCH } from '../constants.js';
 import { T } from '../i18n/ru.js';
 import { sessionStateLabel, classLabel, whyText, fmtTime } from '../labels.js';
 import { stateColorVar } from '../state-style.js';
-import { post, del } from '../api.js';
+import { post, del, get, patch } from '../api.js';
 import { Badge } from '../components/badge.js';
 import { Button } from '../components/button.js';
 import { Section } from '../components/section.js';
@@ -65,6 +65,15 @@ function actionList(sess) {
   return a;
 }
 
+// relayTone — тон чипа состояния связи (ТЗ Relay §15.1).
+function relayTone(state) {
+  if (state === 'SENDING' || state === 'WAITING_ANSWER') return 'var(--color-info)';
+  if (state === 'DELIVERING') return 'var(--color-success)';
+  if (state === 'NEEDS_LOGIN') return 'var(--color-warning)';
+  if (state === 'HOLD') return 'var(--color-danger)';
+  return 'var(--color-muted)'; // ARMED, DONE
+}
+
 export function SessionPage() {
   const s = useStore();
   const sid = s.pageParam;
@@ -74,6 +83,11 @@ export function SessionPage() {
   const [busy, setBusy] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
   const [connectCopied, setConnectCopied] = useState(false);
+  // Связь с проектом (ТЗ Relay §15.1): статус + диалог.
+  const [relay, setRelay] = useState(null);
+  const [relayOpen, setRelayOpen] = useState(false);
+  const [relayUrl, setRelayUrl] = useState('');
+  const [relayErr, setRelayErr] = useState('');
   // Раздел постановки в очередь: остановка (Esc) + сверка реальной остановки
   // по активности панели (не по факту отправки Esc).
   const [stopState, setStopState] = useState(''); // '' | 'stopping' | 'done' | 'failed'
@@ -106,6 +120,40 @@ export function SessionPage() {
     }, LAUNCH.stopPollMs);
     return () => clearInterval(h);
   }, [stopState]);
+
+  // Связь с проектом (ТЗ Relay §15.1): статус связи по sid.
+  const loadRelay = () => {
+    get(`/api/v1/sessions/${encodeURIComponent(sid)}/relay`)
+      .then((r) => { if (r.ok) setRelay(r.data); })
+      .catch(() => {});
+  };
+  useEffect(() => { loadRelay(); }, [sid, s.sessions]);
+
+  const relayAction = (action) => {
+    post(`/api/v1/sessions/${encodeURIComponent(sid)}/relay/${action}`, {})
+      .then((r) => {
+        if (r.ok) { setRelay(r.data); }
+        else { const d = r.data || {}; actions.addToast({ kind: 'error', text: d.detail || d.code || ('HTTP ' + r.status) }); }
+      })
+      .catch(() => actions.addToast({ kind: 'error', text: 'network' }));
+  };
+  const relayLink = (url) => {
+    setRelayErr('');
+    patch(`/api/v1/sessions/${encodeURIComponent(sid)}`, { orch_url: url, relay_enabled: true })
+      .then((r) => {
+        if (r.ok) { setRelay(r.data); setRelayOpen(false); }
+        else {
+          const d = r.data || {};
+          setRelayErr(d.code === 'ORCH_CHAT_IN_USE' ? T.session.relayErrInUse : T.session.relayErrSite);
+        }
+      })
+      .catch(() => actions.addToast({ kind: 'error', text: 'network' }));
+  };
+  const relayUnlink = () => {
+    patch(`/api/v1/sessions/${encodeURIComponent(sid)}`, { orch_url: '', relay_enabled: false })
+      .then((r) => { if (r.ok) { setRelay(r.data); } })
+      .catch(() => actions.addToast({ kind: 'error', text: 'network' }));
+  };
 
   if (!s.loaded) {
     return html`<div class="page"><div class="skeleton" style=${{ height: '320px' }}></div></div>`;
@@ -229,6 +277,38 @@ export function SessionPage() {
           </dl>
         </${Section}>
 
+        ${sess.orch_url && relay ? html`<${Section} title=${T.session.relay}>
+          <div class="sc-relay">
+            <div class="sc-relay-head">
+              <${Badge} tone=${relayTone(relay.state)} label=${relay.state || 'ARMED'} dot=${true} />
+              <a class="sc-relay-link mono" href=${sess.orch_url} target="_blank" rel="noopener">${sess.orch_url}</a>
+            </div>
+            <dl class="sc-dl sc-relay-dl">
+              <div><dt>${T.session.relayCycle}</dt><dd class="mono">${relay.cycle_seq}</dd></div>
+              <div><dt>${T.session.relaySent}</dt><dd class="mono">${relay.sent_at || T.units.none}</dd></div>
+              <div><dt>${T.session.relayAnswer}</dt><dd class="mono">${relay.answer_at || T.units.none}</dd></div>
+              <div><dt>${T.session.relayDelivered}</dt><dd class="mono">${relay.delivered_at || T.units.none}</dd></div>
+            </dl>
+            <div class="sc-relay-actions">
+              <${Button} variant="secondary" label=${T.session.relaySendNow}
+                onClick=${() => relayAction('send')} />
+              <${Button} variant="secondary" label=${T.session.relayDeliverNow}
+                onClick=${() => relayAction('deliver')} />
+              <${Button} variant="secondary" label=${T.session.relaySkip}
+                onClick=${() => relayAction('skip')} />
+              <${Button} variant="primary" label=${T.session.relayResume}
+                onClick=${() => relayAction('resume')} />
+              <${Button} variant="danger" label=${T.session.relayOff}
+                onClick=${relayUnlink} />
+            </div>
+          </div>
+        </${Section}>` : html`<${Section} title=${T.session.relay}>
+          <div class="sc-relay">
+            <${Button} variant="secondary" label=${T.session.relayLink}
+              onClick=${() => { setRelayUrl(sess.orch_url || ''); setRelayErr(''); setRelayOpen(true); }} />
+          </div>
+        </${Section}>`}
+
         ${why ? html`<${Section} title=${T.session.whyTitle}>
           <div class="sc-why">${why}</div>
         </${Section}>` : null}
@@ -264,6 +344,23 @@ export function SessionPage() {
       <${Composer} sid=${sid} disabled=${false} state=${sess.state}
         initialValue=${sess.launch_command} />
     </div>
+
+    ${relayOpen ? html`<${Dialog} title=${T.session.relayLink}
+      onClose=${() => setRelayOpen(false)}
+      footer=${html`
+        <${Button} variant="secondary" label=${T.dialog.close}
+          onClick=${() => setRelayOpen(false)} />
+        <${Button} variant="primary" label=${T.session.relayLink}
+          onClick=${() => relayLink(relayUrl)} />`}>
+      <p class="dialog-note">${T.session.relayWarn}</p>
+      <label class="field">
+        <span class="field-label">${T.session.relayUrl}</span>
+        <input class="input" type="url" value=${relayUrl}
+          onInput=${(e) => setRelayUrl(e.target.value)}
+          placeholder="https://…" />
+      </label>
+      ${relayErr ? html`<p class="dialog-error">${relayErr}</p>` : null}
+    </${Dialog}>` : null}
 
     ${confirmClose ? html`<${Dialog} title=${T.session.closeTitle}
       onClose=${() => setConfirmClose(false)}

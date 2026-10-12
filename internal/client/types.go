@@ -42,6 +42,8 @@ type Session struct {
 	LastMigratedFrom string `json:"LastMigratedFrom"`
 	Attempts         int    `json:"Attempts"`
 	CreatedAt        string `json:"CreatedAt"`
+	OrchURL          string `json:"OrchURL"`
+	RelayEnabled     bool   `json:"RelayEnabled"`
 	Actions          []Action `json:"actions"` // v2 15.2
 }
 

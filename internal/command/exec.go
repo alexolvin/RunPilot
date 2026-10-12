@@ -51,6 +51,7 @@ type Executor interface {
 	Cancel(ctx context.Context, sid string) (Outcome, error)
 	Auto(ctx context.Context, sid string, on bool) (Outcome, error)
 	Why(ctx context.Context, sid string) (Outcome, error)
+	Relay(ctx context.Context, sid, action string) (Outcome, error)
 
 	// Ввод (R6: только по запросу оператора).
 	Paste(ctx context.Context, sid, text string, enqueue bool) (Outcome, error)
@@ -254,6 +255,15 @@ func Run(ctx context.Context, p *Parsed, ex Executor) (Outcome, error) {
 			return err("ARG", "нужно on|off"), nil
 		}
 		return ex.Auto(ctx, sid, a[1] == "on")
+	case "relay":
+		sid, e := target(ctx, ex, a)
+		if e != nil {
+			return err("BAD_TARGET", e.Error()), nil
+		}
+		if len(a) <= 1 {
+			return err("ARG", "нужно on|off|send|deliver|resume"), nil
+		}
+		return ex.Relay(ctx, sid, a[1])
 	case "why":
 		sid, e := target(ctx, ex, a)
 		if e != nil {
