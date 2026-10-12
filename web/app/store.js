@@ -83,6 +83,8 @@ function normSession(s) {
     created_at: s.CreatedAt || '', tmux_session: s.TmuxSession || '',
     // Раздел постановки в очередь: буфер «команд для запуска» (заряд запуска).
     launch_command: s.LaunchCommand || '',
+    // Связь с проектом (ТЗ Relay §15.1): URL чата оркестратора + включена ли связь.
+    orch_url: s.OrchURL || '', relay_enabled: !!s.RelayEnabled,
     untested: !!s.untested,
     // W13 этап 2: сервер текущего слота + правило выбора («В работе»).
     server: s.server || '', rule: s.rule || '',
