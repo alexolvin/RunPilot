@@ -53,6 +53,11 @@ type Qwen struct {
 	QuitText              string           `yaml:"quit_text"`
 	PastePlaceholderRegex string           `yaml:"paste_placeholder_regex"`
 
+	// Диалог вопроса (ТЗ Relay §12.2): regex диалога/выделения + клавиши allowlist.
+	DialogRegex         string   `yaml:"dialog_regex"`
+	DialogSelectedRegex string   `yaml:"dialog_selected_regex"`
+	DialogKeys          []string `yaml:"dialog_keys"`
+
 	cmdline *regexp.Regexp
 }
 
@@ -145,6 +150,8 @@ func (p *Qwen) compile() error {
 		"input_strip_regex":  p.InputStripRe,
 		"volatile_regex":     p.VolatileRe,
 		"paste_placeholder_regex": p.PastePlaceholderRegex,
+		"dialog_regex":           p.DialogRegex,
+		"dialog_selected_regex":  p.DialogSelectedRegex,
 	}
 	for name, pattern := range fields {
 		if pattern == "" {

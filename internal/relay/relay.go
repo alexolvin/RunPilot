@@ -22,6 +22,8 @@ type Relay struct {
 	lastSent time.Time
 	// onSendingHook — запись SENDING в БД (заполняется координатором).
 	onSendingHook func(page *rod.Page, sentHash string) error
+	// deliver — хуки доставки агенту (заполняются координатором, раздел 12).
+	deliver DeliverHooks
 }
 
 // New — сборка автомата.

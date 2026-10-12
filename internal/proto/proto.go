@@ -115,6 +115,8 @@ const (
 	// последний ход; read_report_file — содержимое .md-файла сессии.
 	KindTurnReport     Kind = "turn_report"
 	KindReadReportFile Kind = "read_report_file"
+	// dialog_answer (ТЗ Relay §12.2): шаги диалога вопроса (клавиши/вставка).
+	KindDialogAnswer Kind = "dialog_answer"
 )
 
 // Все значения type протокола (для валидации входящих сообщений).
@@ -130,7 +132,7 @@ var AllKinds = map[Kind]bool{
 	KindKillProcess: true, KindListDirs: true, KindUpdate: true, KindUninstall: true,
 	KindConfig: true, KindExecRoots: true, KindAdopt: true,
 	KindPtyOpen: true, KindPtyClose: true, KindPtyExit: true,
-	KindTurnReport: true, KindReadReportFile: true,
+	KindTurnReport: true, KindReadReportFile: true, KindDialogAnswer: true,
 }
 
 // Msg — одно сообщение канала узла. Поля, не относящиеся к type,
@@ -214,6 +216,9 @@ type Msg struct {
 	Path string `json:"path,omitempty"`
 	// Ответ turn_report: разобранный последний ход.
 	TurnReport *TurnReport `json:"turn_report,omitempty"`
+
+	// dialog_answer (ТЗ Relay §12.2): шаги диалога вопроса.
+	DialogSteps []DialogStep `json:"dialog_steps,omitempty"`
 
 	// list_dirs / dirs (13.2): префикс автодополнения и список каталогов.
 	Prefix string   `json:"prefix,omitempty"`
@@ -394,6 +399,16 @@ type ReportQuestionItem struct {
 type ReportOption struct {
 	Label       string `json:"label"`
 	Description string `json:"description,omitempty"`
+}
+
+// DialogStep — один шаг диалога вопроса (ТЗ Relay §12.2).
+// Key — клавиша из dialog_keys (Up/Down/Enter/Space/Tab); Paste — текст
+// для вставки (свободный вариант); Expected — ожидаемая выделенная строка
+// после шага (проверка по dialog_selected_regex, пусто — без проверки).
+type DialogStep struct {
+	Key      string `json:"key,omitempty"`
+	Paste    string `json:"paste,omitempty"`
+	Expected string `json:"expected,omitempty"`
 }
 
 // New — сообщение с корректной версией.

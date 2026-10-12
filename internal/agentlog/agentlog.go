@@ -91,8 +91,9 @@ type functionCall struct {
 }
 
 type functionResponse struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Response any    `json:"response"`
 }
 
 // ParseRecording — разбор последнего хода из записи Qwen Code (раздел 6.1).

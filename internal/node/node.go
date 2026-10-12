@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -123,12 +124,25 @@ func New(cfg *config.Config, prof *profiles.Qwen, ex Execer, clk clock.Clock, lo
 		CompressText:          prof.CompressText,
 		QuitText:              prof.QuitText,
 		PastePlaceholderRegex: prof.PastePlaceholderRegex,
+		DialogKeys:            prof.DialogKeys,
+		DialogRegex:           compileOptional(prof.DialogRegex),
+		DialogSelectedRegex:   compileOptional(prof.DialogSelectedRegex),
 	}, time.Duration(cfg.Dispatch.ResumeKeyDelayMS)*time.Millisecond)
 	return n, nil
 }
 
 // ctxBackground — фон для разовых вызовов вне цикла (version_cmd).
 func ctxBackground() context.Context { return context.Background() }
+
+// compileOptional — regex или nil (пустая строка — nil; ошибка не возможна:
+// профиль уже скомпилирован при загрузке).
+func compileOptional(pattern string) *regexp.Regexp {
+	if pattern == "" {
+		return nil
+	}
+	re, _ := regexp.Compile(pattern)
+	return re
+}
 
 // coderCommand — команда кодера: profiles.qwen.command из конфига узла
 // (абсолютный путь, пишет install.sh), иначе command профиля (qwen.yaml).

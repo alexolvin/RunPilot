@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -66,6 +67,11 @@ type Profile struct {
 	CompressText          string
 	QuitText              string
 	PastePlaceholderRegex string
+
+	// Диалог вопроса (ТЗ Relay §12.2): клавиши allowlist + regex диалога/выделения.
+	DialogKeys          []string
+	DialogRegex         *regexp.Regexp
+	DialogSelectedRegex *regexp.Regexp
 }
 
 // NewCommandRunner создаёт исполнителя; resumeWait — пауза
@@ -120,6 +126,8 @@ func (c *CommandRunner) HandleCommand(ctx context.Context, socket string, m prot
 		return c.screen(ctx, socket, m)
 	case proto.KindPaste:
 		return c.paste(ctx, socket, m)
+	case proto.KindDialogAnswer:
+		return c.dialogAnswer(ctx, socket, m)
 	case proto.KindApprove:
 		return c.approve(ctx, socket, m)
 	case proto.KindCompress:

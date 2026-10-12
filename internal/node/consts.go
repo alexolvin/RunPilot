@@ -117,6 +117,9 @@ const (
 	pasteSettle = 150 * time.Millisecond
 	pastePoll   = 8
 
+	// dialogSettle — пауза перед переснятием после шага диалога (ТЗ Relay §12.2).
+	dialogSettle = 150 * time.Millisecond
+
 	// dimsFields — число полей «ширина высота» из display-message (screen).
 	dimsFields = 2
 

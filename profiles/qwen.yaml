@@ -60,6 +60,12 @@ quit_text: /quit
 # 13.1: Qwen Code сворачивает длинную вставку в заглушку «[Pasted Content N chars]»
 # (фикстуры idle_input_pasted_short / idle_input_pasted_long, 0.24.5).
 paste_placeholder_regex: '\[Pasted Content \d+ chars\]'
+# Диалог вопроса (ТЗ Relay §12.2): regex диалога/выделения + клавиши allowlist.
+# Фикстуры: ask_single, ask_multi, ask_multiselect, ask_free_text_active,
+# ask_free_text_multiline (текущая версия Qwen Code).
+dialog_regex: '❯|Type something|Введите что-то'
+dialog_selected_regex: '^❯'
+dialog_keys: [Up, Down, Enter, Space, Tab]
 env:
   OPENAI_BASE_URL: "{{.Gateway}}/s/{{.SID}}/v1"
   OPENAI_API_KEY: "runpilot"

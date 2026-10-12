@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"runpilot/internal/textnorm"
 )
 
 // writeJSONL — записать строки в tmp-файл.
@@ -268,5 +270,42 @@ func TestRecordingCompressionMidTurn(t *testing.T) {
 	}
 	if rep.Report != "Готово, отчёт в step1.md" {
 		t.Fatalf("отчёт = %q", rep.Report)
+	}
+}
+
+// TestDeliveryProofReport — kind=report: хеш последнего пользовательского сообщения.
+func TestDeliveryProofReport(t *testing.T) {
+	lines := []string{
+		`{"type":"user","uuid":"u1","message":{"role":"user","parts":[{"text":"Шаг 1"}]}}`,
+		`{"type":"assistant","uuid":"a1","message":{"role":"model","parts":[{"text":"Делаю."}]}}`,
+		`{"type":"user","uuid":"u2","message":{"role":"user","parts":[{"text":"Сделай шаг 2."}]}}`,
+	}
+	p := writeJSONL(t, lines)
+	if ok, err := DeliveryProof(p, KindReport, "wrong-hash", nil); err != nil || ok {
+		t.Fatalf("несоответствующий хеш: ok=%v err=%v, хочу false", ok, err)
+	}
+	// Хеш нормализованного текста последнего пользовательского сообщения.
+	if ok, err := DeliveryProof(p, KindReport, textnorm.NormHash("Сделай шаг 2."), nil); err != nil || !ok {
+		t.Fatalf("совпадающий хеш: ok=%v err=%v, хочу true", ok, err)
+	}
+}
+
+// TestDeliveryProofQuestion — kind=question: результат ask_user_question содержит ответ.
+func TestDeliveryProofQuestion(t *testing.T) {
+	lines := []string{
+		`{"type":"user","uuid":"u1","message":{"role":"user","parts":[{"text":"задача"}]}}`,
+		`{"type":"assistant","uuid":"a1","message":{"role":"model","parts":[{"functionCall":{"id":"c1","name":"ask_user_question","args":{}}}]}}`,
+		`{"type":"user","uuid":"u2","message":{"role":"user","parts":[{"functionResponse":{"id":"c1","name":"ask_user_question","response":{"answer":"Свободный ответ"}}}]}}`,
+	}
+	p := writeJSONL(t, lines)
+	if ok, err := DeliveryProof(p, KindQuestion, "wrong", nil); err != nil || ok {
+		t.Fatalf("несоответствующий хеш: ok=%v, хочу false", ok)
+	}
+	if ok, err := DeliveryProof(p, KindQuestion, textnorm.NormHash("Свободный ответ"), nil); err != nil || !ok {
+		t.Fatalf("хеш ответа: ok=%v err=%v, хочу true", ok, err)
+	}
+	// По подписи варианта.
+	if ok, err := DeliveryProof(p, KindQuestion, "", []string{"Свободный"}); err != nil || !ok {
+		t.Fatalf("подпись варианта: ok=%v err=%v, хочу true", ok, err)
 	}
 }

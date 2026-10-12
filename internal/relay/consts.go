@@ -10,4 +10,6 @@ const (
 	pollInterval = 200 * time.Millisecond
 	// loginTimeout — дедлайн поиска logged_in_selector.
 	loginTimeout = 5 * time.Second
+	// idlePollInterval — период опроса IDLE при ожидании ввода (12.1.1).
+	idlePollInterval = 200 * time.Millisecond
 )
