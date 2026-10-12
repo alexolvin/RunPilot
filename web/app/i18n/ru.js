@@ -39,6 +39,7 @@ export const T = {
 
   browserView: {
     title: 'Живой просмотр',
+    sessionBtn: 'Живой просмотр связи',
     done: 'Готово',
     close: 'Закрыть просмотр',
     none: 'Вкладки браузера не открыты',

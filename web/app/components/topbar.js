@@ -6,7 +6,6 @@ import { useStore, actions } from '../store.js';
 import { stateColorVar } from '../state-style.js';
 import { T } from '../i18n/ru.js';
 import { navigate } from '../router.js';
-import { get } from '../api.js';
 import { Button } from './button.js';
 import { Icon } from './icon-view.js';
 import { ThemeToggle } from './theme-toggle.js';
@@ -73,28 +72,6 @@ function Notifications() {
   </button>`;
 }
 
-// BrowserViewButton — «Живой просмотр» (ТЗ Relay §8): открывает окно вкладки
-// координатора. Запрашивает список вкладок и открывает первую.
-function BrowserViewButton() {
-  const open = async () => {
-    try {
-      const r = await get('/api/v1/browser');
-      const tabs = (r.data && r.data.tabs) || [];
-      if (!r.data || !r.data.running || tabs.length === 0) {
-        actions.addToast({ kind: 'info', text: T.browserView.none });
-        return;
-      }
-      actions.openBrowserView({ tab: tabs[0] });
-    } catch {
-      actions.addToast({ kind: 'error', text: T.browserView.errGeneric });
-    }
-  };
-  return html`<button class="icon-btn" type="button" title=${T.browserView.title}
-    aria-label=${T.browserView.title} onClick=${open}>
-    ${Icon({ name: 'monitor' })}
-  </button>`;
-}
-
 export function Topbar() {
   const s = useStore();
   const title = T.pages[s.page] || T.pages.queue;
@@ -106,7 +83,6 @@ export function Topbar() {
     <div class="topbar-actions">
       ${NewSessionButton()}
       ${NewSessionIconBtn()}
-      ${BrowserViewButton()}
       ${Notifications()}
       ${ThemeToggle()}
     </div>

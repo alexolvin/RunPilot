@@ -155,6 +155,22 @@ export function SessionPage() {
       .catch(() => actions.addToast({ kind: 'error', text: 'network' }));
   };
 
+  // Живой просмотр связи (ТЗ Relay §8.3): вкладка именно ЭТОЙ сессии в её
+  // профиле (своя авторизация). Открывает вкладку (идемпотентно) и оверлей.
+  const openSessionBrowserView = async () => {
+    try {
+      const r = await post('/api/v1/browser/tabs', { session: sid, url: sess.orch_url });
+      if (r.ok) {
+        actions.openBrowserView({ tab: sid, name: sess.name, url: sess.orch_url });
+      } else {
+        const d = r.data || {};
+        actions.addToast({ kind: 'error', text: d.detail || d.code || ('HTTP ' + r.status) });
+      }
+    } catch {
+      actions.addToast({ kind: 'error', text: 'network' });
+    }
+  };
+
   if (!s.loaded) {
     return html`<div class="page"><div class="skeleton" style=${{ height: '320px' }}></div></div>`;
   }
@@ -290,6 +306,8 @@ export function SessionPage() {
               <div><dt>${T.session.relayDelivered}</dt><dd class="mono">${relay.delivered_at || T.units.none}</dd></div>
             </dl>
             <div class="sc-relay-actions">
+              <${Button} variant="secondary" label=${T.browserView.sessionBtn}
+                onClick=${openSessionBrowserView} />
               <${Button} variant="secondary" label=${T.session.relaySendNow}
                 onClick=${() => relayAction('send')} />
               <${Button} variant="secondary" label=${T.session.relayDeliverNow}

@@ -103,10 +103,11 @@ function useBrowserView(tab, onErr) {
 export function BrowserViewPage() {
   const s = useStore();
   if (!s.browserView) return null;
-  return html`<${BrowserViewOverlay} tab=${s.browserView.tab} url=${s.browserView.url || ''} />`;
+  return html`<${BrowserViewOverlay} tab=${s.browserView.tab} name=${s.browserView.name || ''}
+    url=${s.browserView.url || ''} />`;
 }
 
-function BrowserViewOverlay({ tab, url }) {
+function BrowserViewOverlay({ tab, name, url }) {
   const close = () => actions.closeBrowserView();
   const { imgRef, status, errMsg, send } = useBrowserView(tab, close);
   const isPhone = useIsPhone();
@@ -137,7 +138,7 @@ function BrowserViewOverlay({ tab, url }) {
       onClick=${(e) => e.stopPropagation()}>
       <div class="bv-head">
         <h2 class="bv-title">${T.browserView.title}
-          <span class="bv-tab mono">${tab}</span>
+          <span class="bv-tab mono" title=${name ? name + ' · ' + tab : tab}>${name || tab}</span>
         </h2>
         ${url ? html`<span class="bv-url" title=${url}>${url}</span>` : null}
         ${status === 'connecting' ? html`<span class="bv-status connecting">${T.browserView.connecting}</span>` : null}
