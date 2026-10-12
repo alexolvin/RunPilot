@@ -168,30 +168,44 @@ func (b *Browser) teardown() {
 	b.xvfbDead = nil
 }
 
-// OpenTab — новая вкладка с URL. Возвращает ID.
+// OpenTab — новая вкладка с URL. Возвращает ID. Навигация — в фоне: тяжёлый
+// SPA может не слать load-событие, и ожидание загрузки заблокировало бы b.mu
+// (весь браузер) на время загрузки. Оператор видит загрузку в живом просмотре.
 func (b *Browser) OpenTab(ctx context.Context, url string) (string, error) {
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	if !b.running {
+		b.mu.Unlock()
 		return "", fmt.Errorf("browser: не запущен")
 	}
 	if len(b.tabs) >= b.cfg.MaxTabs {
+		b.mu.Unlock()
 		return "", fmt.Errorf("browser: превышен лимит вкладок %d", b.cfg.MaxTabs)
 	}
 	page, err := b.rod.Page(proto.TargetCreateTarget{})
 	if err != nil {
+		b.mu.Unlock()
 		return "", fmt.Errorf("browser: вкладка: %w", err)
-	}
-	if url != "" {
-		if err := page.Navigate(url); err != nil {
-			_ = page.Close()
-			return "", fmt.Errorf("browser: навигация: %w", err)
-		}
 	}
 	b.tabSeq++
 	id := "tab-" + strconv.Itoa(b.tabSeq)
 	b.tabs[id] = &Tab{ID: id, Page: page, URL: url}
+	b.mu.Unlock()
+
+	if url != "" {
+		go b.navigate(page, url)
+	}
 	return id, nil
+}
+
+// navigate — фоновая навигация вкладки (таймаут полной загрузки из конфигурации;
+// ошибка не критична — вкладка открыта, оператор видит состояние в просмотре).
+func (b *Browser) navigate(page *rod.Page, url string) {
+	_ = page.Timeout(b.pageLoadTimeout()).Navigate(url)
+}
+
+// pageLoadTimeout — таймаут полной загрузки страницы (browser.page_load_timeout_sec).
+func (b *Browser) pageLoadTimeout() time.Duration {
+	return time.Duration(b.cfg.PageLoadTimeoutSec) * time.Second
 }
 
 // CloseTab — закрыть вкладку.
