@@ -54,6 +54,23 @@ type Config struct {
 	Backup   Backup   `yaml:"backup"`
 	Media    Media    `yaml:"media"`
 	Relay    Relay    `yaml:"relay"`
+	Browser  Browser  `yaml:"browser"`
+}
+
+// Browser — параметры браузера координатора (ТЗ Relay, раздел 8/16):
+// Xvfb + Google Chrome под управлением go-rod.
+type Browser struct {
+	ChromePath   string `yaml:"chrome_path"`
+	XvfbPath     string `yaml:"xvfb_path"`
+	Display      string `yaml:"display"`
+	Screen       string `yaml:"screen"`
+	ProfileDir   string `yaml:"profile_dir"`
+	MaxTabs      int    `yaml:"max_tabs"`
+	PageLoadTimeoutSec int `yaml:"page_load_timeout_sec"`
+	IdleStopMin  int    `yaml:"idle_stop_min"`
+	ViewJPEGQuality   int `yaml:"view_jpeg_quality"`
+	ViewMaxWidth      int `yaml:"view_max_width"`
+	ViewIdleCloseMin  int `yaml:"view_idle_close_min"`
 }
 
 // Relay — параметры связи сессии с проектом оркестратора (ТЗ Relay, раздел 16).
