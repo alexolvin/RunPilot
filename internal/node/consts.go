@@ -129,4 +129,11 @@ const (
 
 	// binVersionTimeout — таймаут <bin> version (W12: сверка версии при self-update).
 	binVersionTimeout = binVersionTimeoutSec * time.Second
+
+	// Связь с оркестратором (ТЗ Relay): запасные значения, если конфиг пуст.
+	// defaultScrollback / defaultAttachMaxKB дублируют defaults.go relay.*;
+	// kbInBytes — КБ в байтах (read_report_file: лимит attach_max_kb).
+	defaultScrollback  = 3000
+	defaultAttachMaxKB = 512
+	kbInBytes          = 1024
 )

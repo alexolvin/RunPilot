@@ -52,13 +52,17 @@ type SessionRecord struct {
 	// узел убивает группу kill(-PGID, SIGKILL): осиротевший qwen (внучатый
 	// процесс) не держит соединение со шлюзом. 0 = ещё не запущен.
 	ExecPGID int
+	// QwenSessionID — UUIDv4, сгенерированный координатором при создании
+	// сессии (R0 ТЗ Relay §3). Передаётся кодеру как --session-id; при
+	// перезапуске — --resume <uuid>. Запись Qwen Code: <uuid>.jsonl.
+	QwenSessionID string
 }
 
 const sessionCols = `sid, name, host, host_ip, tmux_session, window, pane_id,
 profile, agent_version, kind, state, state_changed_at, hold_reason, class,
 constraint_kind, constraint_server, auto_enqueue, last_server,
 last_turn_end, last_migrated_from, attempts, created_at, launch_command,
-exec_pid, exec_starttime, exec_pgid`
+exec_pid, exec_starttime, exec_pgid, qwen_session_id`
 
 func scanSession(row interface{ Scan(...any) error }) (SessionRecord, error) {
 	var r SessionRecord
@@ -69,7 +73,7 @@ func scanSession(row interface{ Scan(...any) error }) (SessionRecord, error) {
 		&r.PaneID, &r.Profile, &r.AgentVersion, &kind, &state, &changed, &hold,
 		&class, &ckind, &r.ConstraintServer, &auto, &r.LastServer,
 		&turnEnd, &r.LastMigratedFrom, &r.Attempts, &created, &r.LaunchCommand,
-		&r.ExecPID, &r.ExecStarttime, &r.ExecPGID)
+		&r.ExecPID, &r.ExecStarttime, &r.ExecPGID, &r.QwenSessionID)
 	if err == nil {
 		r.Class = model.QueueClass(class)
 	}
@@ -102,14 +106,14 @@ func (s *Store) CreateSession(r SessionRecord) error {
 			agent_version, kind, state, state_changed_at, hold_reason, class,
 			constraint_kind, constraint_server, auto_enqueue, last_server,
 			last_turn_end, last_migrated_from, attempts, created_at,
-			launch_command, exec_pid, exec_starttime, exec_pgid
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			launch_command, exec_pid, exec_starttime, exec_pgid, qwen_session_id
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			r.SID, r.Name, r.Host, r.HostIP, r.TmuxSession, r.Window, r.PaneID,
 			r.Profile, r.AgentVersion, r.Kind, r.State, ts(r.StateChangedAt),
 			r.HoldReason, int(r.Class), r.ConstraintKind, r.ConstraintServer,
 			boolInt(r.AutoEnqueue), r.LastServer, ts(r.LastTurnEnd),
 			r.LastMigratedFrom, r.Attempts, ts(r.CreatedAt), r.LaunchCommand,
-			r.ExecPID, r.ExecStarttime, r.ExecPGID)
+			r.ExecPID, r.ExecStarttime, r.ExecPGID, r.QwenSessionID)
 		return err
 	})
 }

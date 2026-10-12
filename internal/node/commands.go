@@ -76,14 +76,16 @@ func NewCommandRunner(ex Execer, re detect.Regexps, p Profile, resumeWait time.D
 
 // Reply — ответ на команду координатора. Cols/Rows — для KindScreen,
 // Roots — project_roots узла в ответе list_dirs (поле proto.Msg.ProjectRoots
-// существует с v2 — старые узлы просто не заполняют его, omitempty).
+// существует с v2 — старые узлы просто не заполняют его, omitempty),
+// TurnReport — разобранный ход (ТЗ Relay, turn_report).
 type Reply struct {
-	CmdID  string
-	Result string
-	Detail string
-	Cols   int
-	Rows   int
-	Roots  []string
+	CmdID      string
+	Result     string
+	Detail     string
+	Cols       int
+	Rows       int
+	Roots      []string
+	TurnReport *proto.TurnReport
 }
 
 func (r Reply) msg() proto.Msg {
@@ -91,6 +93,7 @@ func (r Reply) msg() proto.Msg {
 	m.CmdID, m.Result, m.Detail = r.CmdID, r.Result, r.Detail
 	m.Cols, m.Rows = r.Cols, r.Rows
 	m.ProjectRoots = r.Roots
+	m.TurnReport = r.TurnReport
 	return m
 }
 

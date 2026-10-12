@@ -76,6 +76,12 @@ func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusInternalServerError, "SID", err.Error())
 		return
 	}
+	// R0 ТЗ Relay §3: qwen_session_id (UUIDv4) — --session-id / --chat-recording.
+	qwenSID, err := sid.NewUUIDv4()
+	if err != nil {
+		httpError(w, http.StatusInternalServerError, "QWEN_SID", err.Error())
+		return
+	}
 	env, err := s.spawnEnv(newSID)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, "ENV", err.Error())
@@ -88,6 +94,8 @@ func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 	m.Env = env
 	m.Args = req.Args
 	m.SID = newSID
+	// R0 ТЗ Relay §3: qwen_session_id → --session-id/--chat-recording.
+	m.QwenSessionID = qwenSID
 	// item 3: размер контекста (min по серверам) → contextWindowSize кодера.
 	m.ContextWindow = s.MinContextWindow()
 	// W15 этап 3: модальности пула (пересечение) → modalities кодера.
@@ -114,6 +122,7 @@ func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 		Profile: "qwen", State: model.SessionIdle, StateChangedAt: now,
 		Class: model.ClassNormal, ConstraintKind: model.ConstraintNone,
 		AutoEnqueue: req.AutoEnqueue, CreatedAt: now,
+		QwenSessionID: qwenSID,
 	}
 	if req.Pin != "" {
 		rec.ConstraintKind = model.ConstraintPin

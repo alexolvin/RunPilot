@@ -53,6 +53,11 @@ const (
 
 	// Терминал (13.4 ТЗ): PTY открыт (tmux attach запущен).
 	ResPtyOpened = "PTY_OPENED"
+
+	// read_report_file (ТЗ Relay §6.2): файл вне каталога / не .md / сверх лимита.
+	ResPathForbidden = "PATH_FORBIDDEN"
+	ResExtForbidden  = "EXT_FORBIDDEN"
+	ResTooLarge      = "TOO_LARGE"
 )
 
 // Kind — значения поля type.
@@ -105,6 +110,11 @@ const (
 	KindPtyOpen  Kind = "pty_open"
 	KindPtyClose Kind = "pty_close"
 	KindPtyExit  Kind = "pty_exit"
+
+	// Связь с оркестратором (ТЗ Relay, раздел 2). turn_report — разобранный
+	// последний ход; read_report_file — содержимое .md-файла сессии.
+	KindTurnReport     Kind = "turn_report"
+	KindReadReportFile Kind = "read_report_file"
 )
 
 // Все значения type протокола (для валидации входящих сообщений).
@@ -120,6 +130,7 @@ var AllKinds = map[Kind]bool{
 	KindKillProcess: true, KindListDirs: true, KindUpdate: true, KindUninstall: true,
 	KindConfig: true, KindExecRoots: true, KindAdopt: true,
 	KindPtyOpen: true, KindPtyClose: true, KindPtyExit: true,
+	KindTurnReport: true, KindReadReportFile: true,
 }
 
 // Msg — одно сообщение канала узла. Поля, не относящиеся к type,
@@ -196,6 +207,13 @@ type Msg struct {
 	Dir  string            `json:"dir,omitempty"`
 	Env  map[string]string `json:"env,omitempty"`
 	Args []string          `json:"args,omitempty"`
+	// QwenSessionID — UUIDv4 (ТЗ Relay §3): --session-id / --resume / --chat-recording.
+	QwenSessionID string `json:"qwen_session_id,omitempty"`
+
+	// turn_report / read_report_file (ТЗ Relay §2). Path — файл отчёта.
+	Path string `json:"path,omitempty"`
+	// Ответ turn_report: разобранный последний ход.
+	TurnReport *TurnReport `json:"turn_report,omitempty"`
 
 	// list_dirs / dirs (13.2): префикс автодополнения и список каталогов.
 	Prefix string   `json:"prefix,omitempty"`
@@ -343,6 +361,39 @@ type UnmanagedPane struct {
 	Dir     string `json:"dir,omitempty"`
 	Cmd     string `json:"cmd,omitempty"`
 	Socket  string `json:"socket,omitempty"`
+}
+
+// TurnReport — разобранный последний ход (ТЗ Relay §2/§6). Узел → координатор.
+type TurnReport struct {
+	Source   string        `json:"source"` // recording | terminal
+	Found    bool          `json:"found"`
+	Report   string        `json:"report,omitempty"`
+	Files    []ReportFile  `json:"files,omitempty"`
+	Question *ReportQuestion `json:"question,omitempty"`
+}
+
+// ReportFile — .md-файл хода (путь + размер).
+type ReportFile struct {
+	Path string `json:"path"`
+	Size int64  `json:"size"`
+}
+
+// ReportQuestion — аргументы неотвеченного ask_user_question.
+type ReportQuestion struct {
+	Questions []ReportQuestionItem `json:"questions"`
+}
+
+// ReportQuestionItem — один вопрос.
+type ReportQuestionItem struct {
+	Question    string           `json:"question"`
+	Options     []ReportOption   `json:"options,omitempty"`
+	MultiSelect bool             `json:"multi_select,omitempty"`
+}
+
+// ReportOption — вариант ответа.
+type ReportOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
 }
 
 // New — сообщение с корректной версией.

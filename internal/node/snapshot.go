@@ -131,6 +131,19 @@ func (s *snapshotter) LiveSIDs() []string {
 	return out
 }
 
+// PaneBySID — информация о живой управляемой панели по SID (ТЗ Relay:
+// turn_report/read_report_file). ok=false — панель не найдена.
+func (s *snapshotter) PaneBySID(sid string) (PaneInfo, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, ps := range s.panes {
+		if ps != nil && ps.info.SID == sid {
+			return ps.info, true
+		}
+	}
+	return PaneInfo{}, false
+}
+
 // paneMsg — сообщение pane для координатора.
 func paneMsg(info PaneInfo, st detect.State, hash uint64, input string, stableSince time.Time, agentVer string) proto.Pane {
 	preview := input

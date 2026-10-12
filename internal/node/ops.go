@@ -152,6 +152,10 @@ func (n *Node) spawn(ctx context.Context, m proto.Msg) (*Reply, error) {
 	}
 	args = append(args, n.coderCommand())
 	args = append(args, CoderArgsFromEnv(env)...)
+	// R0 ТЗ Relay §3: --session-id <uuid> --chat-recording (запись хода).
+	if m.QwenSessionID != "" {
+		args = append(args, "--session-id", m.QwenSessionID, "--chat-recording")
+	}
 	args = append(args, m.Args...)
 	if _, err := n.ex.Output(ctx, "tmux", tmuxArgs(socket, args...)...); err != nil {
 		return &Reply{CmdID: m.CmdID, Result: "SPAWN_FAILED", Detail: err.Error()}, nil
@@ -234,6 +238,10 @@ func (n *Node) respawn(ctx context.Context, socket string, m proto.Msg) (*Reply,
 	}
 	args = append(args, n.coderCommand())
 	args = append(args, CoderArgsFromEnv(env)...)
+	// R0 ТЗ Relay §3: --resume <uuid> вместо --continue (кодер возобновляет запись).
+	if m.QwenSessionID != "" {
+		args = append(args, "--resume", m.QwenSessionID)
+	}
 	args = append(args, m.Args...)
 	if _, err := n.ex.Output(ctx, "tmux", tmuxArgs(socket, args...)...); err != nil {
 		return &Reply{CmdID: m.CmdID, Result: ResPaneGone}, nil

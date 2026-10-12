@@ -128,6 +128,13 @@ var configKeys = []string{
 	"jobs", "jobs.slots", "jobs.heartbeat_sec", "jobs.heartbeat_timeout_sec", "jobs.wait_max_default_sec",
 	"backup", "backup.daily_at_utc", "backup.keep",
 	"media", "media.probe_many_images",
+	"relay", "relay.report_keywords", "relay.terminal_marker_regex", "relay.agent_block_regex",
+	"relay.free_text_labels", "relay.stop_word", "relay.recording_settle_ms",
+	"relay.recording_wait_max_sec", "relay.scrollback_lines", "relay.attach_max_files",
+	"relay.attach_max_kb", "relay.upload_timeout_sec", "relay.send_template",
+	"relay.question_template", "relay.oversize_note_template", "relay.min_send_interval_sec",
+	"relay.send_confirm_sec", "relay.answer_timeout_min", "relay.answer_stable_sec",
+	"relay.input_wait_sec", "relay.max_auto_cycles",
 	"log", "log.path", "log.max_mb", "log.backups",
 }
 

@@ -53,6 +53,39 @@ type Config struct {
 	Jobs     Jobs     `yaml:"jobs"`
 	Backup   Backup   `yaml:"backup"`
 	Media    Media    `yaml:"media"`
+	Relay    Relay    `yaml:"relay"`
+}
+
+// Relay — параметры связи сессии с проектом оркестратора (ТЗ Relay, раздел 16).
+// Все числа/пути/регулярки/шаблоны берутся только отсюда (строгое правило 1).
+type Relay struct {
+	ReportKeywords []string `yaml:"report_keywords"`
+	// TerminalMarkerRegex — маркер отчёта в истории терминала (◆︎).
+	TerminalMarkerRegex string `yaml:"terminal_marker_regex"`
+	// AgentBlockRegex — заголовок блока для агента в ответе оркестратора.
+	AgentBlockRegex string `yaml:"agent_block_regex"`
+	// FreeTextLabels — подписи пункта «свой вариант» в диалоге (проверка по снимку).
+	FreeTextLabels []string `yaml:"free_text_labels"`
+	// StopWord — блок для агента, равный этому тексту, завершает связь.
+	StopWord string `yaml:"stop_word"`
+	// RecordingSettleMS — отсутствие изменений записи, считающее её стабилизировавшейся.
+	RecordingSettleMS int `yaml:"recording_settle_ms"`
+	// RecordingWaitMaxSec — макс. ожидание записи перед переходом к терминалу.
+	RecordingWaitMaxSec int `yaml:"recording_wait_max_sec"`
+	// ScrollbackLines — глубина истории терминала (capture-pane -S).
+	ScrollbackLines int `yaml:"scrollback_lines"`
+	AttachMaxFiles  int `yaml:"attach_max_files"`
+	AttachMaxKB     int `yaml:"attach_max_kb"`
+	UploadTimeoutSec int `yaml:"upload_timeout_sec"`
+	SendTemplate    string `yaml:"send_template"`
+	QuestionTemplate string `yaml:"question_template"`
+	OversizeNoteTemplate string `yaml:"oversize_note_template"`
+	MinSendIntervalSec int `yaml:"min_send_interval_sec"`
+	SendConfirmSec     int `yaml:"send_confirm_sec"`
+	AnswerTimeoutMin   int `yaml:"answer_timeout_min"`
+	AnswerStableSec    int `yaml:"answer_stable_sec"`
+	InputWaitSec       int `yaml:"input_wait_sec"`
+	MaxAutoCycles      int `yaml:"max_auto_cycles"`
 }
 
 // Media — параметры медиа-проб (цикл W15). ProbeManyImages — N картинок в

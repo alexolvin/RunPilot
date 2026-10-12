@@ -555,6 +555,10 @@ func (n *Node) Handle(ctx context.Context, m proto.Msg) (*Reply, error) {
 		return n.adopt(ctx, m)
 	case proto.KindKillProcess:
 		return n.killProcess(ctx, m)
+	case proto.KindTurnReport:
+		return n.turnReport(ctx, m)
+	case proto.KindReadReportFile:
+		return n.readReportFile(ctx, m)
 	case proto.KindPtyOpen:
 		return n.ptyOpen(ctx, m)
 	case proto.KindPtyClose:

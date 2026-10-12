@@ -64,9 +64,15 @@ func (s *Server) CmdRestart(ctx context.Context, sidv string) (command.Outcome, 
 	m.SID = sidv
 	m.PaneID = sess.PaneID
 	m.Env = env
-	m.Args = []string{"--continue"}
 	m.ContextWindow = s.MinContextWindow()
 	m.InputModalities = s.IntersectionModalities()
+	// R0 ТЗ Relay §3: --resume <uuid> вместо --continue (кодер возобновляет
+	// запись). Сессии до R0 без qwen_session_id — как раньше (--continue).
+	if sess.QwenSessionID != "" {
+		m.QwenSessionID = sess.QwenSessionID
+	} else {
+		m.Args = []string{"--continue"}
+	}
 	rep, err := s.dispatchToNodeTimeout(ctx, sess.Host, m, restartAgentTimeout)
 	if err != nil {
 		return command.Outcome{Code: "NODE", Text: err.Error()}, nil
