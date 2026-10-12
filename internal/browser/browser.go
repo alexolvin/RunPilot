@@ -216,6 +216,7 @@ func (b *Browser) startSessionLocked(ctx context.Context, sid string) (*sessionB
 		Bin(b.cfg.ChromePath).
 		UserDataDir(profile).
 		Headless(false).
+		Leakless(false).
 		Set("window-size", windowSize(b.cfg.Screen))
 	l.Env(append(os.Environ(), "DISPLAY="+b.cfg.Display)...)
 	url, err := l.Launch()
