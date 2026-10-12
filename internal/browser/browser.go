@@ -221,7 +221,9 @@ func (b *Browser) startSessionLocked(ctx context.Context, sid string) (*sessionB
 	if b.cfg.Proxy != "" {
 		l.Set("proxy-server", b.cfg.Proxy)
 	}
-	l.Env(append(os.Environ(), "DISPLAY="+b.cfg.Display)...)
+	envVars := append(os.Environ(), "DISPLAY="+b.cfg.Display)
+	b.log.Info("browser: env Chrome", "count", len(envVars), "env", envVars)
+	l.Env(envVars...)
 	url, err := l.Launch()
 	if err != nil {
 		return nil, fmt.Errorf("browser: Chrome %s: %w", sid, err)
