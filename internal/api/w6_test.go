@@ -193,6 +193,43 @@ func TestEnrollFlow(t *testing.T) {
 	}
 }
 
+// TestEnrollUser — user-параметр enroll (ТЗ «определение пользователя для
+// создания нового узла через web»): install-команда идёт через sudo -u <user>
+// (узел работает от этого пользователя OS); некорректное имя → 400
+// (защита от инъекции в shell-строку).
+func TestEnrollUser(t *testing.T) {
+	ts, _, _ := testServer(t)
+	// С user → sudo -u <user> в команде установки.
+	resp, err := httpPostJSON(t, ts.URL+"/api/v1/nodes/enroll", map[string]any{"user": "coder1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("enroll user = %d (тело %s), хочу 201", resp.StatusCode, body)
+	}
+	var out struct {
+		Install string `json:"install"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.Install, "sudo -u coder1") {
+		t.Errorf("install не содержит sudo -u coder1: %s", out.Install)
+	}
+	// Некорректный user (пробел/инъекция) → 400.
+	resp2, err := httpPostJSON(t, ts.URL+"/api/v1/nodes/enroll",
+		map[string]any{"user": "bad user; rm -rf /"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusBadRequest {
+		t.Errorf("некорректный user = %d, хочу 400", resp2.StatusCode)
+	}
+}
+
 // W9 доп-3f: install.sh не держит терминал (раньше «exec runpilot node» заменял
 // шелл оператора — tmux-сеанс «зависал» на логах узла): узел ставится
 // службой systemd, скрипт завершается.

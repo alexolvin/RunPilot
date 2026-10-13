@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -70,10 +71,27 @@ func (s *Server) nodeAuth(next http.Handler) http.Handler {
 
 // --- подключение узла (раздел 14, CONTROL 1) ---
 
+// userNameRe — валидное имя пользователя Unix. Защита от инъекции: user
+// встраивается в install-команду (shell-строка).
+var userNameRe = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
+
 // handleNodeEnroll — POST /api/v1/nodes/enroll: создать enroll-токен.
+// user (опц.) — от какого пользователя OS работать узел: install выполняется
+// от него (sudo -u), user-служба systemd — его. Пусто = пользователь,
+// запустивший команду (старое поведение).
 func (s *Server) handleNodeEnroll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpError(w, http.StatusMethodNotAllowed, "METHOD", "POST")
+		return
+	}
+	var body struct {
+		User string `json:"user"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	user := strings.TrimSpace(body.User)
+	if user != "" && !userNameRe.MatchString(user) {
+		httpError(w, http.StatusBadRequest, "BAD_USER",
+			"некорректное имя пользователя (допустимы [a-z_][a-z0-9_-]*)")
 		return
 	}
 	now := s.clk.Now()
@@ -83,12 +101,19 @@ func (s *Server) handleNodeEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	base := s.requestBase(r)
+	install := "curl -fsSL " + base + "/enroll/" + tok.Token + "/install.sh | bash"
+	if user != "" {
+		// HOME явный (getent): sudo не обязан подставлять домашний каталог
+		// целевого пользователя — иначе конфиг уйдёт в $HOME оператора.
+		install = "sudo -u " + user + " bash -c 'export HOME=\"$(getent passwd " + user +
+			" | cut -d: -f6)\"; " + install + "'"
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{
 		"token":    tok.Token,
 		"dist_url": base + "/enroll/" + tok.Token + "/runpilot",
-		"install":  "curl -fsSL " + base + "/enroll/" + tok.Token + "/install.sh | bash",
+		"install":  install,
 	})
 }
 
@@ -264,12 +289,14 @@ fi
 echo "runpilot: устанавливаю службу узла…"
 "$BIN" service install node
 "$BIN" tmux-setup
-# linger: user-служба не переживёт выход пользователя.
-LINGER="$(loginctl show-user "$USER" -p Linger --value 2>/dev/null || true)"
+# linger: user-служба не переживёт выход пользователя. $(id -un) — фактический
+# пользователь (при sudo -u <user> $USER может остаться операторским).
+NODE_USER="$(id -un)"
+LINGER="$(loginctl show-user "$NODE_USER" -p Linger --value 2>/dev/null || true)"
 if [ "$LINGER" != "yes" ]; then
   echo ""
   echo "runpilot: linger не включён — после выхода пользователя узел остановится."
-  echo "    Включите: sudo loginctl enable-linger $USER"
+  echo "    Включите: sudo loginctl enable-linger $NODE_USER"
   exit 3
 fi
 if [ "$(id -u)" = "0" ]; then

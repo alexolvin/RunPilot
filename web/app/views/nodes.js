@@ -126,16 +126,21 @@ function NodeDetail({ host }) {
 function NodeEnroll({ onClose }) {
   const s = useStore();
   const [cmd, setCmd] = useState('');
+  const [user, setUser] = useState('');
   const [ready, setReady] = useState(false);
   const [copied, setCopied] = useState(false);
   // Базовый набор узлов на момент открытия: новый узел (node_id) = «подключился».
   const base = useState(() => new Set(s.nodes.map((n) => n.node_id)))[0];
 
+  // user меняется → новый enroll-токен + install-команда (sudo -u <user>).
   useEffect(() => {
-    post('/api/v1/nodes/enroll', {}).then((r) => {
-      if (r.ok && r.data && r.data.install) setCmd(r.data.install);
+    let live = true;
+    setCmd('');
+    post('/api/v1/nodes/enroll', { user: user.trim() || undefined }).then((r) => {
+      if (live && r.ok && r.data && r.data.install) setCmd(r.data.install);
     });
-  }, []);
+    return () => { live = false; };
+  }, [user]);
 
   useEffect(() => {
     if (ready) return;
@@ -151,6 +156,12 @@ function NodeEnroll({ onClose }) {
     footer=${html`
       <${Button} variant="primary" label=${T.nodes.enClose} onClick=${onClose} />`}>
     <p class="dialog-note">${T.nodes.enNote}</p>
+    <div class="field" style=${{ marginBottom: 'var(--space-3)' }}>
+      <label>${T.nodes.enUser}</label>
+      <input type="text" value=${user} placeholder=${T.nodes.enUserPlaceholder}
+        onInput=${(e) => setUser(e.target.value)} />
+      <p class="dialog-note" style=${{ marginTop: 'var(--space-1)' }}>${T.nodes.enUserNote}</p>
+    </div>
     ${cmd ? html`
       <label style=${{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>${T.nodes.enCommand}</label>
       <div class="code-block">${cmd}</div>
