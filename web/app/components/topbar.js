@@ -62,6 +62,44 @@ function NewSessionIconBtn() {
   </button>`;
 }
 
+// AddServerButton — «Добавить сервер» на вкладке «Серверы» (десктоп).
+function AddServerButton() {
+  const s = useStore();
+  if (s.page !== 'servers') return null;
+  return Button({ variant: 'primary', label: T.servers.add,
+    onClick: () => actions.openDialog('add-server') });
+}
+
+// AddServerIconBtn — «Добавить сервер» на телефоне: иконка + (паттерн .ns-new).
+function AddServerIconBtn() {
+  const s = useStore();
+  if (s.page !== 'servers') return null;
+  return html`<button class="icon-btn ns-new" type="button" title=${T.servers.add}
+    aria-label=${T.servers.add}
+    onClick=${() => actions.openDialog('add-server')}>
+    ${Icon({ name: 'plus' })}
+  </button>`;
+}
+
+// ConnectNodeButton — «Подключить узел» на вкладке «Узлы» (десктоп).
+function ConnectNodeButton() {
+  const s = useStore();
+  if (s.page !== 'nodes') return null;
+  return Button({ variant: 'primary', label: T.nodes.connect,
+    onClick: () => actions.openDialog('enroll-node') });
+}
+
+// ConnectNodeIconBtn — «Подключить узел» на телефоне: иконка + (паттерн .ns-new).
+function ConnectNodeIconBtn() {
+  const s = useStore();
+  if (s.page !== 'nodes') return null;
+  return html`<button class="icon-btn ns-new" type="button" title=${T.nodes.connect}
+    aria-label=${T.nodes.connect}
+    onClick=${() => actions.openDialog('enroll-node')}>
+    ${Icon({ name: 'plus' })}
+  </button>`;
+}
+
 function Notifications() {
   const s = useStore();
   const n = s.counts.notifications || 0;
@@ -83,6 +121,10 @@ export function Topbar() {
     <div class="topbar-actions">
       ${NewSessionButton()}
       ${NewSessionIconBtn()}
+      ${AddServerButton()}
+      ${AddServerIconBtn()}
+      ${ConnectNodeButton()}
+      ${ConnectNodeIconBtn()}
       ${Notifications()}
       ${ThemeToggle()}
     </div>

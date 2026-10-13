@@ -74,22 +74,16 @@ function NodeCard(props) {
 
 export function NodesPage() {
   const s = useStore();
-  const [enroll, setEnroll] = useState(false);
   if (!s.loaded) {
     return html`<div class="page"><div class="skeleton" style=${{ height: '200px' }}></div></div>`;
   }
   if (s.pageParam) return NodeDetail({ host: s.pageParam });
   return html`<div class="page">
-    <div class="page-head-row">
-      <h2 class="detail-title">${s.nodes.length + ' ' + T.pages.nodes.toLowerCase()}</h2>
-      <${Button} variant="primary" label=${T.nodes.connect} onClick=${() => setEnroll(true)} />
-    </div>
     ${s.nodes.length
       ? html`<div class="card-grid">${s.nodes.map((n) => NodeCard({
           n, count: s.sessions.filter((x) => x.node_id === n.node_id).length }))}</div>`
       : html`<${EmptyState} icon="monitor" title=${T.empty.nodes.title} text=${T.empty.nodes.text}
-          actionLabel=${T.empty.nodes.action} onAction=${() => setEnroll(true)} />`}
-    ${enroll ? html`<${NodeEnroll} onClose=${() => setEnroll(false)} />` : null}
+          actionLabel=${T.empty.nodes.action} onAction=${() => actions.openDialog('enroll-node')} />`}
   </div>`;
 }
 
@@ -123,7 +117,7 @@ function NodeDetail({ host }) {
 }
 
 // --- Подключение узла (14, CONTROL 1, J7): одна команда ---
-function NodeEnroll({ onClose }) {
+export function NodeEnroll({ onClose }) {
   const s = useStore();
   const [cmd, setCmd] = useState('');
   const [user, setUser] = useState('');

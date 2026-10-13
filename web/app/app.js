@@ -3,7 +3,7 @@
 // W4: заголовок вкладки «(N) RunPilot» (11.11) и маркер data-sse-id для R8.
 import { html } from './html.js';
 import { useEffect } from 'preact/hooks';
-import { useStore } from './store.js';
+import { useStore, actions } from './store.js';
 import { T } from './i18n/ru.js';
 import { Sidebar } from './components/sidebar.js';
 import { Topbar } from './components/topbar.js';
@@ -12,6 +12,8 @@ import { CommandBar } from './components/command-bar.js';
 import { Banner } from './components/banner.js';
 import { PageView } from './views/pages.js';
 import { NewSessionDialog } from './components/new-session-dialog.js';
+import { ServerWizard } from './views/servers.js';
+import { NodeEnroll } from './views/nodes.js';
 import { TerminalPage } from './components/terminal.js';
 import { BrowserViewPage } from './components/browser-view.js';
 import { Toasts } from './components/toasts.js';
@@ -21,6 +23,8 @@ function DialogHost() {
   const s = useStore();
   if (!s.dialog) return null;
   if (s.dialog.name === 'new-session') return html`<${NewSessionDialog} />`;
+  if (s.dialog.name === 'add-server') return html`<${ServerWizard} onClose=${actions.closeDialog} />`;
+  if (s.dialog.name === 'enroll-node') return html`<${NodeEnroll} onClose=${actions.closeDialog} />`;
   return null;
 }
 

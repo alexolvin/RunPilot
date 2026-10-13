@@ -6,8 +6,7 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import { useStore, actions } from '../store.js';
 import { get, post } from '../api.js';
 import { T } from '../i18n/ru.js';
-import { stateColorVar } from '../state-style.js';
-import { classLabel, whyText, fmtDur } from '../labels.js';
+import { whyText, fmtDur } from '../labels.js';
 import { UI, LAUNCH, FMT, W6 } from '../constants.js';
 import { ServerCard } from '../components/server-card.js';
 import { SessionRow } from '../components/session-row.js';
@@ -185,9 +184,7 @@ export function QueuePage() {
             ${queuedRows.slice(0, UI.queueWorkMax).map((row) => {
               const why = whyText(s.meta, 'ineligible', row.why);
               const srs = serverReasonsText(row.server_reasons);
-              const cTone = stateColorVar(String(row.class).toUpperCase());
               return html`<div class="srow qrow" onClick=${() => navigate('sessions', row.sid)}>
-                <span class="qrow-pos">${row.rank}</span>
                 <div class="srow-main">
                   <span class="srow-name" title=${row.sid}>${row.session}</span>
                   ${row.node_id ? html`<span class="srow-sub">${row.node_id}</span>` : null}
@@ -196,7 +193,6 @@ export function QueuePage() {
                 </div>
                 <div class="srow-side">
                   ${row.held ? html`<${Badge} tone="var(--color-warning)" label=${T.queue.held} />` : null}
-                  <${Badge} tone=${cTone} label=${classLabel(s.meta, row.class)} />
                   ${row.held && row.held_since ? html`<${HeldTimer} since=${row.held_since} />` : null}
                   <span class="qrow-wait">${row.wait_sec}${T.units.sec}</span>
                   <${IconButton} variant="secondary" icon="file-text" title=${T.session.editLaunch}
