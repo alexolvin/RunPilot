@@ -342,6 +342,14 @@ while [ $# -gt 0 ]; do
     *) shift ;;
   esac
 done
+# Останавливаем запущенный узел (если есть), чтобы заменить бинарник:
+# иначе curl -o $BIN → exit 23 (text-file-busy, ELF занят). Сервис перезапустится
+# ниже (service install node), если установка дойдёт до конца.
+if [ "$(id -u)" = "0" ]; then
+  systemctl stop runpilot-node 2>/dev/null || true
+else
+  systemctl --user stop runpilot-node 2>/dev/null || true
+fi
 echo "runpilot: скачиваю бинарник…"
 HDR="$(mktemp)"
 trap 'rm -f "$HDR"' EXIT
@@ -580,10 +588,27 @@ func (s *Server) handleNodeDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	switch mode {
 	case "now":
-		// uninstall (best-effort) + отзыв токена + снять панели.
-		if rep, err := s.dispatchToNodeTimeout(r.Context(), host, proto.New(proto.KindUninstall), s.nodeOpTimeout()); err == nil {
-			s.log.Info("api: node delete: uninstall", "host", host, "result", rep.Result)
+		// uninstall: узел сам снимает сервис (systemctl disable+stop, rm
+		// бинарника/конфига). При ошибке — отмена удаления (узел остаётся в
+		// координаторе) + реальная ошибка пользователю.
+		rep, err := s.dispatchToNodeTimeout(r.Context(), host, proto.New(proto.KindUninstall), s.nodeOpTimeout())
+		if err != nil {
+			s.log.Warn("api: node delete: uninstall failed", "host", host, "err", err)
+			httpError(w, http.StatusServiceUnavailable, "NODE_OFFLINE",
+				"узел недоступен, не удалось снять: "+err.Error())
+			return
 		}
+		if rep.Result != proto.ResUninstalled {
+			detail := rep.Detail
+			if detail == "" {
+				detail = "узел не подтвердил снятие"
+			}
+			s.log.Warn("api: node delete: uninstall failed", "host", host, "detail", detail)
+			httpError(w, http.StatusServiceUnavailable, "UNINSTALL_FAILED",
+				"не удалось удалить узел: "+detail)
+			return
+		}
+		s.log.Info("api: node delete: uninstall", "host", host, "result", rep.Result)
 		// Токен узла per-host (не per-user): извлекаем host из nodeID.
 		_ = s.store.RevokeNodeToken(hostOf(host), s.clk.Now())
 		s.hub.DetachHost(host)

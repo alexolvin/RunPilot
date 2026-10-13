@@ -449,12 +449,66 @@ func (n *Node) config(ctx context.Context, m proto.Msg) (*Reply, error) {
 
 // --- uninstall (5.3): снять узел, не трогая tmux/кодеры ---
 
+// tmuxBlockStart/End — маркеры блока runpilot в ~/.tmux.conf (дубликат
+// cmd/runpilot/tmuxsetup.go: package main не импортируется из internal/node).
+const (
+	tmuxBlockStart = "# >>> runpilot >>>"
+	tmuxBlockEnd   = "# <<< runpilot <<<"
+)
+
+// systemctlNodeArgs — аргументы systemctl для runpilot-node: user-юнит
+// (дефолт) или system-юнит (root).
+func systemctlNodeArgs(subcmd string) []string {
+	if os.Geteuid() == 0 {
+		return []string{subcmd, "runpilot-node"}
+	}
+	return []string{"--user", subcmd, "runpilot-node"}
+}
+
 func (n *Node) uninstall(ctx context.Context, m proto.Msg) (*Reply, error) {
-	// Реальная очистка: systemctl stop/rm runpilot-node, rm бинарника,
-	// secrets.env, блока runpilot в ~/.tmux.conf. tmux-сессии/кодеры остаются
-	// (станут UNMANAGED). Здесь — best-effort best: служба остановлена
-	// координатором, узел завершится после ответа.
+	home, _ := os.UserHomeDir()
+	// Синхронная очистка (до reply): disable сервиса (Restart=always → иначе
+	// systemd перезапустит) + удаление конфига/secrets/tmux-блока/юнит-файла/
+	// бинарника. На Linux удаление работающего ELF и unit-файла безопасно.
+	_ = exec.Command("systemctl", systemctlNodeArgs("disable")...).Run()
+	cfgDir := filepath.Join(home, ".config", "runpilot")
+	_ = os.Remove(filepath.Join(cfgDir, "config.yaml"))
+	_ = os.Remove(filepath.Join(cfgDir, "secrets.env"))
+	_ = removeTmuxBlock(home)
+	_ = os.Remove(filepath.Join(home, ".config", "systemd", "user", "runpilot-node.service"))
+	_ = os.Remove("/etc/systemd/system/runpilot-node.service")
+	if bin := n.selfBinPath(); bin != "" {
+		_ = os.Remove(bin)
+	}
+	// reply уходит координатору в handleCommand после возврата. stop с
+	// задержкой: он завершает процесс узла → только после reply.
+	go func() {
+		time.Sleep(uninstallStopDelay)
+		cctx, cancel := context.WithTimeout(context.Background(), uninstallStopTimeout)
+		defer cancel()
+		_, _ = exec.CommandContext(cctx, "systemctl", systemctlNodeArgs("stop")...).CombinedOutput()
+	}()
 	return &Reply{CmdID: m.CmdID, Result: proto.ResUninstalled}, nil
+}
+
+// removeTmuxBlock — убрать блок runpilot (между маркерами) из ~/.tmux.conf.
+func removeTmuxBlock(home string) error {
+	path := filepath.Join(home, ".tmux.conf")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	s := string(data)
+	start := strings.Index(s, tmuxBlockStart)
+	end := strings.Index(s, tmuxBlockEnd)
+	if start < 0 || end < 0 || end < start {
+		return nil // блока нет
+	}
+	tail := s[end+len(tmuxBlockEnd):]
+	if i := strings.IndexByte(tail, '\n'); i >= 0 {
+		tail = tail[i+1:]
+	}
+	return os.WriteFile(path, []byte(s[:start]+tail), tmuxConfFilePerm)
 }
 
 // --- update (14.2): самообновление ---

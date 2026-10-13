@@ -139,4 +139,13 @@ const (
 	defaultScrollback  = 3000
 	defaultAttachMaxKB = 512
 	kbInBytes          = 1024
+
+	// uninstallStopDelay — задержка перед `systemctl stop runpilot-node` в
+	// uninstall (5.3): reply должен улететь координатору ДО stop (stop
+	// завершает процесс узла). 500 мс достаточно для локальной ws-записи.
+	uninstallStopDelay = 500 * time.Millisecond
+	// uninstallStopTimeout — таймаут `systemctl stop` (не порог ТЗ).
+	uninstallStopTimeout = 10 * time.Second
+	// tmuxConfFilePerm — права ~/.tmux.conf при удалении блока runpilot.
+	tmuxConfFilePerm = 0o644
 )

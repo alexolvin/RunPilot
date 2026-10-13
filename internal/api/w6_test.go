@@ -98,18 +98,44 @@ func distStatus(t *testing.T, url, token string) int {
 // --- CONTROL 7: удаление узла в обоих режимах ---
 
 func TestNodeDeleteBothModesControl7(t *testing.T) {
-	ts, st, _ := testServer(t)
+	ts, st, hub := testServer(t)
 
-	// Режим now: токен отзывается сразу.
+	// Режим now: узел отвечает на uninstall → токен отзывается сразу.
 	tok1 := mustEnroll(t, ts)
 	if err := st.BindTokenHost(tok1, "host-now", time.Now()); err != nil {
 		t.Fatal(err)
 	}
+	addFakeNode(t, hub, "host-now", proto.ResUninstalled, "")
 	if code, _ := doJSON(t, http.MethodDelete, ts.URL+"/api/v1/nodes/host-now?mode=now", nil); code != http.StatusOK {
 		t.Fatalf("delete now = %d, хочу 200", code)
 	}
 	if _, ok := st.VerifyNodeToken(tok1); ok {
 		t.Error("reжим now: токен должен быть отозван")
+	}
+
+	// Режим now + ошибка uninstall → отмена удаления (503), токен жив.
+	tokFail := mustEnroll(t, ts)
+	if err := st.BindTokenHost(tokFail, "host-fail", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	addFakeNode(t, hub, "host-fail", "uninstall_failed", "systemctl stop: permission denied")
+	if code, _ := doJSON(t, http.MethodDelete, ts.URL+"/api/v1/nodes/host-fail?mode=now", nil); code != http.StatusServiceUnavailable {
+		t.Fatalf("delete now (ошибка uninstall) = %d, хочу 503", code)
+	}
+	if _, ok := st.VerifyNodeToken(tokFail); !ok {
+		t.Error("режим now (ошибка): токен не должен быть отозван (отмена удаления)")
+	}
+
+	// Узел недоступен (нет соединения) → отмена удаления (503), токен жив.
+	tokOff := mustEnroll(t, ts)
+	if err := st.BindTokenHost(tokOff, "host-off", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := doJSON(t, http.MethodDelete, ts.URL+"/api/v1/nodes/host-off?mode=now", nil); code != http.StatusServiceUnavailable {
+		t.Fatalf("delete now (узел offline) = %d, хочу 503", code)
+	}
+	if _, ok := st.VerifyNodeToken(tokOff); !ok {
+		t.Error("режим now (offline): токен не должен быть отозван (отмена удаления)")
 	}
 
 	// Режим after_turns: токен жив, пометка на удаление.
