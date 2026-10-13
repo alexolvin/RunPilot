@@ -86,6 +86,10 @@ const (
 	// distVersionTimeout — таймаут `<dist> version` (W12: защита от stale dist).
 	distVersionTimeout = 10 * time.Second
 
+	// enrollInstallTimeout — таймаут ssh-установки узла (auto_install):
+	// скачивание бинарника + install + systemd. 5 мин достаточно для tailnet.
+	enrollInstallTimeout = 5 * time.Minute
+
 	// Медиа-пробы (цикл W15, этап 2). Генерация — ffmpeg drawtext (DejaVu).
 	// mediaProbeFontPath — шрифт для чисел на кадре (системный DejaVu).
 	mediaProbeFontPath = "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf"

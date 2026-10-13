@@ -6,7 +6,7 @@ import { useState, useEffect } from 'preact/hooks';
 import { useStore, actions } from '../store.js';
 import { post, del } from '../api.js';
 import { T } from '../i18n/ru.js';
-import { HTTP, W6, FMT } from '../constants.js';
+import { HTTP, FMT } from '../constants.js';
 import { sessionStateLabel, whyText } from '../labels.js';
 import { EmptyState } from '../components/empty-state.js';
 import { SessionRow } from '../components/session-row.js';
@@ -119,26 +119,17 @@ function NodeDetail({ host }) {
 // --- Подключение узла (14, CONTROL 1, J7): одна команда ---
 export function NodeEnroll({ onClose }) {
   const s = useStore();
-  const [cmd, setCmd] = useState('');
   const [user, setUser] = useState('');
   const [host, setHost] = useState('');
   const [ready, setReady] = useState(false);
-  const [copied, setCopied] = useState(false);
   // Базовый набор узлов на момент открытия: новый узел (node_id) = «подключился».
   const base = useState(() => new Set(s.nodes.map((n) => n.node_id)))[0];
+  // Результат установки (auto_install) — из store (SSE NODE_ENROLL).
+  const enroll = s.enroll;
 
-  // host/user меняется → новый enroll-токен + install-команда (ssh <user>@<host>).
-  useEffect(() => {
-    let live = true;
-    setCmd('');
-    post('/api/v1/nodes/enroll', {
-      user: user.trim() || undefined,
-      host: host.trim() || undefined,
-    }).then((r) => {
-      if (live && r.ok && r.data && r.data.install) setCmd(r.data.install);
-    });
-    return () => { live = false; };
-  }, [user, host]);
+  // При открытии диалога сбрасываем состояние установки (не показывать чужой
+  // результат прошлой попытки).
+  useEffect(() => { actions.setEnroll(null); }, []);
 
   useEffect(() => {
     if (ready) return;
@@ -146,13 +137,34 @@ export function NodeEnroll({ onClose }) {
     if (isNew) setReady(true);
   }, [s.nodes]);
 
-  const copy = () => {
-    try { navigator.clipboard.writeText(cmd); setCopied(true); setTimeout(() => setCopied(false), W6.copyFlashMs); } catch { /* нет clipboard */ }
+  // «Добавить» — автоустановка: координатор сам выполняет ssh, результат
+  // приходит по SSE (NODE_ENROLL).
+  const add = () => {
+    const h = host.trim();
+    if (!h) return;
+    actions.setEnroll({ status: 'installing', host: h, output: '' });
+    post('/api/v1/nodes/enroll', {
+      user: user.trim() || undefined,
+      host: h,
+      auto_install: true,
+    }).then((r) => {
+      if (!(r.ok || r.status === HTTP.accepted)) {
+        actions.setEnroll({ status: 'failed', host: h,
+          output: (r.data && r.data.detail) || ('HTTP ' + r.status) });
+      }
+    }).catch(() => {
+      actions.setEnroll({ status: 'failed', host: h, output: 'network' });
+    });
   };
+
+  const installing = !!(enroll && enroll.status === 'installing');
+  const done = !!(enroll && (enroll.status === 'success' || enroll.status === 'failed'));
 
   return html`<${Dialog} title=${T.nodes.enTitle} onClose=${onClose}
     footer=${html`
-      <${Button} variant="primary" label=${T.nodes.enClose} onClick=${onClose} />`}>
+      <${Button} variant="secondary" label=${T.nodes.enClose} onClick=${onClose} />
+      ${!ready && !done ? html`<${Button} variant="primary" label=${T.nodes.enAdd}
+        loading=${installing} disabled=${!host.trim() || installing} onClick=${add} />` : null}`}>
     <p class="dialog-note">${T.nodes.enNote}</p>
     <div class="field" style=${{ marginBottom: 'var(--space-3)' }}>
       <label>${T.nodes.enHost}</label>
@@ -166,11 +178,12 @@ export function NodeEnroll({ onClose }) {
         onInput=${(e) => setUser(e.target.value)} />
       <p class="dialog-note" style=${{ marginTop: 'var(--space-1)' }}>${T.nodes.enUserNote}</p>
     </div>
-    ${cmd ? html`
-      <label style=${{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>${T.nodes.enCommand}</label>
-      <div class="code-block">${cmd}</div>
-      <${Button} variant="secondary" label=${copied ? '✓' : T.nodes.enCopy} onClick=${copy} />`
-      : html`<div class="skeleton" style=${{ height: '60px' }}></div>`}
+    ${installing ? html`<p class="dialog-note">${T.nodes.enInstalling}</p>` : null}
+    ${done ? html`
+      <p class=${enroll.status === 'success' ? 'dialog-ok' : 'dialog-err'}>
+        ${enroll.status === 'success' ? T.nodes.enInstallOk : T.nodes.enInstallFail}
+      </p>
+      ${enroll.output ? html`<div class="code-block">${enroll.output}</div>` : null}` : null}
     <p class=${ready ? 'dialog-ok' : 'dialog-note'} style=${{ marginTop: 'var(--space-3)' }}>
       ${ready ? T.nodes.enConnected : T.nodes.enWaiting}
     </p>

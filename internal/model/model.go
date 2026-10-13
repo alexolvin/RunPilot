@@ -397,6 +397,9 @@ const (
 	// v2 (8.2): live-множество внешних кодеров изменилось (появился/исчез/
 	// сменил статус). Веб ре-берёт GET /externals (event-driven, не поллинг).
 	KindExternals = "EXTERNALS"
+	// Подключение узла (auto_install): результат ssh-установки. payload:
+	// result (ok/failed), output. Server = host узла.
+	KindNodeEnroll = "NODE_ENROLL"
 )
 
 // Коды снятия аренды (раздел 8 ТЗ + диспетчеризация).

@@ -48,6 +48,9 @@ let S = {
   terminal: null,
   // ТЗ Relay §8: живой просмотр вкладки браузера. {tab, url} | null.
   browserView: null,
+  // Подключение узла (auto_install): {status: 'installing'|'success'|'failed',
+  // host, output} | null. Заполняется событием SSE NODE_ENROLL.
+  enroll: null,
 };
 
 function set(patch) {
@@ -287,6 +290,10 @@ export const actions = {
   closeBrowserView() {
     set({ browserView: null });
   },
+  // Подключение узла (auto_install): состояние установки (устанавливаем/результат).
+  setEnroll(enroll) {
+    set({ enroll });
+  },
 
   // applyEvent — ЕДИНСТВЕННОЕ место применения SSE-событий к состоянию (R8).
   // Каждое событие двигает sseId (маркер для замера события→DOM) и точечно
@@ -303,6 +310,14 @@ export const actions = {
       // (event-driven, не поллинг). set() сдвинет sseId (маркер R8).
       actions.loadExternals();
       set(patch);
+      return;
+    }
+    if (ev.kind === 'NODE_ENROLL') {
+      // Подключение узла (auto_install): результат ssh-установки.
+      set({ enroll: {
+        status: pl.result === 'ok' ? 'success' : 'failed',
+        host: ev.server, output: pl.output || '',
+      } });
       return;
     }
     if ((ev.kind === 'SESSION_STATE' || ev.kind === 'HOLD') && ev.sid &&

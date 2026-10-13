@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"runpilot/internal/config"
+	"runpilot/internal/model"
 	"runpilot/internal/proto"
 	"runpilot/internal/store"
 )
@@ -89,8 +90,9 @@ func (s *Server) handleNodeEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		User string `json:"user"`
-		Host string `json:"host"`
+		User        string `json:"user"`
+		Host        string `json:"host"`
+		AutoInstall bool   `json:"auto_install"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	user := strings.TrimSpace(body.User)
@@ -112,22 +114,62 @@ func (s *Server) handleNodeEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	base := s.requestBase(r)
-	install := "curl -fsSL " + base + "/enroll/" + tok.Token + "/install.sh | bash"
+	curlCmd := "curl -fsSL " + base + "/enroll/" + tok.Token + "/install.sh | bash"
+	install := curlCmd
 	if host != "" {
 		// ssh на целевую машину: узел работает от <user> (или от пользователя
-		// ssh, если user пусто). Оператор запускает команду со своей машины.
+		// ssh, если user пусто).
 		target := host
 		if user != "" {
 			target = user + "@" + host
 		}
-		install = "ssh " + target + " '" + install + "'"
+		if body.AutoInstall {
+			// Автоустановка: ssh выполняет координатор (нереинтерактивно).
+			install = "ssh -o BatchMode=yes -o ConnectTimeout=10 " +
+				"-o StrictHostKeyChecking=accept-new " + target + " '" + curlCmd + "'"
+		} else {
+			// Ручной режим: оператор запускает команду со своей машины.
+			install = "ssh " + target + " '" + curlCmd + "'"
+		}
 	}
+
 	w.Header().Set("Content-Type", "application/json")
+	if body.AutoInstall && host != "" {
+		// Ауто-установка: ssh в фоне, результат — по SSE (NODE_ENROLL).
+		go s.runEnrollInstall(host, install)
+		w.WriteHeader(http.StatusAccepted)
+		json.NewEncoder(w).Encode(map[string]string{
+			"token":  tok.Token,
+			"status": "installing",
+			"host":   host,
+		})
+		return
+	}
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{
 		"token":    tok.Token,
 		"dist_url": base + "/enroll/" + tok.Token + "/runpilot",
 		"install":  install,
+	})
+}
+
+// runEnrollInstall — фоновая ssh-установка узла (auto_install). Результат
+// (ok/failed + вывод) уходит в веб событием SSE NODE_ENROLL (Server = host).
+func (s *Server) runEnrollInstall(host, install string) {
+	ctx, cancel := context.WithTimeout(context.Background(), enrollInstallTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "bash", "-c", install)
+	out, err := cmd.CombinedOutput()
+	result := "ok"
+	if err != nil {
+		result = "failed"
+	}
+	s.log.Info("api: node enroll install", "host", host, "result", result, "err", err)
+	payload, _ := json.Marshal(map[string]any{
+		"result": result, "output": strings.TrimSpace(string(out)),
+	})
+	_ = s.store.EventRecord(model.Event{
+		TS: s.clk.Now(), Kind: model.KindNodeEnroll, Server: host, Payload: payload,
 	})
 }
 
