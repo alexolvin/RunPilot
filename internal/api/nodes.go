@@ -588,10 +588,20 @@ func (s *Server) handleNodeDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	switch mode {
 	case "now":
+		// Hub/dispatch/Unregister — per-nodeID (host:os_user), а DELETE-URL
+		// несёт host → резолвим nodeID. Узла нет в hub = offline → отмена
+		// удаления (503): снять сервис по ssh невозможно.
+		nodeID, ok := s.nodeIDForHost(host)
+		if !ok {
+			s.log.Warn("api: node delete: node offline", "host", host)
+			httpError(w, http.StatusServiceUnavailable, "NODE_OFFLINE",
+				"узел не подключён, не удалось снять сервис: "+host)
+			return
+		}
 		// uninstall: узел сам снимает сервис (systemctl disable+stop, rm
 		// бинарника/конфига). При ошибке — отмена удаления (узел остаётся в
 		// координаторе) + реальная ошибка пользователю.
-		rep, err := s.dispatchToNodeTimeout(r.Context(), host, proto.New(proto.KindUninstall), s.nodeOpTimeout())
+		rep, err := s.dispatchToNodeTimeout(r.Context(), nodeID, proto.New(proto.KindUninstall), s.nodeOpTimeout())
 		if err != nil {
 			s.log.Warn("api: node delete: uninstall failed", "host", host, "err", err)
 			httpError(w, http.StatusServiceUnavailable, "NODE_OFFLINE",
@@ -610,11 +620,11 @@ func (s *Server) handleNodeDelete(w http.ResponseWriter, r *http.Request) {
 		}
 		s.log.Info("api: node delete: uninstall", "host", host, "result", rep.Result)
 		// Токен узла per-host (не per-user): извлекаем host из nodeID.
-		_ = s.store.RevokeNodeToken(hostOf(host), s.clk.Now())
-		s.hub.DetachHost(host)
-		s.hub.Unregister(host)
+		_ = s.store.RevokeNodeToken(hostOf(nodeID), s.clk.Now())
+		s.hub.DetachHost(nodeID)
+		s.hub.Unregister(nodeID)
 		if s.sched != nil {
-			s.sched.NodeLost(host)
+			s.sched.NodeLost(nodeID)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"deleted": host})
@@ -781,6 +791,18 @@ func hostOf(nodeID string) string {
 		return nodeID[:i]
 	}
 	return nodeID
+}
+
+// nodeIDForHost — nodeID (host:os_user) первого узла с данным host. Hub/
+// dispatch/Unregister — per-nodeID, а DELETE-URL несёт host. Пустой os_user
+// (старые узлы) → nodeID == host.
+func (s *Server) nodeIDForHost(host string) (string, bool) {
+	for _, n := range s.hub.Nodes() {
+		if n.Host == host {
+			return n.ID(), true
+		}
+	}
+	return "", false
 }
 
 // nodeSettingsCheck — результат проверки ~/.qwen/settings.json одного узла.
