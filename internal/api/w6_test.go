@@ -193,21 +193,22 @@ func TestEnrollFlow(t *testing.T) {
 	}
 }
 
-// TestEnrollUser — user-параметр enroll (ТЗ «определение пользователя для
-// создания нового узла через web»): install-команда идёт через sudo -u <user>
-// (узел работает от этого пользователя OS); некорректное имя → 400
-// (защита от инъекции в shell-строку).
+// TestEnrollUser — user+host-параметры enroll (ТЗ «определение пользователя
+// для создания нового узла через web»): install-команда идёт через
+// ssh <user>@<host> (узел работает от этого пользователя OS, без sudo на
+// целевой); некорректные user/host → 400 (защита от инъекции в shell-строку).
 func TestEnrollUser(t *testing.T) {
 	ts, _, _ := testServer(t)
-	// С user → sudo -u <user> в команде установки.
-	resp, err := httpPostJSON(t, ts.URL+"/api/v1/nodes/enroll", map[string]any{"user": "coder1"})
+	// user + host → ssh <user>@<host> в команде установки.
+	resp, err := httpPostJSON(t, ts.URL+"/api/v1/nodes/enroll",
+		map[string]any{"user": "coder1", "host": "vzu5-big"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("enroll user = %d (тело %s), хочу 201", resp.StatusCode, body)
+		t.Fatalf("enroll user+host = %d (тело %s), хочу 201", resp.StatusCode, body)
 	}
 	var out struct {
 		Install string `json:"install"`
@@ -215,18 +216,42 @@ func TestEnrollUser(t *testing.T) {
 	if err := json.Unmarshal(body, &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.Install, "sudo -u coder1") {
-		t.Errorf("install не содержит sudo -u coder1: %s", out.Install)
+	if !strings.Contains(out.Install, "ssh coder1@vzu5-big") {
+		t.Errorf("install не содержит ssh coder1@vzu5-big: %s", out.Install)
+	}
+	// Только host → ssh <host> (без user).
+	respH, err := httpPostJSON(t, ts.URL+"/api/v1/nodes/enroll", map[string]any{"host": "vzu5-big"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bodyH, _ := io.ReadAll(respH.Body)
+	respH.Body.Close()
+	var outH struct {
+		Install string `json:"install"`
+	}
+	_ = json.Unmarshal(bodyH, &outH)
+	if !strings.Contains(outH.Install, "ssh vzu5-big ") {
+		t.Errorf("install (только host) не содержит ssh vzu5-big: %s", outH.Install)
 	}
 	// Некорректный user (пробел/инъекция) → 400.
 	resp2, err := httpPostJSON(t, ts.URL+"/api/v1/nodes/enroll",
-		map[string]any{"user": "bad user; rm -rf /"})
+		map[string]any{"user": "bad user; rm -rf /", "host": "vzu5-big"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	resp2.Body.Close()
 	if resp2.StatusCode != http.StatusBadRequest {
 		t.Errorf("некорректный user = %d, хочу 400", resp2.StatusCode)
+	}
+	// Некорректный host (инъекция) → 400.
+	resp3, err := httpPostJSON(t, ts.URL+"/api/v1/nodes/enroll",
+		map[string]any{"host": "host; rm -rf /"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp3.Body.Close()
+	if resp3.StatusCode != http.StatusBadRequest {
+		t.Errorf("некорректный host = %d, хочу 400", resp3.StatusCode)
 	}
 }
 

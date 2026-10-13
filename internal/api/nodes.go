@@ -71,14 +71,18 @@ func (s *Server) nodeAuth(next http.Handler) http.Handler {
 
 // --- подключение узла (раздел 14, CONTROL 1) ---
 
-// userNameRe — валидное имя пользователя Unix. Защита от инъекции: user
-// встраивается в install-команду (shell-строка).
+// userNameRe — валидное имя пользователя Unix. Защита от инъекции: user и
+// host встраиваются в install-команду (shell-строка).
 var userNameRe = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
 
+// hostRe — валидное имя хоста / tailscale-name. Защита от инъекции.
+var hostRe = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$`)
+
 // handleNodeEnroll — POST /api/v1/nodes/enroll: создать enroll-токен.
-// user (опц.) — от какого пользователя OS работать узел: install выполняется
-// от него (sudo -u), user-служба systemd — его. Пусто = пользователь,
-// запустивший команду (старое поведение).
+// host (опц.) — целевая машина (tailscale-name): install выполняется через
+// ssh <user>@<host> (оператор со своей машины, без sudo на целевой).
+// user (опц.) — от какого пользователя OS работать узел. Пусто = локальный
+// curl (старое поведение).
 func (s *Server) handleNodeEnroll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		httpError(w, http.StatusMethodNotAllowed, "METHOD", "POST")
@@ -86,12 +90,19 @@ func (s *Server) handleNodeEnroll(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		User string `json:"user"`
+		Host string `json:"host"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	user := strings.TrimSpace(body.User)
+	host := strings.TrimSpace(body.Host)
 	if user != "" && !userNameRe.MatchString(user) {
 		httpError(w, http.StatusBadRequest, "BAD_USER",
 			"некорректное имя пользователя (допустимы [a-z_][a-z0-9_-]*)")
+		return
+	}
+	if host != "" && !hostRe.MatchString(host) {
+		httpError(w, http.StatusBadRequest, "BAD_HOST",
+			"некорректное имя хоста (допустимы [a-z0-9.-])")
 		return
 	}
 	now := s.clk.Now()
@@ -102,11 +113,14 @@ func (s *Server) handleNodeEnroll(w http.ResponseWriter, r *http.Request) {
 	}
 	base := s.requestBase(r)
 	install := "curl -fsSL " + base + "/enroll/" + tok.Token + "/install.sh | bash"
-	if user != "" {
-		// HOME явный (getent): sudo не обязан подставлять домашний каталог
-		// целевого пользователя — иначе конфиг уйдёт в $HOME оператора.
-		install = "sudo -u " + user + " bash -c 'export HOME=\"$(getent passwd " + user +
-			" | cut -d: -f6)\"; " + install + "'"
+	if host != "" {
+		// ssh на целевую машину: узел работает от <user> (или от пользователя
+		// ssh, если user пусто). Оператор запускает команду со своей машины.
+		target := host
+		if user != "" {
+			target = user + "@" + host
+		}
+		install = "ssh " + target + " '" + install + "'"
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
