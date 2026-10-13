@@ -299,6 +299,8 @@ func Schema() []SettingField {
 		// Браузер координатора (ТЗ Relay, раздел 8/16).
 		stringField("browser.chrome_path", "", "Браузер", "Путь к Chrome",
 			"Абсолютный путь к Google Chrome.", ApplyNextTick),
+		stringField("browser.proxy", "", "Браузер", "Прокси",
+			"Прокси для Chrome (--proxy-server), например socks5://127.0.0.1:1080.", ApplyNextTick),
 		stringField("browser.xvfb_path", "", "Браузер", "Путь к Xvfb",
 			"Абсолютный путь к Xvfb.", ApplyNextTick),
 		stringField("browser.display", "", "Браузер", "Дисплей",

@@ -86,8 +86,8 @@ func TestSettingsGetReturnsWorkingValues(t *testing.T) {
 	ts, st, _ := testServer(t)
 	// Пустая БД → значения из defaults.
 	m := getSettings(t, ts)
-	if len(m) != 140 {
-		t.Fatalf("ключей = %d, хочу 140", len(m))
+	if len(m) != 141 {
+		t.Fatalf("ключей = %d, хочу 141", len(m))
 	}
 	if v, ok := m["scheduler.aging_sec"].(float64); !ok || int(v) != 900 {
 		t.Fatalf("scheduler.aging_sec = %v (defaults 900)", m["scheduler.aging_sec"])
@@ -122,8 +122,8 @@ func TestSettingsSchemaEndpoint(t *testing.T) {
 	if err := json.Unmarshal(raw, &fields); err != nil {
 		t.Fatalf("schema не JSON: %v", err)
 	}
-	if len(fields) != 140 {
-		t.Fatalf("полей схемы = %d, хочу 140", len(fields))
+	if len(fields) != 141 {
+		t.Fatalf("полей схемы = %d, хочу 141", len(fields))
 	}
 	for _, f := range fields {
 		if f["path"] == nil || f["type"] == nil || f["group"] == nil ||

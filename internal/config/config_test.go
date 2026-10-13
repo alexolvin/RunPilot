@@ -137,7 +137,7 @@ var configKeys = []string{
 	"relay.input_wait_sec", "relay.max_auto_cycles",
 	"llm_assist", "llm_assist.class", "llm_assist.max_tokens", "llm_assist.timeout_sec",
 	"llm_assist.max_input_kb", "llm_assist.min_quote_chars",
-	"browser", "browser.chrome_path", "browser.xvfb_path", "browser.display",
+	"browser", "browser.chrome_path", "browser.proxy", "browser.xvfb_path", "browser.display",
 	"browser.screen", "browser.profile_dir", "browser.max_tabs",
 	"browser.page_load_timeout_sec", "browser.idle_stop_min", "browser.view_jpeg_quality",
 	"browser.view_max_width", "browser.view_idle_close_min",
