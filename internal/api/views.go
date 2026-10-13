@@ -42,6 +42,8 @@ type SessionView struct {
 // NodeView — узел + действия (плоско, как api.NodeInfo без Conn).
 type NodeView struct {
 	Host        string   `json:"Host"`
+	// OsUser — пользователь ОС узла; идентичность = host:os_user.
+	OsUser        string   `json:"OsUser"`
 	HostIP      string   `json:"HostIP"`
 	RUNPILOTVersion  string   `json:"RUNPILOTVersion"`
 	TmuxVersion string   `json:"TmuxVersion"`
@@ -85,7 +87,8 @@ func sessionView(rec store.SessionRecord) SessionView {
 // nodeView — узел → с действиями.
 func nodeView(n NodeInfo) NodeView {
 	return NodeView{
-		Host: n.Host, HostIP: n.HostIP, RUNPILOTVersion: n.RUNPILOTVersion,
+		Host: n.Host, OsUser: n.OsUser, HostIP: n.HostIP,
+		RUNPILOTVersion: n.RUNPILOTVersion,
 		TmuxVersion: n.TmuxVersion, OS: n.OS, Sockets: n.Sockets,
 		Actions: model.NodeActions(),
 	}

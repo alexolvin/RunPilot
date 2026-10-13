@@ -96,3 +96,37 @@ func TestNodeIdentitySpawnByName(t *testing.T) {
 		t.Errorf("код = %q, хочу NAME_IN_USE", e.Code)
 	}
 }
+
+// TestNodeIdentityStateOsUser — /api/v1/state несёт OsUser узла: веб строит
+// node_id = host:os_user из state и spawn'ит по этой идентичности. Без поля
+// веб шлёт spawn на голый host → NO_NODE («узел не подключён»).
+func TestNodeIdentityStateOsUser(t *testing.T) {
+	ts, _, hub := testServer(t)
+	addFakeNodeWithUser(t, hub, "srv1", "alice", proto.ResSpawned, "%0")
+
+	resp, err := http.Get(ts.URL + "/api/v1/state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("state = %d (тело %s), хочу 200", resp.StatusCode, body)
+	}
+	var sv struct {
+		Nodes []struct {
+			Host   string `json:"Host"`
+			OsUser string `json:"OsUser"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(body, &sv); err != nil {
+		t.Fatalf("распарсить state: %v", err)
+	}
+	if len(sv.Nodes) != 1 {
+		t.Fatalf("узлов в state = %d, хочу 1", len(sv.Nodes))
+	}
+	if sv.Nodes[0].Host != "srv1" || sv.Nodes[0].OsUser != "alice" {
+		t.Errorf("state node = %s:%s, хочу srv1:alice",
+			sv.Nodes[0].Host, sv.Nodes[0].OsUser)
+	}
+}
