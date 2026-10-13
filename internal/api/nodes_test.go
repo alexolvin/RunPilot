@@ -175,3 +175,31 @@ func TestNodeUpdateDistOK(t *testing.T) {
 		t.Fatalf("статус %d, хочу 202 (обновление запущено)", resp.StatusCode)
 	}
 }
+
+// TestParseTailnetHost — резолвинг tailnet-hostname в IPv4 tailscale-IP из JSON
+// `tailscale status --json` (MagicDNS выключен / хост не в /etc/hosts → ssh не
+// резолвит имя; координатор подставляет IP).
+func TestParseTailnetHost(t *testing.T) {
+	const statusJSON = `{
+		"Peer": {
+			"nodekey:aaa": {"HostName": "vzu5-big", "TailscaleIPs": ["100.126.222.23", "fd7a::1"]},
+			"nodekey:bbb": {"HostName": "vzu5-claw", "TailscaleIPs": ["100.95.195.40"]}
+		}
+	}`
+	t.Run("found", func(t *testing.T) {
+		ip, ok := parseTailnetHost([]byte(statusJSON), "vzu5-big")
+		if !ok || ip != "100.126.222.23" {
+			t.Fatalf("получил %q (ok=%v), хочу 100.126.222.23", ip, ok)
+		}
+	})
+	t.Run("not_a_peer", func(t *testing.T) {
+		if ip, ok := parseTailnetHost([]byte(statusJSON), "no-such-host"); ok {
+			t.Fatalf("не ожидал success, получил %q", ip)
+		}
+	})
+	t.Run("invalid_json", func(t *testing.T) {
+		if ip, ok := parseTailnetHost([]byte("not-json"), "vzu5-big"); ok {
+			t.Fatalf("не ожидал success, получил %q", ip)
+		}
+	})
+}

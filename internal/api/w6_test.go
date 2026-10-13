@@ -8,12 +8,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"runpilot/internal/clock"
+	"runpilot/internal/config"
 	"runpilot/internal/model"
 	"runpilot/internal/proto"
 )
@@ -195,11 +198,25 @@ func TestEnrollFlow(t *testing.T) {
 
 // TestEnrollUser — user+host-параметры enroll (ТЗ «определение пользователя
 // для создания нового узла через web»): install-команда идёт через
-// ssh <user>@<host> (узел работает от этого пользователя OS, без sudo на
-// целевой); некорректные user/host → 400 (защита от инъекции в shell-строку).
+// ssh <user>@<target> (узел работает от этого пользователя OS, без sudo на
+// целевой). target = tailscale-IP, если хост — peer tailnet (MagicDNS может
+// быть выкл / хост не в /etc/hosts → ssh не резолвит имя), иначе сам hostname
+// (fallback). Некорректные user/host → 400 (защита от инъекции в shell-строку).
 func TestEnrollUser(t *testing.T) {
-	ts, _, _ := testServer(t)
-	// user + host → ssh <user>@<host> в команде установки.
+	_, st, hub := testServer(t)
+	srv := NewServer(config.Defaults(), st, hub, clock.NewReal(),
+		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	// Детерминированный резолвер: vzu5-big → IP (peer), остальные — не peer.
+	srv.resolveHost = func(host string) (string, bool) {
+		if host == "vzu5-big" {
+			return "100.126.222.23", true
+		}
+		return "", false
+	}
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	// user + host (peer) → ssh <user>@<tailscale-IP>.
 	resp, err := httpPostJSON(t, ts.URL+"/api/v1/nodes/enroll",
 		map[string]any{"user": "coder1", "host": "vzu5-big"})
 	if err != nil {
@@ -216,10 +233,25 @@ func TestEnrollUser(t *testing.T) {
 	if err := json.Unmarshal(body, &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.Install, "ssh coder1@vzu5-big") {
-		t.Errorf("install не содержит ssh coder1@vzu5-big: %s", out.Install)
+	if !strings.Contains(out.Install, "ssh coder1@100.126.222.23") {
+		t.Errorf("install не содержит ssh coder1@100.126.222.23 (tailscale-IP): %s", out.Install)
 	}
-	// Только host → ssh <host> (без user).
+	// user + host (не peer) → ssh <user>@<hostname> (fallback).
+	respNS, err := httpPostJSON(t, ts.URL+"/api/v1/nodes/enroll",
+		map[string]any{"user": "coder1", "host": "other-host"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	bodyNS, _ := io.ReadAll(respNS.Body)
+	respNS.Body.Close()
+	var outNS struct {
+		Install string `json:"install"`
+	}
+	_ = json.Unmarshal(bodyNS, &outNS)
+	if !strings.Contains(outNS.Install, "ssh coder1@other-host") {
+		t.Errorf("install (не peer) не содержит ssh coder1@other-host (fallback): %s", outNS.Install)
+	}
+	// Только host (peer) → ssh <tailscale-IP> (без user).
 	respH, err := httpPostJSON(t, ts.URL+"/api/v1/nodes/enroll", map[string]any{"host": "vzu5-big"})
 	if err != nil {
 		t.Fatal(err)
@@ -230,8 +262,8 @@ func TestEnrollUser(t *testing.T) {
 		Install string `json:"install"`
 	}
 	_ = json.Unmarshal(bodyH, &outH)
-	if !strings.Contains(outH.Install, "ssh vzu5-big ") {
-		t.Errorf("install (только host) не содержит ssh vzu5-big: %s", outH.Install)
+	if !strings.Contains(outH.Install, "ssh 100.126.222.23 ") {
+		t.Errorf("install (только host) не содержит ssh 100.126.222.23: %s", outH.Install)
 	}
 	// Некорректный user (пробел/инъекция) → 400.
 	resp2, err := httpPostJSON(t, ts.URL+"/api/v1/nodes/enroll",

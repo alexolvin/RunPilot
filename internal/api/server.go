@@ -144,6 +144,11 @@ type Server struct {
 	termSeq     int
 	termMaxPerNode int
 	termIdle    time.Duration
+
+	// resolveHost — hostname → IPv4 tailscale-IP (enroll auto_install): при
+	// выключенном MagicDNS / хосте вне /etc/hosts ssh не резолвит имя. Дефолт
+	// resolveTailnetHost (tailscale status); в тестах — nil или заглушка.
+	resolveHost func(string) (string, bool)
 }
 
 // idemRec — кэшированный ответ первого запроса с данным Idempotency-Key.
@@ -236,6 +241,8 @@ func NewServer(cfg *config.Config, st *store.Store, hub *Hub, clk clock.Clock, l
 		terminals:      map[int]*terminalSession{},
 		termMaxPerNode: cfg.Web.TerminalsPerNodeMax,
 		termIdle:       time.Duration(cfg.Web.TerminalIdleMin) * time.Minute,
+		// enroll auto_install: hostname → tailscale-IP (MagicDNS может быть выкл).
+		resolveHost: resolveTailnetHost,
 	}
 }
 

@@ -79,6 +79,46 @@ var userNameRe = regexp.MustCompile(`^[a-z_][a-z0-9_-]*$`)
 // hostRe — валидное имя хоста / tailscale-name. Защита от инъекции.
 var hostRe = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$`)
 
+// resolveTailnetHost — резолвит tailnet-hostname в IPv4 tailscale-IP через
+// `tailscale status --json`. На координаторе MagicDNS может быть выключен и
+// хост может отсутствовать в /etc/hosts — тогда ssh <user>@<host> не резолвит
+// имя. Возвращает ("", false), если хост не peer tailnet или tailscale
+// недоступен — вызывающий коды падает на исходный hostname.
+func resolveTailnetHost(hostname string) (string, bool) {
+	out, err := exec.Command("tailscale", "status", "--json").Output()
+	if err != nil {
+		return "", false
+	}
+	return parseTailnetHost(out, hostname)
+}
+
+// parseTailnetHost — извлекает IPv4 tailscale-IP `hostname` из JSON
+// `tailscale status --json` (map Peer, HostName каждого peer). Возвращает
+// ("", false), если хост не peer.
+func parseTailnetHost(data []byte, hostname string) (string, bool) {
+	var status struct {
+		Peer map[string]struct {
+			HostName     string   `json:"HostName"`
+			TailscaleIPs []string `json:"TailscaleIPs"`
+		} `json:"Peer"`
+	}
+	if err := json.Unmarshal(data, &status); err != nil {
+		return "", false
+	}
+	for _, peer := range status.Peer {
+		if peer.HostName != hostname {
+			continue
+		}
+		for _, ip := range peer.TailscaleIPs {
+			// IPv4 (tailscale 100.x.y.z) — без двоеточия.
+			if !strings.Contains(ip, ":") {
+				return ip, true
+			}
+		}
+	}
+	return "", false
+}
+
 // handleNodeEnroll — POST /api/v1/nodes/enroll: создать enroll-токен.
 // host (опц.) — целевая машина (tailscale-name): install выполняется через
 // ssh <user>@<host> (оператор со своей машины, без sudo на целевой).
@@ -119,9 +159,17 @@ func (s *Server) handleNodeEnroll(w http.ResponseWriter, r *http.Request) {
 	if host != "" {
 		// ssh на целевую машину: узел работает от <user> (или от пользователя
 		// ssh, если user пусто).
-		target := host
+		// MagicDNS может быть выключен / хост не в /etc/hosts: резолвим
+		// tailnet-имя в IP, иначе ssh не найдёт хост.
+		sshHost := host
+		if s.resolveHost != nil {
+			if ip, ok := s.resolveHost(host); ok {
+				sshHost = ip
+			}
+		}
+		target := sshHost
 		if user != "" {
-			target = user + "@" + host
+			target = user + "@" + sshHost
 		}
 		if body.AutoInstall {
 			// Автоустановка: ssh выполняет координатор (нереинтерактивно).
