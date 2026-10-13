@@ -137,10 +137,10 @@ func (p *ExecRootsPusher) ResendHost(host string) {
 }
 
 // send — fire-and-forget KindExecRoots узлу.
-func (p *ExecRootsPusher) send(host string, roots []proto.ExecRoot) {
+func (p *ExecRootsPusher) send(nodeID string, roots []proto.ExecRoot) {
 	m := proto.New(proto.KindExecRoots)
 	m.ExecRoots = roots
-	if err := p.hub.PushToHost(host, m); err != nil {
-		p.log.Warn("api: execroots: push: " + err.Error(), "host", host)
+	if err := p.hub.PushToNode(nodeID, m); err != nil {
+		p.log.Warn("api: execroots: push: " + err.Error(), "node", nodeID)
 	}
 }

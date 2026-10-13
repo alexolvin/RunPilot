@@ -63,6 +63,8 @@ func embeddedNode(ctx context.Context, srv *api.Server, hub *api.Hub,
 	im := &memConn{cmds: make(chan proto.Msg, embeddedCmdChanLen), done: ctx.Done()}
 	info := &api.NodeInfo{
 		Host:        host,
+		// OsUser — пользователь ОС координатора: идентичность узла = host:os_user.
+		OsUser: node.OSUser(),
 		// host_ip встроенного узла = coordinator.bind: кодеры узла ходят в шлюз
 		// через хост gateway_url (= coordinator.bind, валидация конфига), и
 		// источником их соединений становится этот адрес — шлюз сверяет его
@@ -76,17 +78,18 @@ func embeddedNode(ctx context.Context, srv *api.Server, hub *api.Hub,
 		// 13.4: нажатия клавиш терминала → PTY-мастер узла (внутренний транспорт).
 		PtySend: func(c int, d []byte) error { n.PtyWrite(c, d); return nil },
 	}
+	nodeID := info.ID()
 	hub.Register(info)
-	srv.NodeSeen(host)
+	srv.NodeSeen(nodeID)
 	defer func() {
-		srv.NodeLost(host)
-		hub.Unregister(host)
+		srv.NodeLost(nodeID)
+		hub.Unregister(nodeID)
 	}()
-	log.Info("embedded: узел хоста подключен", "host", host, "sockets", cfg.Node.TmuxSockets)
+	log.Info("embedded: узел хоста подключен", "node", nodeID, "sockets", cfg.Node.TmuxSockets)
 
 	// node → координатор: тот же путь, что и WS-транспорт (ApplyNodeMsg).
 	send := func(m proto.Msg) error {
-		srv.ApplyNodeMsg(host, m)
+		srv.ApplyNodeMsg(nodeID, m)
 		return nil
 	}
 
@@ -115,7 +118,7 @@ func embeddedNode(ctx context.Context, srv *api.Server, hub *api.Hub,
 
 	// EXEC-корни (KindExecRoots): при подключении встроенного узла — актуальный
 	// набор (правило «кодер вне очереди»).
-	srv.ExecRootsResend(host)
+	srv.ExecRootsResend(nodeID)
 
 	// GPU-телеметрия (раздел 10 ТЗ), если включена.
 	if n.GPUEnabled() {

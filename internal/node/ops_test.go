@@ -125,7 +125,10 @@ func TestSpawn(t *testing.T) {
 	}
 }
 
-func TestSpawnNameInUse(t *testing.T) {
+// TestSpawnTmuxSessionExists — tmux-сессия с таким именем уже существует
+// (не через runpilot) → TMUX_SESSION_EXISTS (ТЗ «запуск на узле выбранного
+// пользователя»: NAME_IN_USE — для runpilot-БД координатора, здесь — tmux).
+func TestSpawnTmuxSessionExists(t *testing.T) {
 	ex := &fakeExec{}
 	ex.respond = func(name string, args ...string) (string, error) {
 		if strings.Contains(strings.Join(args, " "), "has-session") {
@@ -141,8 +144,8 @@ func TestSpawnNameInUse(t *testing.T) {
 	m.Name = "taken"
 	m.Dir = d
 	rep, _ := n.Handle(context.Background(), m)
-	if rep.Result != "NAME_IN_USE" {
-		t.Fatalf("Result = %q, хочу NAME_IN_USE", rep.Result)
+	if rep.Result != proto.ResTmuxSessionExists {
+		t.Fatalf("Result = %q, хочу %q", rep.Result, proto.ResTmuxSessionExists)
 	}
 }
 

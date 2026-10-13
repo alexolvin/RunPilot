@@ -74,7 +74,11 @@ export function useStore() {
 
 function normSession(s) {
   return {
-    sid: s.SID, name: s.Name, host: s.Host, state: s.State,
+    sid: s.SID, name: s.Name, host: s.Host, os_user: s.OsUser || '',
+    // Идентичность узла сессии = host:os_user (ТЗ «запуск на узле выбранного
+    // пользователя»); пустой os_user (старые записи) → host.
+    node_id: s.OsUser ? s.Host + ':' + s.OsUser : s.Host,
+    state: s.State,
     hold_reason: s.HoldReason || '', class: s.Class,
     state_changed_at: s.StateChangedAt, last_server: s.LastServer || '',
     agent_version: s.AgentVersion || '', profile: s.Profile || '',
@@ -108,7 +112,11 @@ function normServer(s) {
 function normNode(n) {
   const h = n.health;
   return {
-    host: n.Host, host_ip: n.HostIP, runpilot_version: n.RUNPILOTVersion,
+    host: n.Host, os_user: n.OsUser || '',
+    // Идентичность узла = host:os_user (ТЗ «запуск на узле выбранного
+    // пользователя»); пустой os_user (старые узлы) → host.
+    node_id: n.OsUser ? n.Host + ':' + n.OsUser : n.Host,
+    host_ip: n.HostIP, runpilot_version: n.RUNPILOTVersion,
     tmux_version: n.TmuxVersion, os: n.OS, sockets: n.Sockets || [],
     // W12 (ТЗ 14): несовпадение версии узла и координатора — бейдж в вебе.
     version_mismatch: !!n.VersionMismatch,

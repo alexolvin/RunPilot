@@ -453,7 +453,8 @@ func (s *Server) handleNodeDelete(w http.ResponseWriter, r *http.Request) {
 		if rep, err := s.dispatchToNodeTimeout(r.Context(), host, proto.New(proto.KindUninstall), s.nodeOpTimeout()); err == nil {
 			s.log.Info("api: node delete: uninstall", "host", host, "result", rep.Result)
 		}
-		_ = s.store.RevokeNodeToken(host, s.clk.Now())
+		// Токен узла per-host (не per-user): извлекаем host из nodeID.
+		_ = s.store.RevokeNodeToken(hostOf(host), s.clk.Now())
 		s.hub.DetachHost(host)
 		s.hub.Unregister(host)
 		if s.sched != nil {
@@ -610,7 +611,48 @@ func (s *Server) handleNodeDirs(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"result": rep.Result, "dirs": dirs,
 		"roots": rep.ProjectRoots,
+		// Домашний каталог пользователя узла — каталог по умолчанию в форме
+		// «Новая сессия» (ТЗ «запуск на узле выбранного пользователя»).
+		"home": rep.Home,
 	})
+}
+
+// hostOf — имя хоста из идентичности узла (host:os_user): часть до ':'.
+// Токены узла и часть операций per-host (не per-user), а hub/планировщик/
+// dispatch — per-nodeID. Пустой os_user (старые узлы) → nodeID == host.
+func hostOf(nodeID string) string {
+	if i := strings.Index(nodeID, ":"); i >= 0 {
+		return nodeID[:i]
+	}
+	return nodeID
+}
+
+// nodeSettingsCheck — результат проверки ~/.qwen/settings.json одного узла.
+type nodeSettingsCheck struct {
+	Node   string `json:"node"`
+	Level  string `json:"level"`  // PASS | FAIL | WARN
+	Detail string `json:"detail"`
+}
+
+// handleNodeSettingsCheck — GET /api/v1/nodes/settings-check (doctor, ТЗ
+// «запуск сессий на узле выбранного пользователя»): диспатч check_settings
+// каждому подключённому узлу; узел читает свой ~/.qwen/settings.json и
+// возвращает PASS/FAIL/WARN. Ответ — поузловая таблица.
+func (s *Server) handleNodeSettingsCheck(w http.ResponseWriter, r *http.Request) {
+	nodes := s.hub.Nodes()
+	out := make([]nodeSettingsCheck, 0, len(nodes))
+	for _, n := range nodes {
+		nodeID := n.ID()
+		m := proto.New(proto.KindCheckSettings)
+		rep, err := s.dispatchToNodeTimeout(r.Context(), nodeID, m, s.nodeOpTimeout())
+		if err != nil {
+			out = append(out, nodeSettingsCheck{Node: nodeID, Level: "WARN", Detail: "узел недоступен: " + err.Error()})
+			continue
+		}
+		out = append(out, nodeSettingsCheck{Node: nodeID, Level: rep.Result, Detail: rep.Detail})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"nodes": out})
 }
 
 // dispatchToNodeTimeout — команда узлу с коротким таймаутом.

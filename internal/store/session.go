@@ -18,6 +18,9 @@ type SessionRecord struct {
 	SID              string
 	Name             string
 	Host             string
+	// OsUser — пользователь ОС узла (идентичность узла = host:os_user).
+	// Пусто = старая запись (до миграции 023).
+	OsUser           string
 	HostIP           string
 	TmuxSession      string
 	Window           int
@@ -62,20 +65,29 @@ type SessionRecord struct {
 	RelayEnabled bool
 }
 
-const sessionCols = `sid, name, host, host_ip, tmux_session, window, pane_id,
+const sessionCols = `sid, name, host, os_user, host_ip, tmux_session, window, pane_id,
 profile, agent_version, kind, state, state_changed_at, hold_reason, class,
 constraint_kind, constraint_server, auto_enqueue, last_server,
 last_turn_end, last_migrated_from, attempts, created_at, launch_command,
 exec_pid, exec_starttime, exec_pgid, qwen_session_id, orch_url, relay_enabled`
+
+// NodeID — идентичность узла сессии: host:os_user (ТЗ «запуск сессий на
+// узле выбранного пользователя»). Пустой os_user (старые записи) → host.
+func (r SessionRecord) NodeID() string {
+	if r.OsUser == "" {
+		return r.Host
+	}
+	return r.Host + ":" + r.OsUser
+}
 
 func scanSession(row interface{ Scan(...any) error }) (SessionRecord, error) {
 	var r SessionRecord
 	var state, hold, kind, ckind, changed, turnEnd, created string
 	var auto, relayEnabled int
 	var class int
-	err := row.Scan(&r.SID, &r.Name, &r.Host, &r.HostIP, &r.TmuxSession, &r.Window,
-		&r.PaneID, &r.Profile, &r.AgentVersion, &kind, &state, &changed, &hold,
-		&class, &ckind, &r.ConstraintServer, &auto, &r.LastServer,
+	err := row.Scan(&r.SID, &r.Name, &r.Host, &r.OsUser, &r.HostIP, &r.TmuxSession,
+		&r.Window, &r.PaneID, &r.Profile, &r.AgentVersion, &kind, &state, &changed,
+		&hold, &class, &ckind, &r.ConstraintServer, &auto, &r.LastServer,
 		&turnEnd, &r.LastMigratedFrom, &r.Attempts, &created, &r.LaunchCommand,
 		&r.ExecPID, &r.ExecStarttime, &r.ExecPGID, &r.QwenSessionID,
 		&r.OrchURL, &relayEnabled)
@@ -108,20 +120,34 @@ func (s *Store) CreateSession(r SessionRecord) error {
 	}
 	return s.DoWrite(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`INSERT INTO session (
-			sid, name, host, host_ip, tmux_session, window, pane_id, profile,
-			agent_version, kind, state, state_changed_at, hold_reason, class,
-			constraint_kind, constraint_server, auto_enqueue, last_server,
+			sid, name, host, os_user, host_ip, tmux_session, window, pane_id,
+			profile, agent_version, kind, state, state_changed_at, hold_reason,
+			class, constraint_kind, constraint_server, auto_enqueue, last_server,
 			last_turn_end, last_migrated_from, attempts, created_at,
 			launch_command, exec_pid, exec_starttime, exec_pgid, qwen_session_id,
 			orch_url, relay_enabled
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-			r.SID, r.Name, r.Host, r.HostIP, r.TmuxSession, r.Window, r.PaneID,
-			r.Profile, r.AgentVersion, r.Kind, r.State, ts(r.StateChangedAt),
-			r.HoldReason, int(r.Class), r.ConstraintKind, r.ConstraintServer,
-			boolInt(r.AutoEnqueue), r.LastServer, ts(r.LastTurnEnd),
-			r.LastMigratedFrom, r.Attempts, ts(r.CreatedAt), r.LaunchCommand,
-			r.ExecPID, r.ExecStarttime, r.ExecPGID, r.QwenSessionID,
-			r.OrchURL, boolInt(r.RelayEnabled))
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			r.SID, r.Name, r.Host, r.OsUser, r.HostIP, r.TmuxSession, r.Window,
+			r.PaneID, r.Profile, r.AgentVersion, r.Kind, r.State,
+			ts(r.StateChangedAt), r.HoldReason, int(r.Class), r.ConstraintKind,
+			r.ConstraintServer, boolInt(r.AutoEnqueue), r.LastServer,
+			ts(r.LastTurnEnd), r.LastMigratedFrom, r.Attempts, ts(r.CreatedAt),
+			r.LaunchCommand, r.ExecPID, r.ExecStarttime, r.ExecPGID,
+			r.QwenSessionID, r.OrchURL, boolInt(r.RelayEnabled))
+		return err
+	})
+}
+
+// MigrateSessionOsUser — миграция старых записей (ТЗ «запуск сессий на узле
+// выбранного пользователя»): сессии узла host без os_user получают os_user
+// зарегистрировавшегося узла. Idempotent (только os_user = '').
+func (s *Store) MigrateSessionOsUser(host, osUser string) error {
+	if osUser == "" {
+		return nil
+	}
+	return s.DoWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(`UPDATE session SET os_user = ? WHERE host = ? AND os_user = ''`,
+			osUser, host)
 		return err
 	})
 }

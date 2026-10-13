@@ -1,0 +1,6 @@
+=== RUN   TestNodeIdentityCoexist
+--- PASS: TestNodeIdentityCoexist (0.03s)
+=== RUN   TestNodeIdentitySpawnByName
+--- PASS: TestNodeIdentitySpawnByName (0.03s)
+PASS
+ok  	runpilot/internal/api	(cached)

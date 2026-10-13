@@ -29,6 +29,9 @@ const (
 
 	// proto 2: сессии, обновление, каталоги (разделы 13.2/13.5/14.2 ТЗ, v2).
 	ResSpawned      = "SPAWNED"
+	ResNameInUse    = "NAME_IN_USE"
+	ResTmuxSessionExists = "TMUX_SESSION_EXISTS"
+	ResAgentNotFound = "AGENT_NOT_FOUND"
 	ResRespawned    = "RESPAWNED"
 	ResDirForbidden = "DIR_FORBIDDEN"
 	ResDirNotFound  = "DIR_NOT_FOUND"
@@ -99,6 +102,7 @@ const (
 	KindReleasePane Kind = "release_pane"
 	KindKillProcess Kind = "kill_process"
 	KindListDirs    Kind = "list_dirs"
+	KindCheckSettings Kind = "check_settings" // doctor: проверка ~/.qwen/settings.json узла
 	KindUpdate      Kind = "update"
 	KindUninstall   Kind = "uninstall"
 	KindConfig      Kind = "config"
@@ -129,7 +133,8 @@ var AllKinds = map[Kind]bool{
 	KindPaste: true, KindApprove: true, KindCompress: true,
 	KindSetStatus: true, KindSetSummary: true, KindDrain: true,
 	KindSpawn: true, KindRespawn: true, KindKillSession: true, KindReleasePane: true,
-	KindKillProcess: true, KindListDirs: true, KindUpdate: true, KindUninstall: true,
+	KindKillProcess: true, KindListDirs: true, KindCheckSettings: true,
+	KindUpdate: true, KindUninstall: true,
 	KindConfig: true, KindExecRoots: true, KindAdopt: true,
 	KindPtyOpen: true, KindPtyClose: true, KindPtyExit: true,
 	KindTurnReport: true, KindReadReportFile: true, KindDialogAnswer: true,
@@ -144,6 +149,9 @@ type Msg struct {
 	// hello
 	Host        string   `json:"host,omitempty"`
 	HostIP      string   `json:"host_ip,omitempty"`
+	// OsUser — пользователь ОС узла (user.Current). Идентичность узла =
+	// host:os_user — два узла с одним host и разными os_user сосуществуют.
+	OsUser        string   `json:"os_user,omitempty"`
 	RUNPILOTVersion  string   `json:"runpilot_version,omitempty"`
 	TmuxVersion string   `json:"tmux_version,omitempty"`
 	OS          string   `json:"os,omitempty"`
@@ -209,6 +217,9 @@ type Msg struct {
 	Dir  string            `json:"dir,omitempty"`
 	Env  map[string]string `json:"env,omitempty"`
 	Args []string          `json:"args,omitempty"`
+	// Agent — агент спавна (только qwen). Узел валидирует: неизвестный →
+	// AGENT_NOT_FOUND. Пусто = qwen (дефолт).
+	Agent string `json:"agent,omitempty"`
 	// QwenSessionID — UUIDv4 (ТЗ Relay §3): --session-id / --resume / --chat-recording.
 	QwenSessionID string `json:"qwen_session_id,omitempty"`
 
@@ -223,6 +234,9 @@ type Msg struct {
 	// list_dirs / dirs (13.2): префикс автодополнения и список каталогов.
 	Prefix string   `json:"prefix,omitempty"`
 	Dirs   []string `json:"dirs,omitempty"`
+	// Home — домашний каталог пользователя узла (default-каталог формы
+	// «Новая сессия», определяет узел).
+	Home string `json:"home,omitempty"`
 
 	// kill_process (6.7/8.2): цель сигнала. KProcUID/KProcExe — сверка
 	// идентичности процесса узлом (UID+cmdline+start_time, иначе PROCESS_CHANGED).

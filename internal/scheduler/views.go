@@ -101,7 +101,7 @@ func (s *Scheduler) QueueView() []QueueRow {
 		}
 		row := QueueRow{
 			Rank: i + 1, Mode: string(e.Mode), Class: e.Class.String(),
-			Session: sess.Name, Host: sess.Host, SID: e.SID,
+			Session: sess.Name, Host: sess.NodeID(), SID: e.SID,
 			WaitSec:  int(now.Sub(e.EnqueuedAt).Seconds()), Attempts: sess.Attempts,
 			Actions:  model.QueueActions(),
 		}

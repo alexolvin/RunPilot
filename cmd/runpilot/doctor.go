@@ -68,7 +68,28 @@ func newDoctorCmd() *cobra.Command {
 				}
 				checks = rc
 			}
-			results := doctor.Run(&doctor.Context{Cfg: cfg, CfgPath: resolvedPath, NodeVersion: versionInfo.Version, Cmdline: cmdline, ExecRoots: execRoots}, checks)
+			// node_qwen_settings (ТЗ «запуск на узле выбранного пользователя»):
+			// ~/.qwen/settings.json каждого подключённого узла — диспатч
+			// check_settings координатором (GET /api/v1/nodes/settings-check).
+			apiClient := newAPIClient()
+			nodeSettingsCheck := func() ([]doctor.NodeSettingsResult, error) {
+				var resp struct {
+					Nodes []struct {
+						Node   string `json:"node"`
+						Level  string `json:"level"`
+						Detail string `json:"detail"`
+					} `json:"nodes"`
+				}
+				if _, err := apiClient.Do("GET", "/api/v1/nodes/settings-check", nil, &resp); err != nil {
+					return nil, err
+				}
+				out := make([]doctor.NodeSettingsResult, 0, len(resp.Nodes))
+				for _, n := range resp.Nodes {
+					out = append(out, doctor.NodeSettingsResult{Node: n.Node, Level: n.Level, Detail: n.Detail})
+				}
+				return out, nil
+			}
+			results := doctor.Run(&doctor.Context{Cfg: cfg, CfgPath: resolvedPath, NodeVersion: versionInfo.Version, Cmdline: cmdline, ExecRoots: execRoots, NodeSettingsCheck: nodeSettingsCheck}, checks)
 			for _, r := range results {
 				fmt.Println(r)
 			}

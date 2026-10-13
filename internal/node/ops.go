@@ -127,12 +127,16 @@ func (n *Node) spawnSocket() string {
 }
 
 func (n *Node) spawn(ctx context.Context, m proto.Msg) (*Reply, error) {
+	// Агент: только профиль узла (qwen). Пусто = профиль узла.
+	if m.Agent != "" && m.Agent != n.prof.Name {
+		return &Reply{CmdID: m.CmdID, Result: proto.ResAgentNotFound, Detail: m.Agent}, nil
+	}
 	if code := n.validateDir(m.Dir); code != "" {
 		return &Reply{CmdID: m.CmdID, Result: code, Detail: m.Dir}, nil
 	}
 	socket := n.spawnSocket()
 	if tmuxSessionExists(ctx, n.ex, socket, m.Name) {
-		return &Reply{CmdID: m.CmdID, Result: "NAME_IN_USE", Detail: m.Name}, nil
+		return &Reply{CmdID: m.CmdID, Result: proto.ResTmuxSessionExists, Detail: m.Name}, nil
 	}
 	// W13 этап 7: предпроверка ПЕРЕД запуском — только проверяет, ничего не
 	// правит. Коллизия model_alias с id modelProviders (кодер пойдёт мимо
@@ -223,7 +227,55 @@ func (n *Node) listDirs(ctx context.Context, m proto.Msg) (*Reply, error) {
 	if len(dirs) > max {
 		dirs = dirs[:max]
 	}
-	return &Reply{CmdID: m.CmdID, Result: ResSent, Detail: strings.Join(dirs, "\n"), Roots: rootOut}, nil
+	return &Reply{CmdID: m.CmdID, Result: ResSent, Detail: strings.Join(dirs, "\n"),
+		Roots: rootOut, Home: n.homeDir()}, nil
+}
+
+// homeDir — домашний каталог пользователя узла (default-каталог формы
+// «Новая сессия»). Определяет узел (ос.UserHomeDir).
+func (n *Node) homeDir() string {
+	h, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return h
+}
+
+// checkSettings — doctor (проверка ~/.qwen/settings.json узла, ТЗ «запуск
+// сессий на узле выбранного пользователя»): read-only, ничего не правит.
+// Проверки: security.auth.selectedType = openai и нет коллизии modelProviders
+// (id == model_alias — кодер пойдёт на прямой baseUrl в обход шлюза).
+// Result = PASS/FAIL/WARN, Detail — описание.
+func (n *Node) checkSettings(ctx context.Context, m proto.Msg) (*Reply, error) {
+	alias := n.cfg.Profiles.Qwen.ModelAlias
+	userPath, err := qwenSettingsPath()
+	if err != nil {
+		return &Reply{CmdID: m.CmdID, Result: "WARN", Detail: "HOME не определён"}, nil
+	}
+	doc, err := readSettingsDoc(userPath)
+	if err != nil {
+		return &Reply{CmdID: m.CmdID, Result: "FAIL", Detail: userPath + ": " + err.Error()}, nil
+	}
+	if doc == nil {
+		return &Reply{CmdID: m.CmdID, Result: "WARN", Detail: "нет " + userPath + " (не клиентская машина?)"}, nil
+	}
+	// security.auth.selectedType
+	var sel any
+	if sec, ok := doc["security"].(map[string]any); ok {
+		if auth, ok := sec["auth"].(map[string]any); ok {
+			sel = auth["selectedType"]
+		}
+	}
+	if sel != "openai" {
+		return &Reply{CmdID: m.CmdID, Result: "FAIL",
+			Detail: userPath + ": security.auth.selectedType = " + fmt.Sprintf("%v", sel) + " (нужно openai)"}, nil
+	}
+	// modelProviders: коллизия id == model_alias → кодер в обход шлюза.
+	if coll := providerIDCollision(doc, alias); len(coll) > 0 {
+		return &Reply{CmdID: m.CmdID, Result: "FAIL",
+			Detail: userPath + ": " + strings.Join(coll, "; ") + " — кодер пойдёт на прямой baseUrl (в обход шлюза)"}, nil
+	}
+	return &Reply{CmdID: m.CmdID, Result: "PASS", Detail: "selectedType=openai, modelProviders без коллизии"}, nil
 }
 
 // --- панельные операции (respawn / kill_session / release_pane / kill_process) ---

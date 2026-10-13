@@ -25,7 +25,8 @@ export function NewSessionDialog() {
   const s = useStore();
   const [name, setName] = useState('');
   const [nameTouched, setNameTouched] = useState(false);
-  const [host, setHost] = useState(s.nodes.length ? s.nodes[0].host : '');
+  // host = идентичность узла (host:os_user); пусто = узел вызывающего.
+  const [host, setHost] = useState(s.nodes.length ? s.nodes[0].node_id : '');
   const [dir, setDir] = useState('');
   const [nameUsed, setNameUsed] = useState(false);
   const [dirs, setDirs] = useState([]);
@@ -84,6 +85,9 @@ export function NewSessionDialog() {
           if (!live || !r.ok || !r.data) return;
           setDirs(r.data.dirs || []);
           setRoots(r.data.roots || []);
+          // Каталог по умолчанию = домашний каталог пользователя узла
+          // (ТЗ «запуск на узле выбранного пользователя»): только пока пусто.
+          if (!dir && r.data.home) setDir(r.data.home);
         });
     }, W6.dirDebounceMs);
     return () => { live = false; clearTimeout(h); };
@@ -133,8 +137,8 @@ export function NewSessionDialog() {
     </div>
     <div class="field">
       <label>${T.newSession.node}</label>
-      <select value=${host} onChange=${(e) => { setHost(e.target.value); setDirs([]); setDirsOpen(false); }}>
-        ${s.nodes.map((n) => html`<option value=${n.host}>${n.host}</option>`)}
+      <select value=${host} onChange=${(e) => { setHost(e.target.value); setDirs([]); setDirsOpen(false); setDir(''); }}>
+        ${s.nodes.map((n) => html`<option value=${n.node_id}>${n.node_id}</option>`)}
       </select>
     </div>
     <div class="field">

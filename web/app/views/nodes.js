@@ -59,10 +59,10 @@ function NodeHealth({ n }) {
 function NodeCard(props) {
   const n = props.n;
   return html`<div class="node-card card" role="link"
-    onClick=${() => navigate('nodes', n.host)}>
+    onClick=${() => navigate('nodes', n.node_id)}>
     <div class="node-card-head">
       <span class="server-dot" style=${{ '--tone': 'var(--color-success)' }}></span>
-      <span class="server-card-name">${n.host}</span>
+      <span class="server-card-name">${n.node_id}</span>
       <span class="node-card-count">${props.count} ${T.nodes.sessions}${n.unmanaged ? ' · ' + n.unmanaged + ' ' + T.nodes.unmanaged : ''}</span>
     </div>
     <div class="node-card-sub">${n.host_ip || T.units.none} · ${n.runpilot_version || T.units.none}</div>
@@ -86,7 +86,7 @@ export function NodesPage() {
     </div>
     ${s.nodes.length
       ? html`<div class="card-grid">${s.nodes.map((n) => NodeCard({
-          n, count: s.sessions.filter((x) => x.host === n.host).length }))}</div>`
+          n, count: s.sessions.filter((x) => x.node_id === n.node_id).length }))}</div>`
       : html`<${EmptyState} icon="monitor" title=${T.empty.nodes.title} text=${T.empty.nodes.text}
           actionLabel=${T.empty.nodes.action} onAction=${() => setEnroll(true)} />`}
     ${enroll ? html`<${NodeEnroll} onClose=${() => setEnroll(false)} />` : null}
@@ -96,8 +96,9 @@ export function NodesPage() {
 function NodeDetail({ host }) {
   const s = useStore();
   const [del, setDel] = useState(false);
-  const node = s.nodes.find((x) => x.host === host);
-  const list = s.sessions.filter((x) => x.host === host);
+  // host = идентичность узла (host:os_user).
+  const node = s.nodes.find((x) => x.node_id === host);
+  const list = s.sessions.filter((x) => x.node_id === host);
   const groups = ORDER
     .map((st) => ({ st, list: list.filter((x) => x.state === st) }))
     .filter((g) => g.list.length > 0);
@@ -127,8 +128,8 @@ function NodeEnroll({ onClose }) {
   const [cmd, setCmd] = useState('');
   const [ready, setReady] = useState(false);
   const [copied, setCopied] = useState(false);
-  // Базовый набор узлов на момент открытия: новый host = «подключился».
-  const base = useState(() => new Set(s.nodes.map((n) => n.host)))[0];
+  // Базовый набор узлов на момент открытия: новый узел (node_id) = «подключился».
+  const base = useState(() => new Set(s.nodes.map((n) => n.node_id)))[0];
 
   useEffect(() => {
     post('/api/v1/nodes/enroll', {}).then((r) => {
@@ -138,7 +139,7 @@ function NodeEnroll({ onClose }) {
 
   useEffect(() => {
     if (ready) return;
-    const isNew = s.nodes.some((n) => !base.has(n.host));
+    const isNew = s.nodes.some((n) => !base.has(n.node_id));
     if (isNew) setReady(true);
   }, [s.nodes]);
 

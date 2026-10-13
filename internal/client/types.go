@@ -24,6 +24,8 @@ type Session struct {
 	SID              string `json:"SID"`
 	Name             string `json:"Name"`
 	Host             string `json:"Host"`
+	// OsUser — пользователь ОС узла (идентичность узла = host:os_user).
+	OsUser           string `json:"OsUser"`
 	HostIP           string `json:"HostIP"`
 	TmuxSession      string `json:"TmuxSession"`
 	Window           int    `json:"Window"`

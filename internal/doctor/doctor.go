@@ -76,6 +76,17 @@ type Context struct {
 	// StartTimeFn — время старта процесса (node.ProcStartTime); nil — default.
 	// Подменяется в тестах.
 	StartTimeFn func(pid int) int64
+	// NodeSettingsCheck — проверка ~/.qwen/settings.json каждого подключённого
+	// узла (ТЗ «запуск сессий на узле выбранного пользователя»): диспатч
+	// check_settings координатором. nil — нет доступа к координатору.
+	NodeSettingsCheck func() ([]NodeSettingsResult, error)
+}
+
+// NodeSettingsResult — результат проверки settings.json одного узла.
+type NodeSettingsResult struct {
+	Node   string
+	Level  string // PASS | FAIL | WARN
+	Detail string
 }
 
 // Check — одна проверка.
@@ -172,6 +183,9 @@ func RoleChecks(r Role) []Check {
 			{Name: "require_direct", Run: checkRequireDirect},
 			{Name: "log_rotation", Run: checkLogRotation},
 			{Name: "effective_config", Run: checkEffectiveConfig},
+			// ТЗ «запуск сессий на узле выбранного пользователя»: ~/.qwen/
+			// settings.json каждого подключённого узла (диспатч check_settings).
+			{Name: "node_qwen_settings", Run: checkNodeSettings},
 		}
 	case RoleClient:
 		return []Check{
@@ -560,6 +574,41 @@ func parseTmuxVersion(out string) (int, int, bool) {
 		return 0, 0, false
 	}
 	return major, minor, true
+}
+
+// checkNodeSettings — проверка ~/.qwen/settings.json каждого подключённого
+// узла (ТЗ «запуск сессий на узле выбранного пользователя»): координатор
+// диспатчит check_settings каждому узлу; узел читает свой settings.json.
+// FAIL — если на каком-то узле selectedType != openai или коллизия
+// modelProviders (кодер пойдёт в обход шлюза).
+func checkNodeSettings(ctx *Context) Result {
+	if ctx.NodeSettingsCheck == nil {
+		return result("node_qwen_settings", WARN, "нет доступа к координатору (узлы не проверяются)")
+	}
+	nodes, err := ctx.NodeSettingsCheck()
+	if err != nil {
+		return result("node_qwen_settings", WARN, "запрос к координатору: "+err.Error())
+	}
+	if len(nodes) == 0 {
+		return result("node_qwen_settings", WARN, "нет подключённых узлов")
+	}
+	var fails, warns []string
+	for _, n := range nodes {
+		switch n.Level {
+		case "FAIL":
+			fails = append(fails, n.Node+": "+n.Detail)
+		case "WARN":
+			warns = append(warns, n.Node+": "+n.Detail)
+		}
+	}
+	if len(fails) > 0 {
+		return result("node_qwen_settings", FAIL, strings.Join(fails, "; "))
+	}
+	if len(warns) > 0 {
+		return result("node_qwen_settings", WARN, strings.Join(warns, "; "))
+	}
+	return result("node_qwen_settings", PASS,
+		fmt.Sprintf("%d уз.лов: selectedType=openai, modelProviders без коллизии", len(nodes)))
 }
 
 // checkQwenSettings — клиентская проверка (раздел 7 ТЗ): в

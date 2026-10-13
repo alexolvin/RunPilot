@@ -330,7 +330,7 @@ func (s *Scheduler) tickNodeLost(now time.Time) {
 	}
 	sessions := s.sessionsMap()
 	for _, sess := range sessions {
-		if sess.State != model.SessionRunning || !lostSet[sess.Host] {
+		if sess.State != model.SessionRunning || !lostSet[sess.NodeID()] {
 			continue
 		}
 		if s.inflight[sess.SID] != 0 {
@@ -338,7 +338,7 @@ func (s *Scheduler) tickNodeLost(now time.Time) {
 		}
 		s.releaseLeaseLocked(sess.SID, model.ReleaseNodeLost, now)
 		s.sessionEvent(sess, model.EvErrorFatal, model.HoldNodeLost)
-		s.notifyf("runpilot: %s: узел %s не отвечает (NODE_LOST)", sess.Name, sess.Host)
+		s.notifyf("runpilot: %s: узел %s не отвечает (NODE_LOST)", sess.Name, sess.NodeID())
 	}
 }
 

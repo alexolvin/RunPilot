@@ -64,6 +64,9 @@ func (c *lockedNodeConn) writeBinary(data []byte) error {
 // NodeInfo — узел, подключённый к координатору.
 type NodeInfo struct {
 	Host        string
+	// OsUser — пользователь ОС узла. Идентичность узла = host:os_user:
+	// два узла с одним host и разными os_user сосуществуют.
+	OsUser      string
 	HostIP      string
 	RUNPILOTVersion  string
 	TmuxVersion string
@@ -75,6 +78,15 @@ type NodeInfo struct {
 	// встроенный узел — прямой PtyWrite. nil — терминал недоступен.
 	// json:"-" — func не сериализуется (SA1026).
 	PtySend func(chan_ int, data []byte) error `json:"-"`
+}
+
+// ID — идентичность узла: host:os_user (ТЗ «запуск сессий на узле выбранного
+// пользователя»). Пустой OsUser (старые узлы) → host.
+func (n *NodeInfo) ID() string {
+	if n.OsUser == "" {
+		return n.Host
+	}
+	return n.Host + ":" + n.OsUser
 }
 
 // GPUInfo — телеметрия GPU от узла (раздел 10 ТЗ): карты сервера
@@ -131,19 +143,19 @@ func NewHub(clk clock.Clock) *Hub {
 }
 
 // SetNodeHealth — node_health узла (N9/N10): сохраняет снимок здоровья.
-func (h *Hub) SetNodeHealth(host string, v NodeHealthView) {
+func (h *Hub) SetNodeHealth(nodeID string, v NodeHealthView) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	v.Host = host
+	v.Host = nodeID
 	v.At = h.clk.Now()
-	h.healths[host] = &v
+	h.healths[nodeID] = &v
 }
 
 // NodeHealth — последнее node_health узла.
-func (h *Hub) NodeHealth(host string) (NodeHealthView, bool) {
+func (h *Hub) NodeHealth(nodeID string) (NodeHealthView, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	v, ok := h.healths[host]
+	v, ok := h.healths[nodeID]
 	if !ok {
 		return NodeHealthView{}, false
 	}
@@ -183,28 +195,28 @@ func (h *Hub) NewCmdID() string {
 	return fmt.Sprintf("c%d-%d", time.Now().UnixNano(), h.cmdSeq)
 }
 
-// Register — узел прошёл hello.
+// Register — узел прошёл hello. Ключ реестра — идентичность узла (host:os_user).
 func (h *Hub) Register(info *NodeInfo) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.nodes[info.Host] = info
+	h.nodes[info.ID()] = info
 }
 
 // Unregister — узел отключился: его снимки панелей остаются (стареют по
 // received_at), узла в реестре больше нет. Живые UNMANAGED-панели
 // очищаем (стали неживыми; придут снова при переподключении).
-func (h *Hub) Unregister(host string) {
+func (h *Hub) Unregister(nodeID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	delete(h.nodes, host)
-	delete(h.unmanagedLive, host)
+	delete(h.nodes, nodeID)
+	delete(h.unmanagedLive, nodeID)
 }
 
 // Registered — узел уже в реестре (N7: конфликт имени хоста).
-func (h *Hub) Registered(host string) (NodeInfo, bool) {
+func (h *Hub) Registered(nodeID string) (NodeInfo, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	n, ok := h.nodes[host]
+	n, ok := h.nodes[nodeID]
 	if !ok {
 		return NodeInfo{}, false
 	}
@@ -212,13 +224,26 @@ func (h *Hub) Registered(host string) (NodeInfo, bool) {
 	return cp, true
 }
 
+// HasHost — есть ли в реестре узел с данным host (любой os_user). Для N7:
+// конфликт имени хоста (реестр ключируется по host:os_user).
+func (h *Hub) HasHost(host string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, n := range h.nodes {
+		if n.Host == host {
+			return true
+		}
+	}
+	return false
+}
+
 // DetachHost — узел удалён: его панели становятся UNMANAGED (кодеры живут в
 // tmux, runpilot больше не управляет — J7). SID снимается, снимок сохраняется.
-func (h *Hub) DetachHost(host string) {
+func (h *Hub) DetachHost(nodeID string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for id, p := range h.panes {
-		if p.Host != host {
+		if p.Host != nodeID {
 			continue
 		}
 		up := *p
@@ -232,16 +257,16 @@ func (h *Hub) DetachHost(host string) {
 			}
 		}
 	}
-	delete(h.unmanagedLive, host)
+	delete(h.unmanagedLive, nodeID)
 }
 
 // UnmanagedCount — число отцепленных панелей узла.
-func (h *Hub) UnmanagedCount(host string) int {
+func (h *Hub) UnmanagedCount(nodeID string) int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	n := 0
 	for _, p := range h.unmanaged {
-		if p.Host == host {
+		if p.Host == nodeID {
 			n++
 		}
 	}
@@ -249,20 +274,21 @@ func (h *Hub) UnmanagedCount(host string) int {
 }
 
 // UnmanagedOfHost — отцепленные панели узла (для UI).
-func (h *Hub) UnmanagedOfHost(host string) []PaneInfo {
+func (h *Hub) UnmanagedOfHost(nodeID string) []PaneInfo {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	var out []PaneInfo
 	for _, p := range h.unmanaged {
-		if p.Host == host {
+		if p.Host == nodeID {
 			out = append(out, *p)
 		}
 	}
 	return out
 }
 
-// SetPanes — полный список панелей узла (сообщение panes).
-func (h *Hub) SetPanes(host string, list []proto.Pane) {
+// SetPanes — полный список панелей узла (сообщение panes). nodeID —
+// идентичность узла (host:os_user).
+func (h *Hub) SetPanes(nodeID string, list []proto.Pane) {
 	now := h.clk.Now()
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -270,20 +296,20 @@ func (h *Hub) SetPanes(host string, list []proto.Pane) {
 		if p.SID == "" {
 			continue
 		}
-		h.panes[p.PaneID] = &PaneInfo{Pane: p, Host: host, ReceivedAt: now}
+		h.panes[p.PaneID] = &PaneInfo{Pane: p, Host: nodeID, ReceivedAt: now}
 		h.bySID[p.SID] = p.PaneID
 	}
 }
 
-// SetPane — один снимок (сообщение pane).
-func (h *Hub) SetPane(host string, p proto.Pane) {
+// SetPane — один снимок (сообщение pane). nodeID — идентичность узла.
+func (h *Hub) SetPane(nodeID string, p proto.Pane) {
 	if p.SID == "" {
 		return
 	}
 	now := h.clk.Now()
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.panes[p.PaneID] = &PaneInfo{Pane: p, Host: host, ReceivedAt: now}
+	h.panes[p.PaneID] = &PaneInfo{Pane: p, Host: nodeID, ReceivedAt: now}
 	h.bySID[p.SID] = p.PaneID
 }
 
@@ -295,13 +321,14 @@ func (h *Hub) Pane(paneID string) (*PaneInfo, bool) {
 	return p, ok
 }
 
-// PanesOfHost — все снимки панелей узла (diff для PaneGone, Э4).
-func (h *Hub) PanesOfHost(host string) []PaneInfo {
+// PanesOfHost — все снимки панелей узла (diff для PaneGone, Э4). nodeID —
+// идентичность узла (host:os_user).
+func (h *Hub) PanesOfHost(nodeID string) []PaneInfo {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	var out []PaneInfo
 	for _, p := range h.panes {
-		if p.Host == host {
+		if p.Host == nodeID {
 			out = append(out, *p)
 		}
 	}
@@ -310,12 +337,12 @@ func (h *Hub) PanesOfHost(host string) []PaneInfo {
 
 // DropPanesOfHost — панели узла, исчезнувшие из полного нового списка:
 // убрать их снимки, вернуть их sids (PaneGone, Э4).
-func (h *Hub) DropPanesOfHost(host string, newIDs map[string]bool) []string {
+func (h *Hub) DropPanesOfHost(nodeID string, newIDs map[string]bool) []string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	var sids []string
 	for id, p := range h.panes {
-		if p.Host != host || newIDs[id] {
+		if p.Host != nodeID || newIDs[id] {
 			continue
 		}
 		if p.Pane.SID != "" {
@@ -334,7 +361,7 @@ func (h *Hub) DropPanesOfHost(host string, newIDs map[string]bool) []string {
 // MarkUnmanaged — C10: панели, у которых снят @runpilot_sid. Ранее управляемая
 // панель (SID) в новом скане без SID → сессия ведётся в GONE (PaneGone),
 // панель — UNMANAGED. Возвращает такие SID.
-func (h *Hub) MarkUnmanaged(host string, list []proto.Pane) []string {
+func (h *Hub) MarkUnmanaged(nodeID string, list []proto.Pane) []string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	unmanagedNow := map[string]bool{}
@@ -345,7 +372,7 @@ func (h *Hub) MarkUnmanaged(host string, list []proto.Pane) []string {
 	}
 	var sids []string
 	for id, p := range h.panes {
-		if p.Host != host || !unmanagedNow[id] || p.Pane.SID == "" {
+		if p.Host != nodeID || !unmanagedNow[id] || p.Pane.SID == "" {
 			continue
 		}
 		sids = append(sids, p.Pane.SID)
@@ -379,11 +406,11 @@ func (h *Hub) DropPane(paneID string) string {
 
 // SetUnmanaged — полный список UNMANAGED-панелей узла (8.3 X1): живое
 // множество заменяется (пустой список очищает — панель стала управляемой
-// или умерла).
-func (h *Hub) SetUnmanaged(host string, list []proto.UnmanagedPane) {
+// или умерла). Ключ — идентичность узла (host:os_user).
+func (h *Hub) SetUnmanaged(nodeID string, list []proto.UnmanagedPane) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.unmanagedLive[host] = list
+	h.unmanagedLive[nodeID] = list
 }
 
 // Unmanaged — живые UNMANAGED-панели всех узлов (для /state и карточек
@@ -435,15 +462,15 @@ func (h *Hub) PushPane(paneID string, m proto.Msg) error {
 	return node.Conn.WriteJSON(m)
 }
 
-// PushToHost — fire-and-forget сообщение узлу по host БЕЗ ожидания reply
-// (EXEC-корни, KindExecRoots) — по модели PushPane. Ошибка — узел недоступен.
-// Reply узла отбрасывается координатором (пустой CmdID).
-func (h *Hub) PushToHost(host string, m proto.Msg) error {
+// PushToNode — fire-and-forget сообщение узлу по идентичности (host:os_user)
+// БЕЗ ожидания reply (EXEC-корни, KindExecRoots) — по модели PushPane.
+// Ошибка — узел недоступен. Reply узла отбрасывается координатором (пустой CmdID).
+func (h *Hub) PushToNode(nodeID string, m proto.Msg) error {
 	h.mu.Lock()
-	node, ok := h.nodes[host]
+	node, ok := h.nodes[nodeID]
 	h.mu.Unlock()
 	if !ok || node.Conn == nil {
-		return fmt.Errorf("hub: узел %s недоступен", host)
+		return fmt.Errorf("hub: узел %s недоступен", nodeID)
 	}
 	return node.Conn.WriteJSON(m)
 }
@@ -460,22 +487,22 @@ func (h *Hub) PaneBySID(sid string) (*PaneInfo, bool) {
 	return p, ok
 }
 
-// Node — узел по имени.
-func (h *Hub) Node(host string) (*NodeInfo, bool) {
+// Node — узел по идентичности (host:os_user).
+func (h *Hub) Node(nodeID string) (*NodeInfo, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	n, ok := h.nodes[host]
+	n, ok := h.nodes[nodeID]
 	return n, ok
 }
 
 // PtySendToNode — нажатия клавиш терминала узлу (13.4 ТЗ): двоичный кадр с
 // номером канала. Ошибка, если узла нет или PtySend не задан.
-func (h *Hub) PtySendToNode(host string, chan_ int, data []byte) error {
+func (h *Hub) PtySendToNode(nodeID string, chan_ int, data []byte) error {
 	h.mu.Lock()
-	node, ok := h.nodes[host]
+	node, ok := h.nodes[nodeID]
 	h.mu.Unlock()
 	if !ok || node.PtySend == nil {
-		return fmt.Errorf("hub: узел %s: PTY недоступен", host)
+		return fmt.Errorf("hub: узел %s: PTY недоступен", nodeID)
 	}
 	return node.PtySend(chan_, data)
 }
@@ -544,15 +571,15 @@ func (h *Hub) Dispatch(ctx context.Context, paneID string, m proto.Msg) (proto.M
 	}
 }
 
-// DispatchToNode — команда узлу по host (spawn/list_dirs/update/uninstall/
-// config — не зависят от панели, раздел 13.2/14.2 v2). Ответ приходит как
-// KindReply и доставляется в WaitReply.
-func (h *Hub) DispatchToNode(ctx context.Context, host string, m proto.Msg) (proto.Msg, error) {
+// DispatchToNode — команда узлу по идентичности (host:os_user; spawn/
+// list_dirs/update/uninstall/config — не зависят от панели, раздел 13.2/14.2 v2).
+// Ответ приходит как KindReply и доставляется в WaitReply.
+func (h *Hub) DispatchToNode(ctx context.Context, nodeID string, m proto.Msg) (proto.Msg, error) {
 	h.mu.Lock()
-	node, ok := h.nodes[host]
+	node, ok := h.nodes[nodeID]
 	h.mu.Unlock()
 	if !ok || node.Conn == nil {
-		return proto.Msg{}, fmt.Errorf("hub: узел %s недоступен", host)
+		return proto.Msg{}, fmt.Errorf("hub: узел %s недоступен", nodeID)
 	}
 	m.CmdID = h.NewCmdID()
 	wait := h.WaitReply(m.CmdID)
@@ -560,7 +587,7 @@ func (h *Hub) DispatchToNode(ctx context.Context, host string, m proto.Msg) (pro
 		h.mu.Lock()
 		delete(h.replies, m.CmdID)
 		h.mu.Unlock()
-		return proto.Msg{}, fmt.Errorf("hub: отправка узлу %s: %w", host, err)
+		return proto.Msg{}, fmt.Errorf("hub: отправка узлу %s: %w", nodeID, err)
 	}
 	select {
 	case r := <-wait:

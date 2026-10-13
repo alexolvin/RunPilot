@@ -147,7 +147,7 @@ func (s *Scheduler) eligible(e model.QueueEntry, sess store.SessionRecord,
 	}
 
 	// 7. Узел сессии не в drain.
-	if s.nodeDrain[sess.Host] {
+	if s.nodeDrain[sess.NodeID()] {
 		return false
 	}
 	return true
@@ -222,8 +222,8 @@ func (s *Scheduler) primaryReason(e model.QueueEntry, sess store.SessionRecord,
 	}
 
 	// node_drain.
-	if s.nodeDrain[sess.Host] {
-		return model.ReasonNodeDrain, map[string]any{"node": sess.Host}
+	if s.nodeDrain[sess.NodeID()] {
+		return model.ReasonNodeDrain, map[string]any{"node": sess.NodeID()}
 	}
 
 	// not_before.

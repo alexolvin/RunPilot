@@ -32,7 +32,7 @@ export function SessionRow(props) {
   return html`<div class="srow srow--link" onClick=${() => navigate('sessions', s.sid)}>
     <div class="srow-main">
       <span class="srow-name" title=${s.sid}>${s.name || s.sid}</span>
-      ${s.host ? html`<span class="srow-sub">${s.host}</span>` : null}
+      ${s.node_id ? html`<span class="srow-sub">${s.node_id}</span>` : null}
       ${s.server ? html`<span class="srow-sub srow-slot" title=${T.queue.ruleTitle + ': ' + (s.rule || '—')}>${s.server}${s.rule && T.queue.rules[s.rule] ? ' · ' + T.queue.rules[s.rule] : ''}</span>` : null}
       ${hasConstraint ? html`<span class="srow-sub srow-constraint">${s.constraint_kind === 'pin' ? T.a.pin : T.a.prefer}:${s.constraint_server}</span>` : null}
       ${why ? html`<span class="srow-why">${why}</span>` : null}

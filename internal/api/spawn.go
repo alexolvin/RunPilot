@@ -30,6 +30,8 @@ type SpawnRequest struct {
 	Name        string   `json:"name"`
 	Dir         string   `json:"dir"`
 	Node        string   `json:"node"`
+	// Agent — агент (профиль) узла; пусто = профиль узла по умолчанию (qwen).
+	Agent       string   `json:"agent"`
 	Prio        string   `json:"prio"`
 	Pin         string   `json:"pin"`
 	Prefer      string   `json:"prefer"`
@@ -65,9 +67,15 @@ func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	host, err := s.pickNode(req.Node)
+	nodeID, err := s.pickNode(req.Node)
 	if err != nil {
 		httpError(w, http.StatusServiceUnavailable, "NO_NODE", err.Error())
+		return
+	}
+	node, ok := s.hub.Node(nodeID)
+	if !ok {
+		httpError(w, http.StatusServiceUnavailable, "NO_NODE",
+			fmt.Sprintf("узел %s отключился", nodeID))
 		return
 	}
 
@@ -91,6 +99,7 @@ func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 	m := proto.New(proto.KindSpawn)
 	m.Name = req.Name
 	m.Dir = req.Dir
+	m.Agent = req.Agent
 	m.Env = env
 	m.Args = req.Args
 	m.SID = newSID
@@ -103,7 +112,7 @@ func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 	// Таймаут «панель готова» — из конфига (web.spawn_ready_sec, default 5).
 	timeout := time.Duration(s.cfg.Web.SpawnReadySec) * time.Second
 	// Spawn ДО записи: при неудаче (DIR_FORBIDDEN и пр.) записи не остаётся.
-	rep, err := s.dispatchToNodeTimeout(r.Context(), host, m, timeout)
+	rep, err := s.dispatchToNodeTimeout(r.Context(), nodeID, m, timeout)
 	if err != nil {
 		httpError(w, http.StatusServiceUnavailable, "NODE", err.Error())
 		return
@@ -118,7 +127,8 @@ func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 	}
 	now := s.clk.Now()
 	rec := store.SessionRecord{
-		SID: newSID, Name: req.Name, Host: host, HostIP: s.hostIP(host),
+		SID: newSID, Name: req.Name, Host: node.Host, OsUser: node.OsUser,
+		HostIP: node.HostIP,
 		Profile: "qwen", State: model.SessionIdle, StateChangedAt: now,
 		Class: model.ClassNormal, ConstraintKind: model.ConstraintNone,
 		AutoEnqueue: req.AutoEnqueue, CreatedAt: now,
@@ -137,7 +147,7 @@ func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 	}
 	// Панель с @runpilot_sid зарегистрирована сразу (CONTROL 5: ≤5s).
 	pane := proto.Pane{PaneID: rep.Detail, SID: newSID, State: "IDLE"}
-	s.hub.SetPane(host, pane)
+	s.hub.SetPane(nodeID, pane)
 	if s.sched != nil {
 		s.sched.PaneUpdate(rep.Detail, newSID, model.PaneIdle, 0, now)
 	}
@@ -145,10 +155,10 @@ func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 	// (до этого список обновлялся только при RESYNC/релоаде).
 	s.recordSessionCreated(newSID, now)
 	s.log.Info("api: spawn: сессия создана", "sid", newSID, "name", req.Name,
-		"node", host, "pane", rep.Detail)
+		"node", nodeID, "pane", rep.Detail)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{
-		"sid": newSID, "name": req.Name, "node": host, "pane": rep.Detail,
+		"sid": newSID, "name": req.Name, "node": nodeID, "pane": rep.Detail,
 	})
 }
 
@@ -174,12 +184,13 @@ func (s *Server) recordSessionCreated(sidv string, now time.Time) {
 	_ = s.store.EventRecord(model.Event{TS: now, Kind: model.KindSessionState, SID: sidv, Payload: payload})
 }
 
-// pickNode — узел для spawn: по имени или первый онлайн.
+// pickNode — узел для spawn: по идентичности (host:os_user) или первый онлайн.
+// Возвращает nodeID.
 func (s *Server) pickNode(name string) (string, error) {
 	nodes := s.hub.Nodes()
 	if name != "" {
 		for _, n := range nodes {
-			if n.Host == name {
+			if n.ID() == name {
 				return name, nil
 			}
 		}
@@ -188,8 +199,8 @@ func (s *Server) pickNode(name string) (string, error) {
 	if len(nodes) == 0 {
 		return "", fmt.Errorf("нет подключённых узлов")
 	}
-	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Host < nodes[j].Host })
-	return nodes[0].Host, nil
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i].ID() < nodes[j].ID() })
+	return nodes[0].ID(), nil
 }
 
 // spawnEnv — окружение кодера управляемой сессии узла (spawn/adopt): env из

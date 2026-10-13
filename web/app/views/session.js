@@ -41,7 +41,9 @@ function constraintLabel(sess) {
 // через -L <имя> (как узел; -L default = стандартный сокет tmux).
 function connectCmd(sess, pane) {
   if (!sess.host || !pane || !pane.tmux_session) return '';
-  const parts = ['ssh', sess.host, 'tmux'];
+  // Сессия под другим пользователем узла → ssh os_user@host.
+  const target = sess.os_user ? sess.os_user + '@' + sess.host : sess.host;
+  const parts = ['ssh', target, 'tmux'];
   if (pane.socket) parts.push('-L', pane.socket);
   parts.push('attach', '-t', pane.tmux_session);
   return parts.join(' ');
@@ -259,7 +261,7 @@ export function SessionPage() {
         <${Badge} tone=${tone} label=${sessionStateLabel(s.meta, sess.state)} dot=${true} />
       </div>
       <div class="sc-meta mono">
-        ${sess.host || T.units.none} · ${fmtTime(sess.created_at)} ·
+        ${sess.node_id || T.units.none} · ${fmtTime(sess.created_at)} ·
         ${classLabel(s.meta, sess.class)} · ${constraintLabel(sess)} ·
         ${T.session.attempts} ${sess.attempts}
       </div>
@@ -279,7 +281,7 @@ export function SessionPage() {
       <div class="sc-right">
         <${Section} title=${T.session.details}>
           <dl class="sc-dl">
-            <div><dt>${T.session.node}</dt><dd class="mono">${sess.host || T.units.none}</dd></div>
+            <div><dt>${T.session.node}</dt><dd class="mono">${sess.node_id || T.units.none}</dd></div>
             <div><dt>${T.session.sid}</dt><dd class="mono">${sess.sid}</dd></div>
             <div><dt>${T.session.version}</dt><dd>
               ${sess.agent_version || T.units.none}

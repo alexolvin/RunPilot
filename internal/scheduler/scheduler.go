@@ -460,7 +460,7 @@ func (s *Scheduler) NodeDrain(host string, on bool) {
 		return
 	}
 	for _, sess := range sessions {
-		if sess.Host != host {
+		if sess.NodeID() != host {
 			continue
 		}
 		if on && (sess.State == model.SessionIdle || sess.State == model.SessionQueued) {

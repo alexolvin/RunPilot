@@ -29,7 +29,7 @@ func newLsCmd() *cobra.Command {
 			rows := make([][]string, 0, len(sessions))
 			for _, s := range sessions {
 				rows = append(rows, []string{
-					s.Name, s.State, s.Host, s.TmuxSession, s.PaneID,
+					s.Name, s.State, nodeIDOf(s), s.TmuxSession, s.PaneID,
 					classStr(s.Class), constraintStr(s),
 				})
 			}
@@ -42,6 +42,15 @@ func newLsCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&all, "all", false, "включая UNMANAGED и GONE")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "машиночитаемый вывод")
 	return cmd
+}
+
+// nodeIDOf — идентичность узла сессии: host:os_user (ТЗ «запуск на узле
+// выбранного пользователя»); пустой os_user (старые записи) → host.
+func nodeIDOf(s client.Session) string {
+	if s.OsUser == "" {
+		return s.Host
+	}
+	return s.Host + ":" + s.OsUser
 }
 
 // classStr — класс очереди по номеру (0..3).

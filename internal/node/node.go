@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -557,6 +558,8 @@ func (n *Node) Handle(ctx context.Context, m proto.Msg) (*Reply, error) {
 		return n.spawn(ctx, m)
 	case proto.KindListDirs:
 		return n.listDirs(ctx, m)
+	case proto.KindCheckSettings:
+		return n.checkSettings(ctx, m)
 	case proto.KindUpdate:
 		return n.update(ctx, m)
 	case proto.KindUninstall:
@@ -634,6 +637,16 @@ func TmuxVersion(ctx context.Context, ex Execer) string {
 
 // OS — операционная система (для hello).
 func OS() string { return runtime.GOOS }
+
+// OSUser — пользователь ОС узла (user.Current). Идентичность узла =
+// host:os_user (ТЗ: два узла с одним host и разными os_user сосуществуют).
+func OSUser() string {
+	u, err := user.Current()
+	if err != nil {
+		return ""
+	}
+	return u.Username
+}
 
 // Hostname — имя машины (для hello).
 func Hostname() string {

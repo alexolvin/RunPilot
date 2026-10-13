@@ -91,6 +91,8 @@ type Reply struct {
 	Cols       int
 	Rows       int
 	Roots      []string
+	// Home — домашний каталог пользователя узла (ответ list_dirs).
+	Home       string
 	TurnReport *proto.TurnReport
 }
 
@@ -99,6 +101,7 @@ func (r Reply) msg() proto.Msg {
 	m.CmdID, m.Result, m.Detail = r.CmdID, r.Result, r.Detail
 	m.Cols, m.Rows = r.Cols, r.Rows
 	m.ProjectRoots = r.Roots
+	m.Home = r.Home
 	m.TurnReport = r.TurnReport
 	return m
 }

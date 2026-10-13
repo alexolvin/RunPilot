@@ -382,8 +382,8 @@ func (s *Server) maybePushPoolConfig() {
 	cfgMsg.ContextWindow = s.MinContextWindow()
 	cfgMsg.InputModalities = s.IntersectionModalities()
 	for _, n := range s.hub.Nodes() {
-		if err := s.hub.PushToHost(n.Host, cfgMsg); err != nil {
-			s.log.Warn("api: пуш config (смена пула): "+err.Error(), "host", n.Host)
+		if err := s.hub.PushToNode(n.ID(), cfgMsg); err != nil {
+			s.log.Warn("api: пуш config (смена пула): "+err.Error(), "node", n.ID())
 		}
 	}
 	s.log.Info("api: смена пула — пуш config узлам", "sig", sig)
@@ -470,6 +470,7 @@ func (s *Server) Routes() http.Handler {
 	// v2 (W6, раздел 14/5.3): узлы — подключение, список, удаление, обновление, dirs.
 	mux.HandleFunc("POST /api/v1/nodes/enroll", s.handleNodeEnroll)
 	mux.HandleFunc("GET /api/v1/nodes", s.handleNodes)
+	mux.HandleFunc("GET /api/v1/nodes/settings-check", s.handleNodeSettingsCheck)
 	mux.HandleFunc("DELETE /api/v1/nodes/{host}", s.handleNodeDelete)
 	mux.HandleFunc("POST /api/v1/nodes/{host}/update", s.handleNodeUpdate)
 	mux.HandleFunc("GET /api/v1/nodes/{host}/update/{id}", s.handleNodeUpdateStatus)
@@ -986,10 +987,16 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 	if host == "" {
 		host = remoteIP
 	}
+	// Идентичность узла = host:os_user (ТЗ «запуск сессий на узле выбранного
+	// пользователя»): два узла с одним host и разными os_user сосуществуют.
+	nodeID := host
+	if hello.OsUser != "" {
+		nodeID = host + ":" + hello.OsUser
+	}
 	// N7: конфликт имени хоста — hello утверждает существующий host, а токен
 	// привязан к другому. Соединение закрывается, имя хоста не меняется.
 	if th := nodeTokenHost(r.Context()); th != "" && th != host {
-		if _, exists := s.hub.Registered(host); exists {
+		if s.hub.HasHost(host) {
 			s.log.Warn("api: node: конфликт имени хоста", "host", host,
 				"token_host", th, "addr", r.RemoteAddr)
 			_ = conn.WriteControl(websocket.CloseMessage,
@@ -1000,22 +1007,26 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 	}
 	lc := &lockedNodeConn{Conn: conn}
 	s.hub.Register(&NodeInfo{
-		Host: host, HostIP: hello.HostIP,
+		Host: host, OsUser: hello.OsUser, HostIP: hello.HostIP,
 		RUNPILOTVersion: hello.RUNPILOTVersion, TmuxVersion: hello.TmuxVersion,
 		OS: hello.OS, Sockets: hello.Sockets, Conn: lc,
 		PtySend: func(c int, d []byte) error { return lc.writeBinary(proto.EncodeFrame(c, d)) },
 	})
+	// Миграция старых сессий (os_user пуст) на идентичность узла host:os_user.
+	if err := s.store.MigrateSessionOsUser(host, hello.OsUser); err != nil {
+		s.log.Warn("api: node: миграция os_user сессий", "host", host, "err", err)
+	}
 	defer func() {
-		s.hub.Unregister(host)
+		s.hub.Unregister(nodeID)
 		if s.sched != nil {
-			s.sched.NodeLost(host)
+			s.sched.NodeLost(nodeID)
 		}
 		// 13.4: узел отключился — закрыть его терминалы (PTY ушёл с ним).
-		s.closePtyByHost(host)
+		s.closePtyByHost(nodeID)
 	}()
-	s.log.Info("api: node: подключился", "host", host, "runpilot", hello.RUNPILOTVersion)
+	s.log.Info("api: node: подключился", "node", nodeID, "runpilot", hello.RUNPILOTVersion)
 	if s.sched != nil {
-		s.sched.NodeSeen(host)
+		s.sched.NodeSeen(nodeID)
 	}
 	// W12 (ТЗ 14: «Автообновления aqm нет»): несовпадение версий узла и
 	// координатора — ТОЛЬКО WARN. Никакого авто-self-update: обновление узла —
@@ -1041,7 +1052,7 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 	}
 	// EXEC-корни (KindExecRoots): при подключении/переподключении узла —
 	// актуальный набор (правило «кодер вне очереди»).
-	s.ExecRootsResend(host)
+	s.ExecRootsResend(nodeID)
 	// П.6(c): после переподключения (hello + первый полный список panes)
 	// переотправить строки статуса всех панелей узла + сводку. Только на
 	// ПЕРВОМ panes соединения: узел шлёт полный список и по hello, и далее
@@ -1067,16 +1078,16 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 		}
 		switch m.Type {
 		case proto.KindPanes:
-			s.applyPanes(host, m.Panes)
+			s.applyPanes(nodeID, m.Panes)
 			if firstPanes {
 				firstPanes = false
 				if s.pusher != nil {
-					s.pusher.ResendHost(host)
+					s.pusher.ResendHost(nodeID)
 				}
 			}
 		case proto.KindPane:
 			if m.Pane != nil {
-				s.hub.SetPane(host, *m.Pane)
+				s.hub.SetPane(nodeID, *m.Pane)
 				if s.sched != nil {
 					s.sched.PaneUpdate(m.Pane.PaneID, m.Pane.SID,
 						model.PaneState(m.Pane.State), m.Pane.Hash, s.clk.Now())
@@ -1085,23 +1096,23 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 		case proto.KindPaneGone:
 			s.onPaneGone(m.PaneID, m.SID)
 		case proto.KindUnmanaged:
-			s.hub.SetUnmanaged(host, m.Unmanaged)
+			s.hub.SetUnmanaged(nodeID, m.Unmanaged)
 		case proto.KindReply:
 			s.hub.DeliverReply(m)
 		case proto.KindGPU:
 			// Э6: телеметрия GPU узла (server → карты).
-			s.hub.SetGPU(m.Server, host, m.Cards)
+			s.hub.SetGPU(m.Server, nodeID, m.Cards)
 		case proto.KindExternal:
 			// 8.2: внешние кодеры вне tmux/runpilot.
-			s.applyExternals(host, m.Externals)
+			s.applyExternals(nodeID, m.Externals)
 		case proto.KindPtyExit:
 			// 13.4: tmux attach завершился (сессия убита) — закрыть браузер.
 			s.closePty(m.Chan)
 		case proto.KindAgentExit, proto.KindNodeHealth, proto.KindUpdateStatus,
 			proto.KindExecRootDead:
-			s.onNodeInbound(host, m)
+			s.onNodeInbound(nodeID, m)
 		default:
-			s.log.Warn("api: node: неизвестное сообщение", "type", m.Type, "host", host)
+			s.log.Warn("api: node: неизвестное сообщение", "type", m.Type, "node", nodeID)
 		}
 	}
 }
@@ -1110,19 +1121,19 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 // панели завершился → планировщику тик по sid), node_health (диск/qwen),
 // update_status (результат self-update), exec_root_dead (корень exec мёртв
 // без finish → снять аренду + GONE).
-func (s *Server) onNodeInbound(host string, m proto.Msg) {
+func (s *Server) onNodeInbound(nodeID string, m proto.Msg) {
 	switch m.Type {
 	case proto.KindAgentExit:
 		// 7.3 C1: кодер в панели завершился/убит → аренда AGENT_EXITED,
 		// ход LOST, сессия HOLD(AGENT_EXITED).
-		s.log.Info("api: node: агент завершился", "host", host, "sid", m.SID, "code", m.ExitCode)
+		s.log.Info("api: node: агент завершился", "node", nodeID, "sid", m.SID, "code", m.ExitCode)
 		if s.sched != nil && m.SID != "" {
 			s.sched.AgentExit(m.SID, m.ExitCode)
 		}
 	case proto.KindNodeHealth:
-		s.applyNodeHealth(host, m)
+		s.applyNodeHealth(nodeID, m)
 	case proto.KindUpdateStatus:
-		s.log.Info("api: node: self-update", "host", host, "result", m.Result,
+		s.log.Info("api: node: self-update", "node", nodeID, "result", m.Result,
 			"version", m.Version)
 	case proto.KindExecRootDead:
 		s.onExecRootDead(m.SID, m.PID)
@@ -1159,7 +1170,7 @@ func (s *Server) onExecRootDead(sid string, pid int) {
 
 // applyNodeHealth — node_health узла (N9/N10, 14.4): проблемы (нет tmux/qwen,
 // мало места на диске) и расхождение часов — в hub (страница узла) + [WARN].
-func (s *Server) applyNodeHealth(host string, m proto.Msg) {
+func (s *Server) applyNodeHealth(nodeID string, m proto.Msg) {
 	var problems []string
 	if m.TmuxVersion == "" {
 		problems = append(problems, "no_tmux")
@@ -1174,28 +1185,28 @@ func (s *Server) applyNodeHealth(host string, m proto.Msg) {
 	if m.NodeTimeMS > 0 {
 		skewMS = m.NodeTimeMS - s.clk.Now().UnixMilli()
 	}
-	s.hub.SetNodeHealth(host, NodeHealthView{
+	s.hub.SetNodeHealth(nodeID, NodeHealthView{
 		Problems:    problems,
 		TimeSkewMS:  skewMS,
 		DiskFreeMB:  m.DiskFreeMB,
 		QwenVersion: m.QwenVersion,
 	})
 	if len(problems) > 0 {
-		s.log.Warn("api: node: здоровье: проблемы", "host", host, "problems", problems)
+		s.log.Warn("api: node: здоровье: проблемы", "node", nodeID, "problems", problems)
 	}
 }
 
 // applyPanes — полный список панелей узла: снимки в hub + diff на
 // исчезнувшие (PaneGone, Э4) + хук планировщика по каждому снимку.
-func (s *Server) applyPanes(host string, panes []proto.Pane) {
+func (s *Server) applyPanes(nodeID string, panes []proto.Pane) {
 	newIDs := map[string]bool{}
 	for _, p := range panes {
 		newIDs[p.PaneID] = true
 	}
-	goneSIDs := s.hub.DropPanesOfHost(host, newIDs)
+	goneSIDs := s.hub.DropPanesOfHost(nodeID, newIDs)
 	// C10: снят @runpilot_sid → панель есть, опции нет → сессия GONE, панель UNMANAGED.
-	goneSIDs = append(goneSIDs, s.hub.MarkUnmanaged(host, panes)...)
-	s.hub.SetPanes(host, panes)
+	goneSIDs = append(goneSIDs, s.hub.MarkUnmanaged(nodeID, panes)...)
+	s.hub.SetPanes(nodeID, panes)
 	// C6: узел сообщает версию кодера в снимке (version_cmd при запуске).
 	for _, p := range panes {
 		s.syncAgentVersion(p)
@@ -1209,14 +1220,14 @@ func (s *Server) applyPanes(host string, panes []proto.Pane) {
 				model.PaneState(p.State), p.Hash, s.clk.Now())
 		}
 	}
-	s.reconcilePanesWithStore(host, panes)
+	s.reconcilePanesWithStore(nodeID, panes)
 }
 
 // reconcilePanesWithStore — полная сверка с БД: сессия (PANE, не GONE)
 // узла, чья панель отсутствует в полном списке узла → GONE. Закрывает
 // сценарий «потерянная сессия»: координатор перезапустился, полный список
 // пришёл уже без панели (hub её не знал — diff по памяти не сработал).
-func (s *Server) reconcilePanesWithStore(host string, panes []proto.Pane) {
+func (s *Server) reconcilePanesWithStore(nodeID string, panes []proto.Pane) {
 	inList := map[string]bool{}
 	for _, p := range panes {
 		if p.SID != "" {
@@ -1229,7 +1240,9 @@ func (s *Server) reconcilePanesWithStore(host string, panes []proto.Pane) {
 	}
 	gone := 0
 	for _, r := range recs {
-		if r.Host != host || r.Kind != model.KindPane ||
+		// Сравнение по идентичности узла (host:os_user): сессия узла, чья
+		// панель отсутствует в полном списке → GONE.
+		if r.NodeID() != nodeID || r.Kind != model.KindPane ||
 			r.State == model.SessionGone || inList[r.SID] {
 			continue
 		}
@@ -1240,19 +1253,20 @@ func (s *Server) reconcilePanesWithStore(host string, panes []proto.Pane) {
 	}
 	if gone > 0 {
 		s.log.Warn("api: node: сверка с БД: панели не найдены → GONE",
-			"host", host, "count", gone)
+			"node", nodeID, "count", gone)
 	}
 }
 
 // ApplyNodeMsg — сообщение «узел → координатор» тем же путём, что и
-// WS-транспорт (v2 раздел 2.5: встроенный узел). Хост уже зарегистрирован.
-func (s *Server) ApplyNodeMsg(host string, m proto.Msg) {
+// WS-транспорт (v2 раздел 2.5: встроенный узел). Узел уже зарегистрирован;
+// nodeID — идентичность узла (host:os_user).
+func (s *Server) ApplyNodeMsg(nodeID string, m proto.Msg) {
 	switch m.Type {
 	case proto.KindPanes:
-		s.applyPanes(host, m.Panes)
+		s.applyPanes(nodeID, m.Panes)
 	case proto.KindPane:
 		if m.Pane != nil {
-			s.hub.SetPane(host, *m.Pane)
+			s.hub.SetPane(nodeID, *m.Pane)
 			if s.sched != nil {
 				s.sched.PaneUpdate(m.Pane.PaneID, m.Pane.SID,
 					model.PaneState(m.Pane.State), m.Pane.Hash, s.clk.Now())
@@ -1261,21 +1275,21 @@ func (s *Server) ApplyNodeMsg(host string, m proto.Msg) {
 	case proto.KindPaneGone:
 		s.onPaneGone(m.PaneID, m.SID)
 	case proto.KindUnmanaged:
-		s.hub.SetUnmanaged(host, m.Unmanaged)
+		s.hub.SetUnmanaged(nodeID, m.Unmanaged)
 	case proto.KindReply:
 		s.hub.DeliverReply(m)
 	case proto.KindGPU:
-		s.hub.SetGPU(m.Server, host, m.Cards)
+		s.hub.SetGPU(m.Server, nodeID, m.Cards)
 	case proto.KindExternal:
-		s.applyExternals(host, m.Externals)
+		s.applyExternals(nodeID, m.Externals)
 	case proto.KindPtyExit:
 		// 13.4: tmux attach завершился (сессия убита) — закрыть браузер.
 		s.closePty(m.Chan)
 	case proto.KindAgentExit, proto.KindNodeHealth, proto.KindUpdateStatus,
 		proto.KindExecRootDead:
-		s.onNodeInbound(host, m)
+		s.onNodeInbound(nodeID, m)
 	default:
-		s.log.Warn("api: node: неизвестное сообщение", "type", m.Type, "host", host)
+		s.log.Warn("api: node: неизвестное сообщение", "type", m.Type, "node", nodeID)
 	}
 }
 

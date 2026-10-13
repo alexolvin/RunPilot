@@ -190,7 +190,7 @@ export function QueuePage() {
                 <span class="qrow-pos">${row.rank}</span>
                 <div class="srow-main">
                   <span class="srow-name" title=${row.sid}>${row.session}</span>
-                  ${row.host ? html`<span class="srow-sub">${row.host}</span>` : null}
+                  ${row.node_id ? html`<span class="srow-sub">${row.node_id}</span>` : null}
                   ${why ? html`<span class="srow-why">${why}</span>` : null}
                   ${srs ? html`<span class="srow-why srow-servers" title=${T.queue.serverReasonsTitle}>${srs}</span>` : null}
                 </div>

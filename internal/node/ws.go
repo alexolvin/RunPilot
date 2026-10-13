@@ -277,6 +277,8 @@ func (w *WSClient) hello(ctx context.Context, conn *websocket.Conn) error {
 	// и host EXEC-сессии в runpilot exec) — единая функция.
 	m.Host = HostnameOrDefault(w.node.cfg.Node.Host)
 	m.HostIP = HostIP(hostPort(w.url))
+	// ОсUser — пользователь ОС узла: идентичность узла = host:os_user.
+	m.OsUser = OSUser()
 	m.RUNPILOTVersion = w.runpilotVersion
 	m.TmuxVersion = TmuxVersion(ctx, w.node.ex)
 	m.OS = OS()
