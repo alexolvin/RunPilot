@@ -830,6 +830,7 @@ func (s *Server) handleNodeDirs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"result": rep.Result, "dirs": dirs,
+		"detail_raw": rep.Detail, "detail_len": len(rep.Detail),
 		"roots": rep.ProjectRoots,
 		// Домашний каталог пользователя узла — каталог по умолчанию в форме
 		// «Новая сессия» (ТЗ «запуск на узле выбранного пользователя»).
