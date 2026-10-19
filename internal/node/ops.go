@@ -196,7 +196,6 @@ func firstPaneID(ctx context.Context, ex Execer, socket, session string) string 
 
 func (n *Node) listDirs(ctx context.Context, m proto.Msg) (*Reply, error) {
 	max := n.cfg.Web.DirsMaxOrDefault() // web.dirs_max; <=0 — дефолт (defaults.go)
-	n.log.Info("listDirs: start", "roots", n.rootsList(), "max", max)
 	var dirs []string
 	// Roots для подсказки веба: существующие корни, абсолютные пути
 	// (тильды раскрыты, симлинки разрешены), дубликаты убраны.
@@ -219,20 +218,16 @@ func (n *Node) listDirs(ctx context.Context, m proto.Msg) (*Reply, error) {
 			n.log.Warn("listDirs: os.ReadDir", "root", rroot, "err", err)
 			continue
 		}
-		names := make([]string, 0, len(entries))
 		for _, e := range entries {
-			names = append(names, fmt.Sprintf("%s(type=%o,dir=%v)", e.Name(), e.Type(), e.IsDir()))
 			if e.IsDir() {
 				dirs = append(dirs, rroot+"/"+e.Name())
 			}
 		}
-		n.log.Info("listDirs: read", "root", rroot, "entries", len(entries), "names", names)
 	}
 	sort.Strings(dirs)
 	if len(dirs) > max {
 		dirs = dirs[:max]
 	}
-	n.log.Info("listDirs: done", "count", len(dirs), "dirs", dirs)
 	return &Reply{CmdID: m.CmdID, Result: ResSent, Detail: strings.Join(dirs, "\n"),
 		Roots: rootOut, Home: n.homeDir()}, nil
 }

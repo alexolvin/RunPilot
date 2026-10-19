@@ -154,11 +154,6 @@ func (w *WSClient) session(ctx context.Context) (bool, error) {
 		for {
 			select {
 			case m := <-out:
-				if m.Type == proto.KindReply {
-					if jb, jerr := json.Marshal(&m); jerr == nil {
-						w.log.Info("node: reply JSON", "len", len(jb), "json", string(jb))
-					}
-				}
 				if err := conn.WriteJSON(&m); err != nil {
 					select {
 					case writeErr <- err:
