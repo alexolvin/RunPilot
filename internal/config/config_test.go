@@ -115,7 +115,7 @@ var configKeys = []string{
 	"node.project_roots_default", "node.project_dir_match", "node.state_dir",
 	"web", "web.bind", "web.port", "web.public_url",
 	"web.session_ttl_days", "web.login_rate_per_min",
-	"web.screen_interval_ms", "web.paste_verify_sec", "web.paste_max_kb",
+	"web.screen_interval_ms", "web.server_metrics_interval_ms", "web.paste_verify_sec", "web.paste_max_kb",
 	"web.spawn_ready_sec", "web.dirs_max", "web.sse_replay", "web.sse_clients_max",
 	"web.screens_per_client_max", "web.terminals_per_node_max", "web.terminal_idle_min",
 	"web.undo_sec", "web.page_size", "web.idempotency_ttl_sec",

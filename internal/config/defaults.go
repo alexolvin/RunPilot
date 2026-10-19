@@ -92,6 +92,7 @@ func Defaults() *Config {
 			SessionTTLDays:  14,
 			LoginRatePerMin: 10,
 			ScreenIntervalMS:      2000,
+			ServerMetricsIntervalMS: 2000,
 			PasteVerifySec:        10,
 			PasteMaxKB:            64,
 			SpawnReadySec:         5,

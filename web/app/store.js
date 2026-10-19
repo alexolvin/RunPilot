@@ -327,7 +327,12 @@ export const actions = {
       doResync();
       return;
     }
-    if (ev.kind === 'SESSION_STATE' && ev.sid && pl.to) {
+    if (ev.kind === 'SERVER_METRICS' && Array.isArray(pl)) {
+      // Живая загрузка серверов (gen_tok_s, power, kv_pct, слоты): координатор
+      // пушит снимок ServersView — карточки обновляются без полного
+      // ресинка /state (R3: без REST-поллинга).
+      patch.servers = pl.map(normServer);
+    } else if (ev.kind === 'SESSION_STATE' && ev.sid && pl.to) {
       patch.sessions = S.sessions.map((s) =>
         s.sid === ev.sid ? { ...s, state: pl.to } : s);
       // Слоты серверов (slots_info в карточке) зависят от занятости сессий:

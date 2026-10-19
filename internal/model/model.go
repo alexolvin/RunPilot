@@ -387,6 +387,10 @@ const (
 	// v2 (раздел 15.4): SCREEN — кадр живого экрана по подписке ?screens=
 	// (координатор просит узел снять панель с -e). Не пишется в БД.
 	KindScreen = "SCREEN"
+	// Живая загрузка серверов (gen_tok_s, power, kv_pct, слоты): координатор
+	// шлёт снимок ServersView по всем SSE-соединениям раз в
+	// web.server_metrics_interval_ms. Не пишется в БД (живой поток, как SCREEN).
+	KindServerMetrics = "SERVER_METRICS"
 	// v2 (8.1): состояние задания runpilot exec (JOB): finish (OK/ERROR),
 	// CLIENT_LOST (X5). payload: outcome, exit_code, signal.
 	KindJobState = "JOB_STATE"

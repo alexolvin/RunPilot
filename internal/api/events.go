@@ -153,12 +153,40 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		defer tick.Stop()
 		screenCh = tick.C
 	}
-	screenNxt := maxID
+	// Живая загрузка серверов: раз в web.server_metrics_interval_ms событие
+	// SERVER_METRICS (снимок ServersView) → клиент обновляет карточки серверов
+	// без полного ресинка /state. Не пишется в БД (живой поток, как SCREEN).
+	var serverMetricsCh <-chan time.Time
+	if tick := s.serverMetricsTicker(); tick != nil {
+		defer tick.Stop()
+		serverMetricsCh = tick.C
+	}
+	// connNxt — общий счётчик per-connection событий (SCREEN, SERVER_METRICS):
+	// единая возрастающая последовательность id, без коллизий между видами.
+	connNxt := maxID
+	nextConnID := func() int64 {
+		connNxt++
+		return connNxt
+	}
 	sendScreen := func(f screenFrame, sid string) {
-		screenNxt++
+		id := nextConnID()
 		payload, _ := json.Marshal(f)
-		ev := model.Event{ID: screenNxt, Kind: model.KindScreen, SID: sid, TS: s.clk.Now(), Payload: payload}
-		fmt.Fprintf(w, "id: %d\ndata: %s\n\n", screenNxt, encodeSSE(ev))
+		ev := model.Event{ID: id, Kind: model.KindScreen, SID: sid, TS: s.clk.Now(), Payload: payload}
+		fmt.Fprintf(w, "id: %d\ndata: %s\n\n", id, encodeSSE(ev))
+		flusher.Flush()
+	}
+	sendServerMetrics := func() {
+		if s.sched == nil {
+			return
+		}
+		rows := s.sched.ServersView()
+		if len(rows) == 0 {
+			return
+		}
+		id := nextConnID()
+		payload, _ := json.Marshal(rows)
+		ev := model.Event{ID: id, Kind: model.KindServerMetrics, TS: s.clk.Now(), Payload: payload}
+		fmt.Fprintf(w, "id: %d\ndata: %s\n\n", id, encodeSSE(ev))
 		flusher.Flush()
 	}
 
@@ -182,6 +210,8 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 					sendScreen(f, sid)
 				}
 			}
+		case <-serverMetricsCh:
+			sendServerMetrics()
 		}
 	}
 }

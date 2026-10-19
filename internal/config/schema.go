@@ -329,6 +329,8 @@ func Schema() []SettingField {
 			"Максимум попыток входа в минуту.", ApplyNewConn),
 		intField("web.screen_interval_ms", "ms", "Веб", "Интервал экрана",
 			"Период обновления живого экрана.", ApplyNewConn),
+		intField("web.server_metrics_interval_ms", "ms", "Веб", "Интервал метрик серверов",
+			"Период пуша живой загрузки серверов (SSE SERVER_METRICS).", ApplyNewConn),
 		intField("web.paste_verify_sec", "s", "Веб", "Проверка вставки",
 			"Окно проверки вставки текста.", ApplyNewConn),
 		intField("web.paste_max_kb", "KB", "Веб", "Макс вставки",

@@ -163,6 +163,7 @@ type Web struct {
 	LoginRatePerMin int    `yaml:"login_rate_per_min"`
 	// v2 (раздел 4.2): рабочие ключи веб-подсистемы.
 	ScreenIntervalMS      int `yaml:"screen_interval_ms"`
+	ServerMetricsIntervalMS int `yaml:"server_metrics_interval_ms"`
 	PasteVerifySec        int `yaml:"paste_verify_sec"`
 	PasteMaxKB            int `yaml:"paste_max_kb"`
 	SpawnReadySec         int `yaml:"spawn_ready_sec"`
@@ -551,6 +552,7 @@ func (c *Config) Validate() error {
 		"faults.flap_count":              c.Faults.FlapCount,
 		"faults.flap_window_sec":         c.Faults.FlapWindowSec,
 		"web.screen_interval_ms":         c.Web.ScreenIntervalMS,
+		"web.server_metrics_interval_ms": c.Web.ServerMetricsIntervalMS,
 		"web.paste_verify_sec":           c.Web.PasteVerifySec,
 		"web.paste_max_kb":               c.Web.PasteMaxKB,
 		"web.spawn_ready_sec":            c.Web.SpawnReadySec,

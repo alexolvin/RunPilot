@@ -83,6 +83,16 @@ func (s *Server) screenTicker() *time.Ticker {
 	return time.NewTicker(time.Duration(ms) * time.Millisecond)
 }
 
+// serverMetricsTicker — тикер живой загрузки серверов (nil, если интервал
+// не задан). SERVER_METRICS шлётся всем SSE-клиентам (живой поток, не БД).
+func (s *Server) serverMetricsTicker() *time.Ticker {
+	ms := s.cfg.Web.ServerMetricsIntervalMS
+	if ms <= 0 {
+		return nil
+	}
+	return time.NewTicker(time.Duration(ms) * time.Millisecond)
+}
+
 // parseScreens — строка ?screens=<t>,<t> → sids (разрешение, дедупликация,
 // предел web.screens_per_client_max).
 func (s *Server) parseScreens(q string) []string {
