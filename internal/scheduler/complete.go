@@ -18,12 +18,14 @@ func (s *Scheduler) tickComplete(now time.Time) {
 		if isJob(sess) {
 			continue
 		}
-		switch sess.State {
-		case model.SessionRunning, model.SessionDetached:
-			// RUNNING и DETACHED (§8 ТЗ). DISPATCHING ход НЕ завершает —
-			// только путями подтверждения старта (см. tickConfirm).
-			s.checkTurn(sess, now)
+		// Завершение хода — к любой ACTIVE-аренде (RUNNING, DETACHED, IDLE с
+		// неявной арендой). DISPATCHING (аренда PENDING) ход НЕ завершает —
+		// только путями подтверждения старта (см. tickConfirm).
+		lease, err := s.st.LeaseGet(sess.SID)
+		if err != nil || lease.State != model.LeaseActive {
+			continue
 		}
+		s.checkTurn(sess, now)
 	}
 }
 
@@ -46,8 +48,8 @@ func (s *Scheduler) checkTurn(sess store.SessionRecord, now time.Time) {
 		return
 	}
 
-	// --- Снятие аренды посреди хода (только RUNNING; раздел 8, таблица) ---
-	if sess.State == model.SessionRunning {
+	// --- Снятие аренды посреди хода (к любой ACTIVE-аренде; раздел 8, таблица) ---
+	{
 		// Панель BUSY, запросов нет tool_hold_max_sec → TOOL_TIMEOUT.
 		if pr != nil && pr.state == model.PaneBusy && inflight == 0 {
 			since := time.Time{}
@@ -200,9 +202,11 @@ func (s *Scheduler) closeTurn(sess store.SessionRecord, turn *model.Turn, now ti
 		_ = s.st.SetSessionAttempts(sess.SID, 0)
 		// RUNNING → IDLE (turn_done); DETACHED → IDLE (idle_no_error): из
 		// DETACHED нет перехода по EvTurnDone (автомат, раздел 4 ТЗ).
-		if sess.State == model.SessionDetached {
+		// IDLE (неявная аренда, ход закрыт) — сессия уже IDLE, переход не нужен.
+		switch sess.State {
+		case model.SessionDetached:
 			s.sessionEvent(sess, model.EvIdleNoError, "")
-		} else {
+		case model.SessionRunning:
 			s.sessionEvent(sess, model.EvTurnDone, "")
 		}
 	case model.ResultErrorTransient:

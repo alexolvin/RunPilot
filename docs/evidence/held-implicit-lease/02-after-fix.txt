@@ -1,0 +1,4 @@
+=== RUN   TestIdleSessionActiveLease
+--- PASS: TestIdleSessionActiveLease (0.03s)
+PASS
+ok  	runpilot/internal/scheduler	(cached)

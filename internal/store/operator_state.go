@@ -8,9 +8,8 @@ import "database/sql"
 
 // Виды операторских состояний (per-name).
 const (
-	OperatorStateServerDrain  = "server_drain"
-	OperatorStateServerPaused = "server_paused"
-	OperatorStateNodeDrain    = "node_drain"
+	OperatorStateServerDrain = "server_drain"
+	OperatorStateNodeDrain   = "node_drain"
 )
 
 // SetOperatorState — записать (on=true) или снять (on=false) операторское

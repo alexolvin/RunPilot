@@ -149,6 +149,8 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 		case model.SessionDetached:
 			s.sessionEvent(sess, model.EvResumeRequest, "")
 		}
+		// Неявная аренда: ход создан атомарно с выдачей (идемпотентно).
+		s.ensureTurn(sess.SID, now, now)
 		s.eventAt(now, model.KindLeaseGrant, sess.SID, f.Name, map[string]any{
 			"server": f.Name, "slot": l.Slot, "origin": "IMPLICIT", "held": true,
 			"rule": rule, "candidates": candidates,

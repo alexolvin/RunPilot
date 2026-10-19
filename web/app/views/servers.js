@@ -37,7 +37,6 @@ function ServerDetail({ name }) {
   const s = useStore();
   const [mon, setMon] = useState(null);
   const [del, setDel] = useState(false);
-  const [drain, setDrain] = useState(false);
   const [edit, setEdit] = useState(false);
   useEffect(() => {
     get('/api/v1/monitoring').then((r) => { if (r.ok && r.data) setMon(r.data); });
@@ -94,53 +93,25 @@ function ServerDetail({ name }) {
     </${Section}>
     <div style=${{ marginTop: 'var(--space-5)' }} class="detail-actions">
       <${Button} variant="secondary" label=${T.servers.edit} onClick=${() => setEdit(true)} />
-      <${Button} variant="secondary" label=${T.servers.drain} onClick=${() => setDrain(true)} />
       <${Button} variant="secondary"
-        label=${server.state === 'PAUSED' ? T.servers.resume : T.servers.pause}
-        onClick=${() => togglePause(name, server.state)} />
+        label=${server.state === 'DRAINING' ? T.servers.undrain : T.servers.drain}
+        title=${server.state === 'DRAINING' ? '' : T.servers.drainTip}
+        onClick=${() => toggleDrain(name, server.state)} />
       <${Button} variant="danger" label=${T.servers.delTitle} onClick=${() => setDel(true)} />
     </div>
     ${del ? html`<${ServerDelete} name=${name} used=${server.running} onClose=${() => setDel(false)} />` : null}
-    ${drain ? html`<${ServerDrain} name=${name} onClose=${() => setDrain(false)} />` : null}
     ${edit ? html`<${ServerWizard} server=${server} onClose=${() => setEdit(false)} />` : null}
   </div>`;
 }
 
-// --- J4: снять ходы с сервера (drain) ---
-function ServerDrain({ name, onClose }) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-  const doDrain = () => {
-    setBusy(true); setErr('');
-    post('/api/v1/servers/' + encodeURIComponent(name) + '/drain', { on: true })
-      .then((r) => {
-        if (r.ok) {
-          actions.addToast({ kind: 'info', text: T.servers.drained });
-          onClose();
-          return;
-        }
-        setErr((r.data && r.data.detail) || ('HTTP ' + r.status));
-      })
-      .catch(() => setErr('network'))
-      .finally(() => setBusy(false));
-  };
-  return html`<${Dialog} title=${T.servers.drain + ': ' + name} onClose=${onClose}
-    footer=${html`
-      <${Button} variant="secondary" label=${T.nodes.enClose} onClick=${onClose} />
-      <${Button} variant="primary" label=${T.servers.drain} loading=${busy} onClick=${doDrain} />`}>
-    <p class="dialog-note">${T.servers.drainNote}</p>
-    ${err ? html`<p class="dialog-err">${err}</p>` : null}
-  </${Dialog}>`;
-}
-
-// --- Пауза: временно вывести сервер из выдачи (идущие ходы доделываются) ---
-function togglePause(name, state) {
-  const on = state !== 'PAUSED';
-  post('/api/v1/servers/' + encodeURIComponent(name) + '/pause', { on })
+// --- Дренаж: вывести сервер из выдачи (идущие ходы доделываются) ---
+function toggleDrain(name, state) {
+  const on = state !== 'DRAINING';
+  post('/api/v1/servers/' + encodeURIComponent(name) + '/drain', { on })
     .then((r) => {
       if (r.ok) {
         actions.resync();
-        actions.addToast({ kind: 'info', text: (on ? T.servers.pauseDone : T.servers.resumeDone) + ': ' + name });
+        actions.addToast({ kind: 'info', text: (on ? T.servers.drained : T.servers.undrained) + ': ' + name });
         return;
       }
       actions.addToast({ kind: 'error', text: (r.data && r.data.detail) || ('HTTP ' + r.status) });

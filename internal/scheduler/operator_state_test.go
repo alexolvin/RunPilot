@@ -38,11 +38,8 @@ func TestOperatorStatesPersistAndRestore(t *testing.T) {
 	if hosts, _ := h.st.OperatorStates(store.OperatorStateNodeDrain); !containsStr(hosts, "host1") {
 		t.Fatal("drain узла не сохранён в БД")
 	}
-	// 3) drain + пауза сервера (как делает колбэк serve.go).
+	// 3) drain сервера (как делает колбэк serve.go).
 	if err := h.st.SetOperatorState("a", store.OperatorStateServerDrain, true); err != nil {
-		t.Fatal(err)
-	}
-	if err := h.st.SetOperatorState("b", store.OperatorStateServerPaused, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -67,7 +64,7 @@ func TestOperatorStatesPersistAndRestore(t *testing.T) {
 		Reload: func() error { return h.st.LoadWorkingInto(h.cfg) },
 	})
 	_ = sch2.LoadMode()
-	d, p, n := sch2.RestoreOperatorStates(func(name string, st model.ServerState) {
+	d, _, n := sch2.RestoreOperatorStates(func(name string, st model.ServerState) {
 		applied[name] = st
 	})
 
@@ -78,11 +75,8 @@ func TestOperatorStatesPersistAndRestore(t *testing.T) {
 	if applied["a"] != model.ServerDraining {
 		t.Fatalf("drain сервера a не восстановлен: %q", applied["a"])
 	}
-	if applied["b"] != model.ServerPaused {
-		t.Fatalf("пауза сервера b не восстановлена: %q", applied["b"])
-	}
-	if !containsStr(d, "a") || !containsStr(p, "b") || !containsStr(n, "host1") {
-		t.Fatalf("списки восстановления неверны: d=%v p=%v n=%v", d, p, n)
+	if !containsStr(d, "a") || !containsStr(n, "host1") {
+		t.Fatalf("списки восстановления неверны: d=%v n=%v", d, n)
 	}
 	if !sch2.nodeDrain["host1"] {
 		t.Fatal("nodeDrain не применён к host1 после восстановления")

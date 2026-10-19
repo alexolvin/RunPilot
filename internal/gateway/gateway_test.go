@@ -600,6 +600,33 @@ func TestPassthroughModels(t *testing.T) {
 	}
 }
 
+// W15: /v1/models — декларация modalities модели пула (пересечение серверов).
+func TestPassthroughModelsModalities(t *testing.T) {
+	a := fakellm.Start("model-a")
+	defer a.Close()
+	b := fakellm.Start("model-b")
+	defer b.Close()
+	t.Setenv("RUNPILOT_TEST_KEY_A", "ka")
+	t.Setenv("RUNPILOT_TEST_KEY_B", "kb")
+	sa := srvCfg("a", 5, 1, a.URL, "RUNPILOT_TEST_KEY_A")
+	sa.InputModalities = []string{"image", "video"}
+	sb := srvCfg("b", 10, 1, b.URL, "RUNPILOT_TEST_KEY_B")
+	sb.InputModalities = []string{"video"} // пересечение [image,video]∩[video]=[video]
+	st, _, ts := testEnv(t, []config.Server{sa, sb})
+	s := mkSession(t, st, model.SessionIdle)
+
+	resp, body := postJSON(t, ts.URL+"/s/"+s+"/v1/models", "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("v1/models: %d", resp.StatusCode)
+	}
+	if !strings.Contains(body, `"modalities":["video"]`) {
+		t.Fatalf("нет modalities [video] в ответе /v1/models: %s", body)
+	}
+	if strings.Contains(body, "image") {
+		t.Fatalf("image не должен быть в modalities (пересечение): %s", body)
+	}
+}
+
 // --- запрет usage/529 в коде шлюза (раздел 6 ТЗ) ---
 
 func TestNoUsageNo529(t *testing.T) {

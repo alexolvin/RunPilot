@@ -489,12 +489,6 @@ func (s *Scheduler) RestoreOperatorStates(applyServerState func(name string, st 
 			applyServerState(name, model.ServerDraining)
 		}
 	}
-	pause, _ = s.st.OperatorStates(store.OperatorStateServerPaused)
-	for _, name := range pause {
-		if applyServerState != nil {
-			applyServerState(name, model.ServerPaused)
-		}
-	}
 	nodes, _ = s.st.OperatorStates(store.OperatorStateNodeDrain)
 	for _, host := range nodes {
 		s.NodeDrain(host, true)
@@ -512,9 +506,9 @@ func (s *Scheduler) ServerState(name string, st model.ServerState) {
 		delete(s.downSince, name)
 	}
 	s.event(model.KindServerState, "", name, map[string]any{"server": name, "state": string(st)})
-	// PAUSED не снимает идущие ходы (оператор пузил сервер, чтобы доделать
-	// текущие; DOWN/DRAINING/QUARANTINED — снимают, как раньше).
-	if st != model.ServerPaused {
+	// DRAINING не снимает идущие ходы (оператор вывел сервер из выдачи, чтобы
+	// доделать текущие; DOWN/QUARANTINED — снимают).
+	if st != model.ServerDraining {
 		s.serverDownLocked(name, now)
 	}
 	fn := s.onStatus

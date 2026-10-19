@@ -296,25 +296,14 @@ func newServeCmd() *cobra.Command {
 				// п.1: drain сервера переживает рестарт.
 				return st.SetOperatorState(name, store.OperatorStateServerDrain, on)
 			})
-			// Пауза (UP↔PAUSED): новый ход не выдаётся, идущие доделываются.
-			// Sticky: health-серии не сбрасывают PAUSED в UP (как DRAINING).
-			srv.SetServerPause(func(name string, on bool) error {
-				if on {
-					gw.Servers().SetState(name, model.ServerPaused)
-				} else {
-					gw.Servers().SetState(name, model.ServerUp)
-				}
-				// п.1: пауза сервера переживает рестарт.
-				return st.SetOperatorState(name, store.OperatorStateServerPaused, on)
-			})
-			// п.1: восстановить операторские состояния (пауза/drain сервера,
+			// п.1: восстановить операторские состояния (drain сервера,
 			// drain узла, пауза планировщика) из БД. После LoadMode/Recover
 			// (активных аренд нет) и до Start.
-			if d, p, n := sch.RestoreOperatorStates(func(name string, stt model.ServerState) {
+			if d, _, n := sch.RestoreOperatorStates(func(name string, stt model.ServerState) {
 				gw.Servers().SetState(name, stt)
-			}); len(d)+len(p)+len(n) > 0 {
+			}); len(d)+len(n) > 0 {
 				log.Info("serve: восстановлены операторские состояния: server-drain "+strconv.Itoa(len(d))+
-					", server-pause "+strconv.Itoa(len(p))+", node-drain "+strconv.Itoa(len(n)))
+					", node-drain "+strconv.Itoa(len(n)))
 			}
 
 			var (

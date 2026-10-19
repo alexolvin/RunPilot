@@ -3,12 +3,14 @@ package gateway
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -233,6 +235,12 @@ func joinPath(base, rest string) string {
 // попытки — в контексте исходящего запроса.
 func (g *Gateway) modifyResponseFor(srv *Server) func(*http.Response) error {
 	return func(res *http.Response) error {
+		// W15: /v1/models — декларировать медиа-возможности модели пула,
+		// чтобы любой агент видел поддержку image/video.
+		if res.StatusCode == http.StatusOK && strings.HasSuffix(res.Request.URL.Path, "/v1/models") {
+			g.augmentModels(res)
+			return nil
+		}
 		st := stateFromCtx(res.Request.Context())
 		if st != nil {
 			st.setStatus(res.StatusCode)
@@ -264,6 +272,76 @@ func (g *Gateway) modifyResponseFor(srv *Server) func(*http.Response) error {
 		}
 		return nil
 	}
+}
+
+// augmentModels — W15: /v1/models — добавить modalities модели пула в ответ,
+// чтобы любой агент видел поддержку image/video. Ответ буферизируется
+// (маленький JSON), к каждой модели в data[] добавляется поле modalities.
+func (g *Gateway) augmentModels(res *http.Response) {
+	modalities := g.poolModalities()
+	if len(modalities) == 0 {
+		return
+	}
+	body, err := io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	if err != nil {
+		return
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(body, &doc); err != nil {
+		res.Body = io.NopCloser(bytes.NewReader(body))
+		return
+	}
+	data, ok := doc["data"].([]any)
+	if !ok {
+		res.Body = io.NopCloser(bytes.NewReader(body))
+		return
+	}
+	for _, item := range data {
+		if m, ok := item.(map[string]any); ok {
+			m["modalities"] = modalities
+		}
+	}
+	newBody, err := json.Marshal(doc)
+	if err != nil {
+		res.Body = io.NopCloser(bytes.NewReader(body))
+		return
+	}
+	res.Body = io.NopCloser(bytes.NewReader(newBody))
+	res.ContentLength = int64(len(newBody))
+	res.Header.Set("Content-Length", strconv.Itoa(len(newBody)))
+}
+
+// poolModalities — пересечение InputModalities всех серверов пула (порядок
+// image, video) — та же логика, что api.Server.IntersectionModalities.
+func (g *Gateway) poolModalities() []string {
+	servers := g.servers.All()
+	if len(servers) == 0 {
+		return nil
+	}
+	var out []string
+	for _, m := range []string{"image", "video"} {
+		ok := true
+		for _, srv := range servers {
+			if !containsStr(srv.Cfg.InputModalities, m) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func containsStr(s []string, v string) bool {
+	for _, x := range s {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
 
 // proxyErrorHandler — ошибка ReverseProxy: до первого байта (соединение,

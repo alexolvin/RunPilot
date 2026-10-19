@@ -1,0 +1,6 @@
+=== RUN   TestIdleSessionActiveLease
+    held_implicit_lease_test.go:40: аренда не снята (stale): ACTIVE
+--- FAIL: TestIdleSessionActiveLease (0.04s)
+FAIL
+FAIL	runpilot/internal/scheduler	0.044s
+FAIL
