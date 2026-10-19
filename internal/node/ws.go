@@ -107,6 +107,12 @@ func (w *WSClient) session(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("dial: %w", err)
 	}
 	defer conn.Close()
+	// Разрыв соединения при отмене ctx (SIGTERM/SIGINT): без этого ReadMessage
+	// ждёт wsReadDeadline (2 мин) — узел не выходит сразу по stop/restart.
+	go func() {
+		<-ctx.Done()
+		_ = conn.Close()
+	}()
 
 	// Э6: ping координатора (WS-контрольный кадр) продлевает read deadline.
 	// Пинг потребляется внутри ReadJSON (авто-pong) и до цикла чтения не
@@ -148,6 +154,11 @@ func (w *WSClient) session(ctx context.Context) (bool, error) {
 		for {
 			select {
 			case m := <-out:
+				if m.Type == proto.KindReply {
+					if jb, jerr := json.Marshal(&m); jerr == nil {
+						w.log.Info("node: reply JSON", "len", len(jb), "json", string(jb))
+					}
+				}
 				if err := conn.WriteJSON(&m); err != nil {
 					select {
 					case writeErr <- err:

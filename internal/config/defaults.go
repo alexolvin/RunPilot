@@ -1,5 +1,10 @@
 package config
 
+// defaultDirsMax — web.dirs_max по умолчанию (13 ТЗ). Единственный источник
+// числа: DirsMaxOrDefault применяет его, если в конфиге значение <= 0
+// (минимальный конфиг узла без web-секции: DirsMax=0 → иначе dirs[:0] пуст).
+const defaultDirsMax = 100
+
 // Defaults — единственные значения по умолчанию (раздел 13 ТЗ).
 // В остальном коде дублировать эти числа запрещено (строгое правило 2).
 func Defaults() *Config {
@@ -96,7 +101,7 @@ func Defaults() *Config {
 			PasteVerifySec:        10,
 			PasteMaxKB:            64,
 			SpawnReadySec:         5,
-			DirsMax:               100,
+			DirsMax:               defaultDirsMax,
 			SSEReplay:             200,
 			SSEClientsMax:         20,
 			ScreensPerClientMax:   10,
@@ -238,4 +243,14 @@ func Defaults() *Config {
 			Backups: 3,
 		},
 	}
+}
+
+// DirsMaxOrDefault — web.dirs_max или дефолт, если значение <= 0. Минимальный
+// конфиг узла без web-секции даёт DirsMax=0 → без этого listDirs резал dirs до
+// dirs[:0] (пустой список каталогов).
+func (w Web) DirsMaxOrDefault() int {
+	if w.DirsMax > 0 {
+		return w.DirsMax
+	}
+	return defaultDirsMax
 }

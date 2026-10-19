@@ -76,6 +76,7 @@ func newRoot(ver string) *cobra.Command {
 		newRelayCmd(),
 		newBrowserCmd(),
 		newOrchCmd(),
+		newNodeKeyCmd(),
 	)
 	root.AddCommand(newQueueCmds()...)
 	return root

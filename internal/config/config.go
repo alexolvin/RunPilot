@@ -148,6 +148,11 @@ type Coordinator struct {
 	HeartbeatSec  int    `yaml:"heartbeat_sec"`
 	DistDir       string `yaml:"dist_dir"`
 	EmbeddedNode  bool   `yaml:"embedded_node"`
+	// SSHKeys — приватные ключи координатора для ssh-подключения к узлам
+	// (enroll auto_install). Пусто = ssh сам перебирает ~/.ssh/ (старое
+	// поведение). Ротация без простоя: добавить новый ключ в список (ssh
+	// попробует оба), разнести новый публичный по узлам, затем убрать старый.
+	SSHKeys []string `yaml:"ssh_keys"`
 }
 
 // Web — параметры веб-слушателя (v2 раздел 2.1). Только петлевой адрес:

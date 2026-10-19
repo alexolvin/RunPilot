@@ -97,6 +97,47 @@ func TestNodeEnrollFileSetupGPU(t *testing.T) {
 	})
 }
 
+// TestNodeEnrollFileSetupPreservesConfig — повторный auto_install не затирает
+// существующий config.yaml: project_roots_default оператора переживает
+// повторную установку (баг: сброс /srv/botboss при ре-автоустановке).
+func TestNodeEnrollFileSetupPreservesConfig(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash не найден")
+	}
+	dir := t.TempDir()
+	// Первый auto_install: создаёт config.yaml.
+	script1 := nodeEnrollFileSetup(dir, "https://3p14-aaa:8788", "tok123")
+	cmd1 := exec.Command("bash", "-c", "set -euo pipefail\n"+script1)
+	if out, err := cmd1.CombinedOutput(); err != nil {
+		t.Fatalf("первый install: %v\n%s", err, out)
+	}
+	// Оператор добавляет project_roots_default (секция node).
+	cfgPath := filepath.Join(dir, "config.yaml")
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfgPath,
+		[]byte(string(data)+"  project_roots_default:\n    - /srv/botboss\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Второй auto_install (повтор) — не должен затереть config.yaml.
+	script2 := nodeEnrollFileSetup(dir, "https://3p14-aaa:8788", "tok456")
+	cmd2 := exec.Command("bash", "-c", "set -euo pipefail\n"+script2)
+	if out, err := cmd2.CombinedOutput(); err != nil {
+		t.Fatalf("второй install: %v\n%s", err, out)
+	}
+	cfg, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"project_roots_default:", "/srv/botboss"} {
+		if !strings.Contains(string(cfg), want) {
+			t.Errorf("config.yaml не содержит %q после повторного install:\n%s", want, cfg)
+		}
+	}
+}
+
 // TestNodeUpdateStaleDistRefused — W12 (ТЗ 14): бинарник в dist_dir не
 // совпадает по версии с координатором (stale dist) → API-обновление отказывает
 // 409 DIST_MISMATCH (иначе self-update узлов разворачивал бы устаревший dist).

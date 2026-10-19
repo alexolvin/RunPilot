@@ -180,6 +180,49 @@ func TestListDirs(t *testing.T) {
 	}
 }
 
+// TestListDirsZeroConfig — узел с нулевым Config (Web.DirsMax = 0: минимальный
+// конфиг узла без web-секции). До фикса listDirs обрезал dirs до dirs[:0] →
+// пустой список; после фикса (DirsMaxOrDefault, defaults.go) — все каталоги.
+func TestListDirsZeroConfig(t *testing.T) {
+	cfg := &config.Config{} // нулевой: Web.DirsMax = 0
+	cfg.Node.TmuxSockets = []string{"default"}
+	prof, err := profiles.LoadEmbeddedQwen()
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := New(cfg, prof, &fakeExec{}, clock.NewReal(),
+		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	for _, sub := range []string{"BotBoss", "migration"} {
+		if err := os.Mkdir(filepath.Join(root, sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	n.SetProjectRoots([]string{root})
+	m := proto.New(proto.KindListDirs)
+	m.CmdID = "c1"
+	rep, err := n.Handle(context.Background(), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Result != ResSent {
+		t.Fatalf("Result = %q, хочу SENT", rep.Result)
+	}
+	var dirs []string
+	for _, d := range strings.Split(rep.Detail, "\n") {
+		if d != "" {
+			dirs = append(dirs, d)
+		}
+	}
+	t.Logf("listDirs (DirsMax=0): %d каталогов: %v", len(dirs), dirs)
+	if len(dirs) != 2 {
+		t.Errorf("listDirs = %d каталогов (%v), хочу 2", len(dirs), dirs)
+	}
+}
+
 // list_dirs → reply.msg(): Roots попадает в существующее поле proto
 // ProjectRoots (подсказка веба с конкретными путями).
 func TestReplyMsgCarriesRoots(t *testing.T) {

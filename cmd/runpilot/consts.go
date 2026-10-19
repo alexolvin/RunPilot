@@ -39,6 +39,10 @@ const (
 	// tmuxDirMode/tmuxFileMode — режимы каталога/файла tmux-блока (0700/0600).
 	tmuxDirMode  = 0o700
 	tmuxFileMode = 0o600
+	// sshDirMode — режим каталога ~/.ssh (node-key gen).
+	sshDirMode = 0o700
+	// pubKeyFields — минимум полей в публичном ключе: "<keytype> <base64>".
+	pubKeyFields = 2
 	// eventChanLen — размер канала событий команды `events`.
 	eventChanLen = 256
 	// briefPayloadMax — длина payload в выводе `events`.

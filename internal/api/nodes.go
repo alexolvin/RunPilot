@@ -119,6 +119,51 @@ func parseTailnetHost(data []byte, hostname string) (string, bool) {
 	return "", false
 }
 
+// TailnetSelfIP — собственный IPv4 tailscale-IP этой машины (Self из
+// `tailscale status --json`). Используется для from="<ip>" в authorized_keys
+// узлов: узел принимает ключ координатора только с его tailnet-IP.
+// Возвращает ("", false), если tailscale недоступен или IP не найден.
+func TailnetSelfIP() (string, bool) {
+	out, err := exec.Command("tailscale", "status", "--json").Output()
+	if err != nil {
+		return "", false
+	}
+	return parseTailnetSelfIP(out)
+}
+
+// parseTailnetSelfIP — IPv4 из Self.TailscaleIPs JSON `tailscale status --json`.
+func parseTailnetSelfIP(data []byte) (string, bool) {
+	var status struct {
+		Self struct {
+			TailscaleIPs []string `json:"TailscaleIPs"`
+		} `json:"Self"`
+	}
+	if err := json.Unmarshal(data, &status); err != nil {
+		return "", false
+	}
+	for _, ip := range status.Self.TailscaleIPs {
+		// IPv4 (tailscale 100.x.y.z) — без двоеточия.
+		if !strings.Contains(ip, ":") {
+			return ip, true
+		}
+	}
+	return "", false
+}
+
+// sshKeyFlags — « -i <путь>» на каждый ключ coordinator.ssh_keys (с
+// расширением ~). Пусто, если список пуст (ssh сам перебирает ~/.ssh/).
+func (s *Server) sshKeyFlags() string {
+	var flags string
+	for _, k := range s.cfg.Coordinator.SSHKeys {
+		p, err := config.ExpandPath(k)
+		if err != nil {
+			continue
+		}
+		flags += " -i " + p
+	}
+	return flags
+}
+
 // handleNodeEnroll — POST /api/v1/nodes/enroll: создать enroll-токен.
 // host (опц.) — целевая машина (tailscale-name): install выполняется через
 // ssh <user>@<host> (оператор со своей машины, без sudo на целевой).
@@ -173,8 +218,11 @@ func (s *Server) handleNodeEnroll(w http.ResponseWriter, r *http.Request) {
 		}
 		if body.AutoInstall {
 			// Автоустановка: ssh выполняет координатор (нереинтерактивно).
+			// -i на каждый ключ из coordinator.ssh_keys (ротация без простоя:
+			// ssh попробует все перечисленные ключи).
 			install = "ssh -o BatchMode=yes -o ConnectTimeout=10 " +
-				"-o StrictHostKeyChecking=accept-new " + target + " '" + curlCmd + "'"
+				"-o StrictHostKeyChecking=accept-new" + s.sshKeyFlags() +
+				" " + target + " '" + curlCmd + "'"
 		} else {
 			// Ручной режим: оператор запускает команду со своей машины.
 			install = "ssh " + target + " '" + curlCmd + "'"
@@ -278,25 +326,30 @@ func nodeEnrollFileSetup(cfgDir, coordinator, token string) string {
 	secrets := cfgDir + "/secrets.env"
 	return fmt.Sprintf(`cfg="%s"
 secrets="%s"
-cat > "$cfg" <<'YAML'
+# config.yaml: создаём только если нет — не затираем operator-конфиг
+# (project_roots_default и пр. должны пережить повторный auto_install).
+if [ ! -f "$cfg" ]; then
+  cat > "$cfg" <<'YAML'
 client:
   coordinator: %s
   token_env: RUNPILOT_NODE_TOKEN
 node:
   host: ""
 YAML
-# Телеметрия GPU (W13 этап 5): --gpu / --gpu-server.
-if [ -n "${GPU_SERVER:-}" ]; then
-  {
-    printf '  gpu: %%s\n' "${GPU:-nvidia}"
-    printf '  gpu_server: %%s\n' "$GPU_SERVER"
-  } >> "$cfg"
+  # Телеметрия GPU (W13 этап 5): --gpu / --gpu-server.
+  if [ -n "${GPU_SERVER:-}" ]; then
+    {
+      printf '  gpu: %%s\n' "${GPU:-nvidia}"
+      printf '  gpu_server: %%s\n' "$GPU_SERVER"
+    } >> "$cfg"
+  fi
+  QWEN_PATH="$(command -v qwen || true)"
+  if [ -n "$QWEN_PATH" ]; then
+    printf 'profiles:\n  qwen:\n    command: %%s\n' "$QWEN_PATH" >> "$cfg"
+  fi
+  chmod 600 "$cfg"
 fi
-QWEN_PATH="$(command -v qwen || true)"
-if [ -n "$QWEN_PATH" ]; then
-  printf 'profiles:\n  qwen:\n    command: %%s\n' "$QWEN_PATH" >> "$cfg"
-fi
-chmod 600 "$cfg"
+# secrets.env — всегда (токен может обновиться при ротации).
 echo "RUNPILOT_NODE_TOKEN=%s" > "$secrets"
 chmod 600 "$secrets"
 `, cfg, secrets, coordinator, token)
@@ -762,6 +815,7 @@ func (s *Server) handleNodeDirs(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusServiceUnavailable, "NODE", err.Error())
 		return
 	}
+	s.log.Info("api: nodeDirs reply", "host", host, "result", rep.Result, "detail_len", len(rep.Detail), "detail", rep.Detail)
 	dirs := splitLines(rep.Detail)
 	// W13 этап 8: фильтр по project_dir_match (подстрока в пути).
 	if match := s.cfg.Node.ProjectDirMatch; match != "" {

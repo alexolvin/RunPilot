@@ -77,7 +77,7 @@ var configKeys = []string{
 	"coordinator.gateway_port", "coordinator.api_port", "coordinator.gateway_url",
 	"coordinator.token_env", "coordinator.db_path", "coordinator.shutdown_grace_sec",
 	"coordinator.bind_retry_sec", "coordinator.bind_alert_min", "coordinator.heartbeat_sec",
-	"coordinator.dist_dir", "coordinator.embedded_node",
+	"coordinator.dist_dir", "coordinator.embedded_node", "coordinator.ssh_keys",
 	"scheduler", "scheduler.tick_ms", "scheduler.aging_sec", "scheduler.prefer_wait_sec",
 	"scheduler.pin_unavailable_sec", "scheduler.affinity_ttl_sec", "scheduler.resume_backoff_sec",
 	"scheduler.auto_requeue_max", "scheduler.snapshot_max_age_sec", "scheduler.dispatch_stable_sec",
