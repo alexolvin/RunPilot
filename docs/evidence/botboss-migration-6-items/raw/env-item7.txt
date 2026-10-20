@@ -56,9 +56,19 @@ __MODULES_LMINIT
 which_declare
 
 # Вывод по пункту 7:
-# - переменные RunPilot: RUNPILOT_SID (единственная).
+# - переменные RunPilot: RUNPILOT_SID.
 # - шлюз: OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL (gateway-URL сессии).
 # - qwen: QWEN_CODE_API_TIMEOUT_MS / QWEN_CODE_SYSTEM_DEFAULTS_PATH / QWEN_CODE_SYSTEM_SETTINGS_PATH.
 # - ключей бирж (BINANCE/KUCOIN/BYBIT/OKX/COINBASE) — НЕТ.
 # - Vault (VAULT_*) — НЕТ.
-# - RUNPILOT_NODE_TOKEN — НЕТ (токен узла в env кодера не попадает).
+
+# СВЕДЕНИЕ / КОРРЕКЦИЯ (2026-10-20): RUNPILOT_NODE_TOKEN В ОКРУЖЕНИИ КОДЕРА
+# ПРИСУТСТВУЕТ — на узле (vzu5-big). Эталонный снимок выше снят с self-node
+# координатора (C6C1DDV93T на 3p14), где токен узла действительно отсутствует
+# (tmux-сервер поднимает координатор, чей env — RUNPILOT_TOKEN, а не
+# RUNPILOT_NODE_TOKEN). На узле tmux-сервер поднимает ПРОЦЕСС УЗЛА, который
+# читает secrets.env (RUNPILOT_NODE_TOKEN), и токен наследуется кодером.
+# Проверено на bbmig (vzu5-big, pid 69884/69893): RUNPILOT_NODE_TOKEN = 1.
+#
+# Это ПРИНЯТОЕ РЕШЕНИЕ ВЛАДЕЛЬЦА (2026-10-19): токен узла в env кодера
+# допустим, не дефект, кодовый фикс не требуется.
