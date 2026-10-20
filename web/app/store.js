@@ -333,11 +333,10 @@ export const actions = {
       // ресинка /state (R3: без REST-поллинга).
       patch.servers = pl.map(normServer);
     } else if (ev.kind === 'SESSION_STATE' && ev.sid && pl.to) {
-      patch.sessions = S.sessions.map((s) =>
-        s.sid === ev.sid ? { ...s, state: pl.to } : s);
-      // Слоты серверов (slots_info в карточке) зависят от занятости сессий:
-      // без ресинка подпись «занят <сессия>» в карточке сервера устаревает до
-      // ручного обновления страницы. Срез свежий — slots_info актуален.
+      // Состояние сессии меняет и секции («В работе»/«Требуют внимания»), и
+      // слоты серверов (slots_info в карточке). Обновляем ВСЁ из одного
+      // свежего среза /state (одновременно), а не точечно: точечный патч
+      // sessions уезжал от карточек на время ресинка → рассинхрон элементов.
       if (!S.resyncing) doResync();
     } else if (ev.kind === 'HOLD' && ev.sid && pl.reason) {
       patch.sessions = S.sessions.map((s) =>
