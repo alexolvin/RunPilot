@@ -121,6 +121,7 @@ export function NodeEnroll({ onClose }) {
   const s = useStore();
   const [user, setUser] = useState('');
   const [host, setHost] = useState('');
+  const [password, setPassword] = useState('');
   const [ready, setReady] = useState(false);
   // Базовый набор узлов на момент открытия: новый узел (node_id) = «подключился».
   const base = useState(() => new Set(s.nodes.map((n) => n.node_id)))[0];
@@ -146,6 +147,7 @@ export function NodeEnroll({ onClose }) {
     post('/api/v1/nodes/enroll', {
       user: user.trim() || undefined,
       host: h,
+      password: password || undefined,
       auto_install: true,
     }).then((r) => {
       if (!(r.ok || r.status === HTTP.accepted)) {
@@ -163,7 +165,7 @@ export function NodeEnroll({ onClose }) {
   return html`<${Dialog} title=${T.nodes.enTitle} onClose=${onClose}
     footer=${html`
       <${Button} variant="secondary" label=${T.nodes.enClose} onClick=${onClose} />
-      ${!ready && !done ? html`<${Button} variant="primary" label=${T.nodes.enAdd}
+      ${!ready ? html`<${Button} variant="primary" label=${T.nodes.enAdd}
         loading=${installing} disabled=${!host.trim() || installing} onClick=${add} />` : null}`}>
     <p class="dialog-note">${T.nodes.enNote}</p>
     <div class="field" style=${{ marginBottom: 'var(--space-3)' }}>
@@ -177,6 +179,12 @@ export function NodeEnroll({ onClose }) {
       <input type="text" value=${user} placeholder=${T.nodes.enUserPlaceholder}
         onInput=${(e) => setUser(e.target.value)} />
       <p class="dialog-note" style=${{ marginTop: 'var(--space-1)' }}>${T.nodes.enUserNote}</p>
+    </div>
+    <div class="field" style=${{ marginBottom: 'var(--space-3)' }}>
+      <label>${T.nodes.enPassword}</label>
+      <input type="password" value=${password} placeholder=${T.nodes.enPasswordPlaceholder}
+        onInput=${(e) => setPassword(e.target.value)} autoComplete="off" />
+      <p class="dialog-note" style=${{ marginTop: 'var(--space-1)' }}>${T.nodes.enPasswordNote}</p>
     </div>
     ${installing ? html`<p class="dialog-note">${T.nodes.enInstalling}</p>` : null}
     ${done ? html`

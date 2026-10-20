@@ -150,6 +150,21 @@ func parseTailnetSelfIP(data []byte) (string, bool) {
 	return "", false
 }
 
+// enrollSSHCommand — ssh-команда автоустановки узла (нереинтерактивно).
+// keyFlags — « -i <путь>» на каждый ключ coordinator.ssh_keys. password —
+// парольная авторизация: BatchMode снят (он гасит промпт пароля), ключ
+// пробуют первым, пароль — fallback через SSH_ASKPASS (задаётся в
+// runEnrollInstall, не в самой команде).
+func enrollSSHCommand(target, curlCmd, keyFlags string, password bool) string {
+	batch := "-o BatchMode=yes "
+	if password {
+		batch = ""
+	}
+	return "ssh " + batch + "-o ConnectTimeout=10 " +
+		"-o StrictHostKeyChecking=accept-new" + keyFlags +
+		" " + target + " '" + curlCmd + "'"
+}
+
 // sshKeyFlags — « -i <путь>» на каждый ключ coordinator.ssh_keys (с
 // расширением ~). Пусто, если список пуст (ssh сам перебирает ~/.ssh/).
 func (s *Server) sshKeyFlags() string {
@@ -177,11 +192,13 @@ func (s *Server) handleNodeEnroll(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		User        string `json:"user"`
 		Host        string `json:"host"`
+		Password    string `json:"password"`
 		AutoInstall bool   `json:"auto_install"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	user := strings.TrimSpace(body.User)
 	host := strings.TrimSpace(body.Host)
+	password := strings.TrimSpace(body.Password)
 	if user != "" && !userNameRe.MatchString(user) {
 		httpError(w, http.StatusBadRequest, "BAD_USER",
 			"некорректное имя пользователя (допустимы [a-z_][a-z0-9_-]*)")
@@ -218,11 +235,7 @@ func (s *Server) handleNodeEnroll(w http.ResponseWriter, r *http.Request) {
 		}
 		if body.AutoInstall {
 			// Автоустановка: ssh выполняет координатор (нереинтерактивно).
-			// -i на каждый ключ из coordinator.ssh_keys (ротация без простоя:
-			// ssh попробует все перечисленные ключи).
-			install = "ssh -o BatchMode=yes -o ConnectTimeout=10 " +
-				"-o StrictHostKeyChecking=accept-new" + s.sshKeyFlags() +
-				" " + target + " '" + curlCmd + "'"
+			install = enrollSSHCommand(target, curlCmd, s.sshKeyFlags(), password != "")
 		} else {
 			// Ручной режим: оператор запускает команду со своей машины.
 			install = "ssh " + target + " '" + curlCmd + "'"
@@ -232,7 +245,7 @@ func (s *Server) handleNodeEnroll(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if body.AutoInstall && host != "" {
 		// Ауто-установка: ssh в фоне, результат — по SSE (NODE_ENROLL).
-		go s.runEnrollInstall(host, install)
+		go s.runEnrollInstall(host, install, password)
 		w.WriteHeader(http.StatusAccepted)
 		json.NewEncoder(w).Encode(map[string]string{
 			"token":  tok.Token,
@@ -251,10 +264,26 @@ func (s *Server) handleNodeEnroll(w http.ResponseWriter, r *http.Request) {
 
 // runEnrollInstall — фоновая ssh-установка узла (auto_install). Результат
 // (ok/failed + вывод) уходит в веб событием SSE NODE_ENROLL (Server = host).
-func (s *Server) runEnrollInstall(host, install string) {
+// password (опц.) — парольная авторизация ssh через SSH_ASKPASS (force):
+// askpass-скрипт выводит $SSHPASS. Пароль только в env подпроцесса, не в
+// командной строке (невидим в ps).
+func (s *Server) runEnrollInstall(host, install, password string) {
 	ctx, cancel := context.WithTimeout(context.Background(), enrollInstallTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "bash", "-c", install)
+	if password != "" {
+		if f, err := os.CreateTemp("", "runpilot-askpass-*"); err == nil {
+			_, _ = f.WriteString("#!/bin/bash\nprintf '%s' \"$SSHPASS\"\n")
+			_ = f.Close()
+			_ = os.Chmod(f.Name(), askPassPerm)
+			defer os.Remove(f.Name())
+			cmd.Env = append(os.Environ(),
+				"SSHPASS="+password,
+				"SSH_ASKPASS="+f.Name(),
+				"SSH_ASKPASS_REQUIRE=force",
+			)
+		}
+	}
 	out, err := cmd.CombinedOutput()
 	result := "ok"
 	if err != nil {

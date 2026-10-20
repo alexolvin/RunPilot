@@ -313,6 +313,34 @@ func TestEnrollUser(t *testing.T) {
 	}
 }
 
+// TestEnrollSSHCommand — сборка ssh-команды автоустановки: ключевой режим
+// держит BatchMode; парольный — снимает его (иначе ssh не промптит пароль и
+// SSH_ASKPASS не сработает). В обоих случаях target и curlCmd на месте.
+func TestEnrollSSHCommand(t *testing.T) {
+	curl := "curl -fsSL http://c/enroll/tok/install.sh | bash"
+	// Ключевой режим (password=false) — BatchMode на месте.
+	key := enrollSSHCommand("coder@100.0.0.1", curl, "", false)
+	if !strings.Contains(key, "-o BatchMode=yes ") {
+		t.Errorf("ключевой режим: BatchMode отсутствует: %s", key)
+	}
+	if !strings.Contains(key, "coder@100.0.0.1 '"+curl+"'") {
+		t.Errorf("ключевой режим: target/curlCmd искажены: %s", key)
+	}
+	// Парольный режим (password=true) — BatchMode снят.
+	pass := enrollSSHCommand("coder@100.0.0.1", curl, "", true)
+	if strings.Contains(pass, "BatchMode") {
+		t.Errorf("парольный режим: BatchMode не снят (askpass не сработает): %s", pass)
+	}
+	if !strings.Contains(pass, "coder@100.0.0.1 '"+curl+"'") {
+		t.Errorf("парольный режим: target/curlCmd искажены: %s", pass)
+	}
+	// keyFlags пробрасываются.
+	kf := enrollSSHCommand("h", curl, " -i /k", true)
+	if !strings.Contains(kf, " -i /k") {
+		t.Errorf("keyFlags потеряны: %s", kf)
+	}
+}
+
 // W9 доп-3f: install.sh не держит терминал (раньше «exec runpilot node» заменял
 // шелл оператора — tmux-сеанс «зависал» на логах узла): узел ставится
 // службой systemd, скрипт завершается.

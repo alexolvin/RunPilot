@@ -7,6 +7,9 @@ const (
 	// httpScheme — схема URL дистрибутива узла (14.2): API координатора
 	// слушает на http (наружу только через tailscale serve/VPN).
 	httpScheme = "http://"
+	// askPassPerm — права askpass-скрипта (enroll password): исполняемый,
+	// только владельцу (скрипт выводит $SSHPASS, не содержит пароль сам).
+	askPassPerm = 0o700
 	// decimalBase / int64Bits — основание и разрядность strconv.ParseInt.
 	decimalBase = 10
 	int64Bits   = 64
