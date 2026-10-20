@@ -35,6 +35,7 @@ func TestInstallSystemdNodeUnit(t *testing.T) {
 		"WantedBy=default.target",
 		"EnvironmentFile=-%h/.config/runpilot/secrets.env",
 		"Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin",
+		"KillMode=process",
 		"Restart=always",
 		"ExecStart=/usr/local/bin/runpilot node --config",
 	} {

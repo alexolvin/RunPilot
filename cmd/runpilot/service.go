@@ -62,6 +62,9 @@ After=network.target
 
 [Service]
 Type=simple
+# KillMode=process: при stop/restart SIGTERM только основному процессу (узлу),
+# а не всему cgroup — tmux-сервер и кодеры (не дети узла) переживают рестарт.
+KillMode=process
 ExecStart=%s %s --config %s
 Environment=PATH=%%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 %sRestart=always
