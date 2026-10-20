@@ -1,0 +1,12 @@
+# Пункт 6 — события QUEUE_SKIP (сессия RWQM0WPQ1M)
+# Источник: БД координатора, таблица `event`.
+
+ts      = 2026-10-19T19:34:34.859096921Z
+kind    = QUEUE_SKIP
+sid     = RWQM0WPQ1M
+payload = {"prev":"","reason":"no_up_server"}
+
+ts      = 2026-10-19T19:38:47.359337833Z
+kind    = QUEUE_SKIP
+sid     = RWQM0WPQ1M
+payload = {"prev":"no_up_server","reason":"cooldown"}

@@ -1,0 +1,12 @@
+# Пункт 6 — запись queue_entry (сессия RWQM0WPQ1M, /srv/botboss/migration)
+# Источник: БД координатора, таблица `event` (QUEUE_ENQUEUE).
+# Строка `queue_entry` удалена вместе с сессией; событие ENQUEUE — авторитетная запись.
+
+ts      = 2026-10-19T19:34:34.596982451Z
+kind    = QUEUE_ENQUEUE
+sid     = RWQM0WPQ1M
+payload = {"class":"normal","front":false,"mode":"submit"}
+
+# ineligible_reason по времени (из QUEUE_SKIP):
+#   19:34:34.859Z  no_up_server   — оба сервера заняты (3p14: MoxMate, vzu5: RunPilot)
+#   19:38:47.359Z  cooldown       — vzu5 освободился (19:38:46.858Z TURN_DONE), кулдаун тика

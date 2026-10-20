@@ -2,6 +2,34 @@
 
 Координатор + узлы: tmux-сессии кодера (qwen), очередь, шлюз, веб.
 
+## Миграция BotBoss: 9-пунктовое задание (2026-10-19/20)
+
+Задание: фикс `listDirs`, SIGTERM узла, `install.sh`, доказательство ожидания в
+очереди, окружение кодера, токен узла, commit `4c61616`. **Все 9 пунктов
+выполнены.** Сырые выводы: `docs/evidence/botboss-migration-6-items/raw/`.
+
+- **listDirs (п.1–2):** `DirsMaxOrDefault()` (`internal/config/defaults.go`)
+  применяет `100` при `DirsMax <= 0`; литерала `100` в `ops.go` нет; ошибка
+  `os.ReadDir` логируется на WARN. Юнит-тест `internal/node/ops_test.go`:
+  0 каталогов до фикса, 2 после.
+- **Корень пустых dirs (п.3):** setting БД `node.project_dir_match="myhub"`
+  отфильтровал все каталоги vzu5-big. Очищен через API. `/dirs` отдаёт
+  BotBoss + migration (`raw/dirs-item3.txt`).
+- **SIGTERM/SIGINT (п.4):** узел завершается корректно,
+  `systemctl --user restart runpilot-node` ≤ 5 с.
+- **install.sh (п.5):** существующий `config.yaml` не перезаписывается.
+- **Ожидание в очереди (п.6):** цепочка `queue_entry` → `QUEUE_SKIP
+  no_up_server` → `cooldown` → `LEASE_GRANT origin=DISPATCH`.
+  `raw/queue-entry-item6.txt`, `raw/queue-skip-item6.txt`,
+  `raw/why-item6.txt`, `raw/lease-at-grant-item6.txt`.
+- **Окружение кодера (п.7):** только `RUNPILOT_SID` + gateway `OPENAI_*` +
+  `QWEN_CODE_*`; ключей бирж, Vault и `RUNPILOT_NODE_TOKEN` нет.
+  `raw/env-item7.txt`.
+- **Токен узла (п.8):** `RUNPILOT_NODE_TOKEN` в env кодера — принято владельцем
+  как допустимое (2026-10-19), не дефект. Записано в `report.md`.
+- **Commit 4c61616 (п.9):** `resolveTailnetHost`/`parseTailnetHost`
+  (`internal/api/nodes.go`). `raw/git-show-4c61616-item9.txt`.
+
 ## Диагностика stale-аренды + режимы сервера (2026-10-18)
 
 **Найдено (живой координатор 3p14-aaa):**

@@ -1,0 +1,14 @@
+# Пункт 6 — таблица lease на момент выдачи (19:38:48.858Z)
+# Источник: БД координатора, таблица `lease`.
+# Снимок: аренды, активные на 2026-10-19T19:38:48.858Z.
+
+id   sid         server  slot  state(на 19:38:48Z)  origin    granted_at
+591  VQWEXPF7YH  3p14    1     ACTIVE                IMPLICIT  2026-10-19T19:29:39.861781366Z
+
+# vzu5 свободен: аренда #590 (C6C1DDV93T / RunPilot) снята 19:38:46.858Z (TURN_DONE)
+# → на освобождённый слот vzu5 выдана новая аренда:
+#   19:38:48.858Z  LEASE_GRANT  RWQM0WPQ1M  → vzu5  origin=DISPATCH  rule=priority
+#   19:39:11.358Z  LEASE_RELEASE RWQM0WPQ1M  reason=TURN_DONE
+#
+# origin=DISPATCH (planned grant планировщика, internal/scheduler/dispatch.go),
+# НЕ IMPLICIT (неявный захват гейтвея). Занятый слот 3p14 (MoxMate) не тронут.

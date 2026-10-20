@@ -1,0 +1,21 @@
+# Пункт 9 — git show 4c61616 --stat
+
+$ git show 4c61616 --stat
+commit 4c61616884da25326f47d9e116533c05b6add3e2
+Author: Alex Olvin <alex.olvin@gmail.com>
+Date:   Tue Oct 13 21:33:34 2026 +0300
+
+    API: enroll auto_install — резолвинг tailnet-hostname в IP (MagicDNS выкл / хост вне /etc/hosts)
+
+    Co-authored-by: Qwen-Coder <qwen-coder@alibabacloud.com>
+
+ cmd/runpilot/VERSION       |  2 +-
+ internal/api/nodes.go      | 52 ++++++++++++++++++++++++++++++++++++++++++++++++++--
+ internal/api/nodes_test.go | 28 ++++++++++++++++++++++++++++
+ internal/api/server.go     |  7 +++++++
+ internal/api/w6_test.go    | 50 +++++++++++++++++++++++++++++++++++++++++---------
+ 5 files changed, 127 insertions(+), 12 deletions(-)
+
+# Функция резолвинга имени в IP — internal/api/nodes.go:
+#   resolveTailnetHost(hostname) (string, bool)  — tailscale status --json → IP
+#   parseTailnetHost(data, hostname) (string, bool) — разбор JSON, первый IPv4 пиром

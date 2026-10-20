@@ -1,0 +1,10 @@
+# Пункт 3 — GET /api/v1/nodes/vzu5-big:botagent/dirs
+# Запрос: 2026-10-20T00:04:17Z, координатор 3p14-aaa (100.124.155.106:8788)
+# Примечание: задеплоенный бинарь 965ce27 ещё несёт временные поля
+# detail_raw/detail_len (отладочные); после деплоя 0abab9f (пункт 2) они уходят.
+# Суть (фикс listDirs): /srv/botboss отдал BotBoss + migration.
+
+$ curl -sS -H "Authorization: Bearer $TOKEN" \
+    http://100.124.155.106:8788/api/v1/nodes/vzu5-big:botagent/dirs
+{"detail_len":149,"detail_raw":"/home/botagent/.config\n/home/botagent/.local\n/home/botagent/.npm\n/home/botagent/.qwen\n/home/botagent/.ssh\n/srv/botboss/BotBoss\n/srv/botboss/migration","dirs":["/home/botagent/.config","/home/botagent/.local","/home/botagent/.npm","/home/botagent/.qwen","/home/botagent/.ssh","/srv/botboss/BotBoss","/srv/botboss/migration"],"home":"/home/botagent","result":"SENT","roots":["/home/botagent","/srv/botboss"]}
+HTTP 200
