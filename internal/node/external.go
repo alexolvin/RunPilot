@@ -114,7 +114,11 @@ func SessionSID(pid int, paneSID map[int]string, execRoots map[int]ExecRoot, sta
 func ScanExternal(t *procTable, panePIDToSID map[int]string, cmdlineRe *regexp.Regexp, gatewayURL string, openAIBaseURL func(pid int) string, execRoots map[int]ExecRoot, cwd func(pid int) string) []proto.ExternalProc {
 	var out []proto.ExternalProc
 	for pid, args := range t.args {
-		if !cmdlineRe.MatchString(args) {
+		// Совпадение по EXE (basename первого поля), а не по всей cmdline:
+		// tmux-сервер несёт команду кодера как аргумент (tmux new-session …
+		// /path/qwen …), но сам кодером не является (exe=tmux) — иначе он
+		// числился бы внешним кодером (pid tmux-сервера, source=tmux).
+		if !cmdlineRe.MatchString(procName(args)) {
 			continue
 		}
 		sessionSID := SessionSID(pid, panePIDToSID, execRoots, procStartTimeFn,

@@ -108,6 +108,31 @@ func TestScanExternalSystemd(t *testing.T) {
 	}
 }
 
+// TestScanExternalTmuxServer — tmux-сервер несёт команду кодера как аргумент
+// (tmux new-session … /path/qwen …), но сам кодером не является (exe=tmux)
+// -> НЕ внешний. Раньше правило совпадало по всей cmdline и tmux-сервер
+// управляемой сессии числился внешним кодером (source=tmux, target=unknown).
+func TestScanExternalTmuxServer(t *testing.T) {
+	prof, err := profiles.LoadEmbeddedQwen()
+	if err != nil {
+		t.Fatal(err)
+	}
+	re := prof.Cmdline()
+	const psOut = `  1    0    0    0 /sbin/init
+700    1  1000  10 tmux -L default new-session -d -s migration -c /srv/migration/ -e OPENAI_BASE_URL=http://127.0.0.1:8787/s/sidmig/v1 /home/botagent/.local/bin/qwen --approval-mode yolo --session-id e8632c3c
+`
+	table, err := processTable(t.Context(), psExec(psOut))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ex := ScanExternal(table, map[int]string{}, re, testExternalGateway,
+		func(pid int) string { return "" }, map[int]ExecRoot{},
+		func(pid int) string { return "" })
+	if len(ex) != 0 {
+		t.Fatalf("tmux-сервер не кодер (exe=tmux), внешних хочу 0: %+v", ex)
+	}
+}
+
 // TestScanExternalExecLive — кодер живой EXEC-сессии: qwen 501 под процессом
 // 500, который в EXEC-корнях (PID+время старта совпадает) + верный URL шлюза
 // -> управляемый (не внешний). cmdline 500 с глобальным флагом --config:

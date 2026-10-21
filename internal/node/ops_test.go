@@ -125,6 +125,59 @@ func TestSpawn(t *testing.T) {
 	}
 }
 
+// TestSpawnCoderExitKeepsPane — спавн обёрнут в bash -c: кодер → при выходе
+// ставит @runpilot_exit (код) и остаётся в панели (exec bash -l). Выход кодера
+// НЕ закрывает панель → сессия не GONE; возобновление — qwen --session-id
+// $QWEN_SESSION_ID в той же панели.
+func TestSpawnCoderExitKeepsPane(t *testing.T) {
+	dir := t.TempDir()
+	ex := &fakeExec{}
+	ex.respond = func(name string, args ...string) (string, error) {
+		s := strings.Join(args, " ")
+		switch {
+		case strings.Contains(s, "has-session"):
+			return "", errors.New("no session") // имя свободно
+		case strings.Contains(s, "new-session"):
+			return "", nil
+		case strings.Contains(s, "list-panes"):
+			return "%0\n", nil
+		case strings.Contains(s, "set-option"):
+			return "", nil
+		}
+		return "", nil
+	}
+	n := newTestNode(t, ex)
+	n.SetProjectRoots([]string{dir})
+
+	m := proto.New(proto.KindSpawn)
+	m.CmdID = "c1"
+	m.Name = "sess-x"
+	m.Dir = dir
+	m.SID = "SS00000001"
+	m.QwenSessionID = "e8632c3c-3260-4ca6-9327-3bb2adc4d1e1"
+	rep, err := n.Handle(context.Background(), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Result != proto.ResSpawned {
+		t.Fatalf("Result = %q, хочу SPAWNED (detail=%q)", rep.Result, rep.Detail)
+	}
+	// Обёртка bash -c: кодер → @runpilot_exit → exec bash -l (панель жива).
+	if !ex.callContains("new-session", "bash", "-c") {
+		t.Error("spawn не обёрнул кодера в bash -c")
+	}
+	if !ex.callContains("exec bash -l") {
+		t.Error("spawn не добавил 'exec bash -l' (панель должна пережить выход кодера)")
+	}
+	if !ex.callContains("tmux set-option -p @runpilot_exit") {
+		t.Error("spawn не ставит @runpilot_exit при выходе кодера")
+	}
+	// QWEN_SESSION_ID — для возобновления кодера в той же панели.
+	if !ex.callContains("QWEN_SESSION_ID=e8632c3c-3260-4ca6-9327-3bb2adc4d1e1") {
+		t.Error("spawn не передал QWEN_SESSION_ID в env панели")
+	}
+}
+
 // TestSpawnTmuxSessionExists — tmux-сессия с таким именем уже существует
 // (не через runpilot) → TMUX_SESSION_EXISTS (ТЗ «запуск на узле выбранного
 // пользователя»: NAME_IN_USE — для runpilot-БД координатора, здесь — tmux).

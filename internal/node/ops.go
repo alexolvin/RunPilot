@@ -151,16 +151,36 @@ func (n *Node) spawn(ctx context.Context, m proto.Msg) (*Reply, error) {
 	// → кодер разрешает read_file медиа и объявляет реальный контекст.
 	n.applySystemSettingsEnv(env, m.SID, m.InputModalities, m.ContextWindow)
 	args := []string{"new-session", "-d", "-s", m.Name, "-c", m.Dir}
+	// QWEN_SESSION_ID — для возобновления кодера в той же панели (bash после
+	// выхода): qwen --session-id $QWEN_SESSION_ID.
+	if m.QwenSessionID != "" {
+		if env == nil {
+			env = map[string]string{}
+		}
+		env["QWEN_SESSION_ID"] = m.QwenSessionID
+	}
 	for _, k := range sortedEnvKeys(env) {
 		args = append(args, "-e", k+"="+env[k])
 	}
-	args = append(args, n.coderCommand())
-	args = append(args, CoderArgsFromEnv(env)...)
+	// Команда кодера + аргументы (W13: маршрут аргументами процесса).
+	coderCmd := []string{n.coderCommand()}
+	coderCmd = append(coderCmd, CoderArgsFromEnv(env)...)
 	// R0 ТЗ Relay §3: --session-id <uuid> --chat-recording (запись хода).
 	if m.QwenSessionID != "" {
-		args = append(args, "--session-id", m.QwenSessionID, "--chat-recording")
+		coderCmd = append(coderCmd, "--session-id", m.QwenSessionID, "--chat-recording")
 	}
-	args = append(args, m.Args...)
+	coderCmd = append(coderCmd, m.Args...)
+	// Обёртка bash -c: кодер → при выходе ставит @runpilot_exit (код) и
+	// остаётся в панели (exec bash -l). Выход кодера НЕ закрывает панель →
+	// сессия не GONE (AgentExit → HOLD); возобновление — qwen --session-id
+	// в той же панели.
+	quoted := make([]string, len(coderCmd))
+	for i, a := range coderCmd {
+		quoted[i] = singleQuote(a)
+	}
+	shellCmd := strings.Join(quoted, " ") +
+		"; rc=$?; tmux set-option -p @runpilot_exit $rc; exec bash -l"
+	args = append(args, "bash", "-c", shellCmd)
 	if _, err := n.ex.Output(ctx, "tmux", tmuxArgs(socket, args...)...); err != nil {
 		return &Reply{CmdID: m.CmdID, Result: "SPAWN_FAILED", Detail: err.Error()}, nil
 	}
@@ -190,6 +210,13 @@ func firstPaneID(ctx context.Context, ex Execer, socket, session string) string 
 		}
 	}
 	return ""
+}
+
+// singleQuote — экранирует аргумент для bash -c (одинарные кавычки; вложенные
+// ' заменяют на '\''). Нужен для обёртки спавна: команда кодера с аргументами
+// (в т.ч. --model с пробелом) передаётся одной строкой в bash -c.
+func singleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // --- list_dirs (13.2): автодополнение каталогов из project_roots ---
