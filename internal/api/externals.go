@@ -123,15 +123,27 @@ func externalBetter(a, b model.ExternalProcess) bool {
 	return a.LastSeen.After(b.LastSeen)
 }
 
-// handleExternalIgnore — POST /api/v1/externals/ignore: правило «Игнорировать».
+// handleExternalIgnore — POST /api/v1/externals/ignore: «Игнорировать».
+// Доступный узел — правило ignore_rule (host+exe+flags). Недоступный узел —
+// удалить строку (нет смысла держать правило/строку для мёртвого узла).
 func (s *Server) handleExternalIgnore(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Host  string `json:"host"`
-		Exe   string `json:"exe"`
-		Flags string `json:"flags"`
+		Host      string `json:"host"`
+		Exe       string `json:"exe"`
+		Flags     string `json:"flags"`
+		PID       int    `json:"pid"`
+		StartTime int64  `json:"start_time"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Exe == "" {
 		httpError(w, http.StatusBadRequest, "BAD_REQUEST", "exe обязателен")
+		return
+	}
+	if _, ok := s.hub.Registered(req.Host); !ok && req.PID > 0 {
+		if err := s.store.ExternalDeleteRow(req.Host, req.PID, req.StartTime); err != nil {
+			httpError(w, http.StatusInternalServerError, "STORE", err.Error())
+			return
+		}
+		writeJSON(w, map[string]any{"deleted": true})
 		return
 	}
 	id, err := s.store.IgnoreAdd(req.Host, req.Exe, req.Flags, s.clk.Now())
@@ -166,6 +178,13 @@ func (s *Server) handleExternalKill(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.PID <= 0 || req.Host == "" {
 		httpError(w, http.StatusBadRequest, "BAD_REQUEST", "host и pid обязательны")
+		return
+	}
+	// Узел недоступен — понятная ошибка БЕЗ обращения к hub (нет соединения,
+	// TERM доставить некуда).
+	if _, ok := s.hub.Registered(req.Host); !ok {
+		httpError(w, http.StatusBadGateway, "NODE_UNAVAILABLE",
+			"узел недоступен: "+req.Host)
 		return
 	}
 	var uid int

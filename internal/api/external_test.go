@@ -219,6 +219,64 @@ func TestExternalAPI(t *testing.T) {
 	}
 }
 
+// TestExternalDeleteByNode — при потере/удалении узла его строки → GONE;
+// «Игнорировать» на недоступном узле удаляет строку; «Завершить» — понятная
+// ошибка без hub.
+func TestExternalDeleteByNode(t *testing.T) {
+	st, srv, clk := extTestServer(t)
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	clk.Advance(10 * time.Second)
+	srv.ApplyNodeMsg("node-01", extMsg(proto.ExternalProc{
+		PID: 800, UID: 1000, StartSec: 10, Exe: "qwen", Source: "cron",
+		OpenAIBaseURL: "http://127.0.0.1:9000/v1",
+	}))
+	// Строка ACTIVE.
+	if list, _ := st.ExternalList(); len(list) != 1 || list[0].Status != model.ExtActive {
+		t.Fatalf("старт: %+v, хочу 1 ACTIVE", list)
+	}
+
+	// ExternalDeleteByNode → GONE.
+	if err := st.ExternalDeleteByNode("node-01", clk.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := st.ExternalList(); len(list) != 1 || list[0].Status != model.ExtGone {
+		t.Fatalf("после DeleteByNode: %+v, хочу GONE", list)
+	}
+
+	// Вторая строка (для ignore-delete на недоступном узле).
+	clk.Advance(time.Second)
+	srv.ApplyNodeMsg("node-01", extMsg(proto.ExternalProc{
+		PID: 801, UID: 1000, StartSec: 10, Exe: "qwen", Source: "cron",
+		OpenAIBaseURL: "http://127.0.0.1:9000/v1",
+	}))
+	// Реальный start_time строки 801 (now − StartSec).
+	var st801 int64
+	if list, _ := st.ExternalList(); list != nil {
+		for _, p := range list {
+			if p.PID == 801 {
+				st801 = p.StartTime
+			}
+		}
+	}
+	// node-01 не зарегистрирован в hub → «Игнорировать» с pid удаляет строку.
+	status, _ := jobReq(t, ts, "", http.MethodPost, "/api/v1/externals/ignore",
+		map[string]any{"host": "node-01", "exe": "qwen", "pid": 801, "start_time": st801})
+	if status != http.StatusOK {
+		t.Fatalf("ignore-delete: %d", status)
+	}
+	if list, _ := st.ExternalList(); len(list) != 1 {
+		t.Fatalf("после ignore-delete: %d строк, хочу 1 (801 удалена): %+v", len(list), list)
+	}
+	// «Завершить» на недоступном узле — 502 NODE_UNAVAILABLE (без hub).
+	status, out := jobReq(t, ts, "", http.MethodPost, "/api/v1/externals/kill",
+		map[string]any{"host": "node-01", "pid": 800, "start_time": 0})
+	if status != http.StatusBadGateway || out["code"] != "NODE_UNAVAILABLE" {
+		t.Fatalf("kill без узла: %d %v, хочу 502 NODE_UNAVAILABLE", status, out)
+	}
+}
+
 // TestExternalListLiveFilter — 8.2: live-список показывает только живых
 // (ACTIVE/IGNORED); GONE/KILLED (мёртвые процессы) скрыты.
 func TestExternalListLiveFilter(t *testing.T) {

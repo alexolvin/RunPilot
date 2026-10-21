@@ -301,9 +301,10 @@ function externalKill(e) {
       else actions.addToast({ kind: 'error', text: (r.data && r.data.detail) || r.status });
     }).catch(() => actions.addToast({ kind: 'error', text: 'network' }));
 }
-// W7 (8.2, J9/J11): «Игнорировать» — правило (host+exe+flags) в БД.
+// W7 (8.2, J9/J11): «Игнорировать» — правило (host+exe+flags) в БД; на строке
+// недоступного узла (pid передан) — удаляет строку.
 function externalIgnore(e) {
-  post('/api/v1/externals/ignore', { host: e.host, exe: e.exe, flags: e.flags || '' })
+  post('/api/v1/externals/ignore', { host: e.host, exe: e.exe, flags: e.flags || '', pid: e.pid, start_time: e.start_time })
     .then((r) => {
       if (r.ok) actions.addToast({ kind: 'info', text: T.externals.ignored });
       else actions.addToast({ kind: 'error', text: (r.data && r.data.detail) || r.status });

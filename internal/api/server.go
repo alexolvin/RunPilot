@@ -1022,6 +1022,8 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 		}
 		// 13.4: узел отключился — закрыть его терминалы (PTY ушёл с ним).
 		s.closePtyByHost(nodeID)
+		// Строки external_process узла → GONE (убираются из live-списка).
+		_ = s.store.ExternalDeleteByNode(nodeID, s.clk.Now())
 	}()
 	s.log.Info("api: node: подключился", "node", nodeID, "runpilot", hello.RUNPILOTVersion)
 	if s.sched != nil {

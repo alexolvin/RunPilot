@@ -708,6 +708,8 @@ func (s *Server) handleNodeDelete(w http.ResponseWriter, r *http.Request) {
 		if s.sched != nil {
 			s.sched.NodeLost(nodeID)
 		}
+		// Строки external_process узла → GONE (убираются из live-списка).
+		_ = s.store.ExternalDeleteByNode(nodeID, s.clk.Now())
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"deleted": host})
 	case "after_turns":

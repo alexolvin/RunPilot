@@ -128,6 +128,26 @@ func (s *Store) ExternalPurge(cutoff time.Time) error {
 	})
 }
 
+// ExternalDeleteByNode — при потере/удалении узла: все его строки получают
+// GONE (убираются из live-списка). Idempotent.
+func (s *Store) ExternalDeleteByNode(nodeID string, at time.Time) error {
+	return s.DoWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(`UPDATE external_process SET status = ?, last_seen = ? WHERE host = ? AND status IN (?, ?)`,
+			model.ExtGone, ts(at), nodeID, model.ExtActive, model.ExtIgnored)
+		return err
+	})
+}
+
+// ExternalDeleteRow — удалить строку (host, pid, start_time). Для «Игнорировать»
+// на строке недоступного узла.
+func (s *Store) ExternalDeleteRow(host string, pid int, startTime int64) error {
+	return s.DoWrite(func(tx *sql.Tx) error {
+		_, err := tx.Exec(`DELETE FROM external_process WHERE host = ? AND pid = ? AND start_time = ?`,
+			host, pid, startTime)
+		return err
+	})
+}
+
 // extKey — устойчивый ключ процесса для keep-множества.
 func extKey(pid int, start int64) string {
 	return strconv.Itoa(pid) + ":" + strconv.FormatInt(start, decimalBase)
