@@ -82,7 +82,7 @@ func (s *Scheduler) agentExitLocked(sid string, code int) {
 		return
 	}
 	if sess.State != model.SessionRunning && sess.State != model.SessionDispatching &&
-		sess.State != model.SessionDetached {
+		sess.State != model.SessionDetached && sess.State != model.SessionIdle {
 		return // уже не в ходе — не трогаем
 	}
 	now := s.clk.Now()

@@ -34,12 +34,12 @@ func TestSessionTransitionsComplete(t *testing.T) {
 // 6 GONE («из любого состояния») + 2 «DETACHED ведёт себя как RUNNING» +
 // 2 ручной hold (OPERATOR из таблицы hold_reason) +
 // 3 аварийная остановка (v2 6.2: DISPATCHING/RUNNING/DETACHED → HOLD) +
-// 3 кодер завершился (v2 7.3 C1: DISPATCHING/RUNNING/DETACHED → HOLD) +
-// 1 активность на шлюзе (HOLD → RUNNING) = 38,
-// плюс начальный ∅ → IDLE (runpilot run) = 39 переходов всего.
+// 4 кодер завершился (v2 7.3 C1: DISPATCHING/RUNNING/DETACHED/IDLE → HOLD) +
+// 1 активность на шлюзе (HOLD → RUNNING) = 39,
+// плюс начальный ∅ → IDLE (runpilot run) = 40 переходов всего.
 func TestTransitionCount(t *testing.T) {
-	const wantTable = 38
-	const wantTotal = 39 // таблица + начальный переход
+	const wantTable = 39
+	const wantTotal = 40 // таблица + начальный переход
 	if got := len(SessionTransitions()); got != wantTable {
 		t.Fatalf("строк в таблице автомата = %d, ждём %d (см. отчёт о маппинге)", got, wantTable)
 	}

@@ -124,6 +124,7 @@ var sessionTransitions = []Transition{
 	{SessionDispatching, EvAgentExit, SessionHold},
 	{SessionRunning, EvAgentExit, SessionHold},
 	{SessionDetached, EvAgentExit, SessionHold},
+	{SessionIdle, EvAgentExit, SessionHold}, // кодер вышел из IDLE (панель жива)
 }
 
 var transitionIndex = func() map[SessionState]map[SessionEvent]SessionState {

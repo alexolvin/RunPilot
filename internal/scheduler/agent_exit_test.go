@@ -77,8 +77,7 @@ func TestAgentExitNormalCode(t *testing.T) {
 	}
 }
 
-// TestAgentExitIdempotent — повторный вызов не ломает (сессия уже HOLD),
-// вызов для сессии вне хода — no-op.
+// TestAgentExitIdempotent — повторный вызов не ломает (сессия уже HOLD).
 func TestAgentExitIdempotent(t *testing.T) {
 	h := runningWithTurn(t, "s1")
 	h.sch.AgentExit("s1", 137)
@@ -87,10 +86,18 @@ func TestAgentExitIdempotent(t *testing.T) {
 	if got := h.sessionState("s1"); got != before {
 		t.Fatalf("повтор C1: state %s → %s, должен не измениться", before, got)
 	}
-	// сессия вне хода — no-op.
-	h.addSession("s2", "s2", "host", model.SessionIdle, model.ClassNormal, model.NoConstraint)
-	h.sch.AgentExit("s2", 1)
-	if got := h.sessionState("s2"); got != model.SessionIdle {
-		t.Fatalf("no-op: s2 state=%s, хочу IDLE (вне хода не трогаем)", got)
+}
+
+// TestAgentExitIdle — кодер завершён из IDLE (панель жива): сессия →
+// HOLD(AGENT_EXITED), аренда/ход не трогались (их нет).
+func TestAgentExitIdle(t *testing.T) {
+	h := newHarn(t, []ServerView{srv("s", 10, 1)})
+	h.addSession("s1", "s1", "host", model.SessionIdle, model.ClassNormal, model.NoConstraint)
+	h.sch.AgentExit("s1", 0)
+	if st := h.sessionState("s1"); st != model.SessionHold {
+		t.Fatalf("после C1 из IDLE: state=%s, хочу HOLD", st)
+	}
+	if hr := h.session("s1").HoldReason; hr != model.HoldAgentExited {
+		t.Fatalf("hold_reason=%s, хочу AGENT_EXITED", hr)
 	}
 }
