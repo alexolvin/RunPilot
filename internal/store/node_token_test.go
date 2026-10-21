@@ -54,6 +54,47 @@ func TestBindTokenHostReEnrollReplacesOld(t *testing.T) {
 	}
 }
 
+// DEFEKT (2026-10-21, инцидент vzu5-big): node_token ключён по host, а
+// идентичность узла — host:os_user. Два узла на одном host (разные os_user)
+// отзывают токены друг друга: claim второго (re-enroll ветка BindTokenHost)
+// отзывает активный токен первого. Факт: claim admin (2026-10-20) отозвал
+// токен botagent → botagent перестал подключаться → power=None у vzu5.
+//
+// Тест зафиксирован как ВОСПРОИЗВЕДЕНИЕ дефекта (текущее, buggy поведение:
+// токен A отзывается). После фикса условие инвертируется: токен A (h:alice)
+// должен ОСТАТЬСЯ валидным, т.к. h:bob — другой узел (другой os_user).
+func TestBindTokenHostTwoOsUsersSameHostRevokeEachOther(t *testing.T) {
+	s, _ := openTest(t)
+	now := time.Now().UTC()
+
+	// Узел h:alice — токен A, привязан к host "h".
+	tokA := NewNodeToken("", now)
+	if err := s.CreateNodeToken(tokA); err != nil {
+		t.Fatalf("CreateNodeToken A: %v", err)
+	}
+	if err := s.BindTokenHost(tokA.Token, "h", now); err != nil {
+		t.Fatalf("claim A (h:alice): %v", err)
+	}
+	if _, ok := s.VerifyNodeToken(tokA.Token); !ok {
+		t.Fatal("токен A (h:alice) должен быть валиден после claim")
+	}
+
+	// Узел h:bob — токен B, привязан к тому же host "h".
+	tokB := NewNodeToken("", now)
+	if err := s.CreateNodeToken(tokB); err != nil {
+		t.Fatalf("CreateNodeToken B: %v", err)
+	}
+	if err := s.BindTokenHost(tokB.Token, "h", now); err != nil {
+		t.Fatalf("claim B (h:bob): %v", err)
+	}
+
+	// ДЕФЕКТ (текущее поведение): claim h:bob отозвал токен h:alice.
+	// h:alice больше не может подключиться. После фикса это условие инвертируется.
+	if _, ok := s.VerifyNodeToken(tokA.Token); ok {
+		t.Fatal("ДЕФЕКТ не воспроизведён: токен A (h:alice) всё ещё валиден — поведение изменилось, обновить тест под фикс")
+	}
+}
+
 func TestBindTokenHostRevokedFails(t *testing.T) {
 	s, _ := openTest(t)
 	now := time.Now().UTC()
