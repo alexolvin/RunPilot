@@ -284,9 +284,9 @@ function ExternalRow({ e }) {
         ${unmanaged ? html`<${Badge} tone="var(--color-warning)" label=${T.externals.unmanaged} />` : null}
         <${Badge} tone=${EXT_TONE[e.status] || 'var(--color-text-muted)'}
           label=${T.externals[EXT_STATUS[e.status]] || e.status} />
+        <${Button} variant="danger" label=${T.externals.kill}
+          onClick=${() => externalKill(e)} />
         ${e.status === 'ACTIVE' ? html`
-          <${Button} variant="danger" label=${T.externals.kill}
-            onClick=${() => externalKill(e)} />
           <${Button} variant="secondary" label=${T.externals.ignore}
             onClick=${() => externalIgnore(e)} />` : null}
       </div>

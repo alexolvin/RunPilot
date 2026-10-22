@@ -110,10 +110,17 @@ func SessionSID(pid int, paneSID map[int]string, execRoots map[int]ExecRoot, sta
 // (время старта + sid), присланный координатором (условие (а) для EXEC).
 // gatewayURL — gateway_url координатора (условие (б)). openAIBaseURL(pid) —
 // OPENAI_BASE_URL кодера из /proc environ; по нему координатор выводит target.
-// source — цепочка родителей до PID 1.
-func ScanExternal(t *procTable, panePIDToSID map[int]string, cmdlineRe *regexp.Regexp, gatewayURL string, openAIBaseURL func(pid int) string, execRoots map[int]ExecRoot, cwd func(pid int) string) []proto.ExternalProc {
+// source — цепочка родителей до PID 1. selfUID — uid узла: рассматриваются
+// только процессы этого пользователя (ps -A видит всех; чужой uid → и environ
+// не читается, target=unknown, и «фантом» чужой сессии в списке).
+func ScanExternal(t *procTable, panePIDToSID map[int]string, cmdlineRe *regexp.Regexp, gatewayURL string, openAIBaseURL func(pid int) string, execRoots map[int]ExecRoot, cwd func(pid int) string, selfUID int) []proto.ExternalProc {
 	var out []proto.ExternalProc
 	for pid, args := range t.args {
+		// Только процессы узла (свой uid): чужие пользователи на том же хосте
+		// — другие узлы (свои сессии), не внешние кодеры этого узла.
+		if selfUID >= 0 && t.uid[pid] != selfUID {
+			continue
+		}
 		// Совпадение по EXE (basename первого поля), а не по всей cmdline:
 		// tmux-сервер несёт команду кодера как аргумент (tmux new-session …
 		// /path/qwen …), но сам кодером не является (exe=tmux) — иначе он

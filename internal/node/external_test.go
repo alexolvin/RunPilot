@@ -52,7 +52,7 @@ func TestScanExternalCron(t *testing.T) {
 	cwds := map[int]string{901: "/home/user/project"}
 	ex := ScanExternal(table, panePIDToSID, re, testExternalGateway,
 		func(pid int) string { return envs[pid] }, map[int]ExecRoot{},
-		func(pid int) string { return cwds[pid] })
+		func(pid int) string { return cwds[pid] }, 1000)
 	if len(ex) != 1 {
 		t.Fatalf("внешних: %d, хочу 1: %+v", len(ex), ex)
 	}
@@ -99,7 +99,7 @@ func TestScanExternalSystemd(t *testing.T) {
 	envs := map[int]string{600: GatewayCoderURL(testExternalGateway, "sid600")}
 	ex := ScanExternal(table, panePIDToSID, re, testExternalGateway,
 		func(pid int) string { return envs[pid] }, map[int]ExecRoot{},
-		func(pid int) string { return "" })
+		func(pid int) string { return "" }, 1000)
 	if len(ex) != 1 {
 		t.Fatalf("внешних: %d, хочу 1 (systemd-qwen): %+v", len(ex), ex)
 	}
@@ -127,7 +127,7 @@ func TestScanExternalTmuxServer(t *testing.T) {
 	}
 	ex := ScanExternal(table, map[int]string{}, re, testExternalGateway,
 		func(pid int) string { return "" }, map[int]ExecRoot{},
-		func(pid int) string { return "" })
+		func(pid int) string { return "" }, 1000)
 	if len(ex) != 0 {
 		t.Fatalf("tmux-сервер не кодер (exe=tmux), внешних хочу 0: %+v", ex)
 	}
@@ -160,7 +160,7 @@ func TestScanExternalExecLive(t *testing.T) {
 	ex := ScanExternal(table, map[int]string{}, re, testExternalGateway,
 		func(pid int) string { return envs[pid] },
 		map[int]ExecRoot{500: {Starttime: 123456, SID: "sid501"}},
-		func(pid int) string { return "" })
+		func(pid int) string { return "" }, 1000)
 	if len(ex) != 0 {
 		t.Fatalf("кодер живой EXEC-сессии управляемый, внешних хочу 0: %+v", ex)
 	}
@@ -193,7 +193,7 @@ func TestScanExternalExecPIDReused(t *testing.T) {
 	ex := ScanExternal(table, map[int]string{}, re, testExternalGateway,
 		func(pid int) string { return envs[pid] },
 		map[int]ExecRoot{500: {Starttime: 123456, SID: "sid501"}},
-		func(pid int) string { return "" })
+		func(pid int) string { return "" }, 1000)
 	if len(ex) != 1 || ex[0].PID != 501 {
 		t.Fatalf("PID переиспользован -> вне очереди: внешних=%d, хочу 1 (501): %+v", len(ex), ex)
 	}
@@ -219,7 +219,7 @@ func TestScanExternalExecFinished(t *testing.T) {
 	ex := ScanExternal(table, map[int]string{}, re, testExternalGateway,
 		func(pid int) string { return envs[pid] },
 		map[int]ExecRoot{},
-		func(pid int) string { return "" })
+		func(pid int) string { return "" }, 1000)
 	if len(ex) != 1 || ex[0].PID != 501 {
 		t.Fatalf("qwen завершённой EXEC-сессии вне очереди: внешних=%d, хочу 1 (501): %+v", len(ex), ex)
 	}
