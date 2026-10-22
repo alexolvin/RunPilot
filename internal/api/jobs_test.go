@@ -153,7 +153,7 @@ func TestJobAuth(t *testing.T) {
 		t.Fatalf("операторский токен: %d, хочу 201", status)
 	}
 	// Токен узла (валидный) → 201 (узел не в hub — IP-проверка пропускается).
-	tok := store.NewNodeToken("node-01", time.Now())
+	tok := store.NewNodeToken("node-01", "", time.Now())
 	if err := st.CreateNodeToken(tok); err != nil {
 		t.Fatal(err)
 	}

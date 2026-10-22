@@ -560,7 +560,7 @@ func (s *Server) authFailType(r *http.Request) string {
 	if s.token != "" && tok == s.token {
 		return "оператор"
 	}
-	if _, ok := s.store.VerifyNodeToken(tok); ok {
+	if _, _, ok := s.store.VerifyNodeToken(tok); ok {
 		return "узел"
 	}
 	return "неизвестный"
@@ -992,12 +992,14 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 	if hello.OsUser != "" {
 		nodeID = host + ":" + hello.OsUser
 	}
-	// N7: конфликт имени хоста — hello утверждает существующий host, а токен
-	// привязан к другому. Соединение закрывается, имя хоста не меняется.
-	if th := nodeTokenHost(r.Context()); th != "" && th != host {
-		if s.hub.HasHost(host) {
+	// N7: конфликт имени хоста — hello утверждает узел (host, os_user), а
+	// токен привязан к другому. Соединение закрывается, имя хоста не меняется.
+	// Legacy-токен (os_user='') совпадает по host только (совместимость).
+	if id := tokenIdentity(r.Context()); id.host != "" {
+		identityMatch := id.host == host && (id.osUser == "" || id.osUser == hello.OsUser)
+		if !identityMatch && s.hub.HasHost(host) {
 			s.log.Warn("api: node: конфликт имени хоста", "host", host,
-				"token_host", th, "addr", r.RemoteAddr)
+				"token_host", id.host, "token_os_user", id.osUser, "addr", r.RemoteAddr)
 			_ = conn.WriteControl(websocket.CloseMessage,
 				websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "HOST_CONFLICT: имя хоста занято узлом с другим токеном"),
 				time.Now().UTC().Add(time.Second))

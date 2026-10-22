@@ -34,16 +34,22 @@ func bearerToken(r *http.Request) string {
 	return strings.TrimPrefix(h, "Bearer ")
 }
 
-// nodeTokenHostKey — ключ контекста: host, к которому привязан токен узла
-// (N7: конфликт имени хоста).
-type nodeTokenHostKey struct{}
+// nodeTokenIdentity — идентичность узла из токена (host, os_user).
+type nodeTokenIdentity struct {
+	host   string
+	osUser string
+}
 
-// nodeTokenHost — host из токена узла (пусто, если не извлечён).
-func nodeTokenHost(ctx context.Context) string {
-	if v, ok := ctx.Value(nodeTokenHostKey{}).(string); ok {
+// nodeTokenIdentityKey — ключ контекста: идентичность узла (host, os_user),
+// к которой привязан токен (N7: конфликт имени хоста).
+type nodeTokenIdentityKey struct{}
+
+// tokenIdentity — идентичность узла из токена (пусто, если не извлечён).
+func tokenIdentity(ctx context.Context) nodeTokenIdentity {
+	if v, ok := ctx.Value(nodeTokenIdentityKey{}).(nodeTokenIdentity); ok {
 		return v
 	}
-	return ""
+	return nodeTokenIdentity{}
 }
 
 // nodeAuth — аутентификация узла: локальный режим (пустой операторский токен)
@@ -61,8 +67,9 @@ func (s *Server) nodeAuth(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if host, ok := s.store.VerifyNodeToken(tok); ok {
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), nodeTokenHostKey{}, host)))
+		if host, osUser, ok := s.store.VerifyNodeToken(tok); ok {
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(),
+				nodeTokenIdentityKey{}, nodeTokenIdentity{host: host, osUser: osUser})))
 			return
 		}
 		s.logAuthFail(r, http.StatusUnauthorized, "UNAUTHORIZED", "неверный или отозванный токен узла", "")
@@ -210,7 +217,7 @@ func (s *Server) handleNodeEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := s.clk.Now()
-	tok := store.NewNodeToken("", now)
+	tok := store.NewNodeToken("", "", now)
 	if err := s.store.CreateNodeToken(tok); err != nil {
 		httpError(w, http.StatusInternalServerError, "STORE", err.Error())
 		return
@@ -453,7 +460,7 @@ fi
 echo "runpilot: привязываю узел…"
 curl -fsSL -X POST "$COORD/enroll/$TOKEN/claim" \
   -H 'Content-Type: application/json' \
-  -d "{\"host\":\"$(hostname)\"}"
+  -d "{\"host\":\"$(hostname)\",\"os_user\":\"$(id -un)\"}"
 # Проверки окружения (14.1: tmux не ниже базового ТЗ, наличие qwen).
 if ! command -v tmux >/dev/null 2>&1; then
   echo "runpilot: tmux не найден в PATH — установите tmux"
@@ -520,20 +527,22 @@ func (s *Server) enrollFile(w http.ResponseWriter, r *http.Request, token, file 
 	s.serveBinary(w, r, p)
 }
 
-// enrollClaim — POST /enroll/<token>/claim {host}: привязать токен к узлу.
+// enrollClaim — POST /enroll/<token>/claim {host, os_user}: привязать токен
+// к узлу (host, os_user).
 func (s *Server) enrollClaim(w http.ResponseWriter, r *http.Request, token string) {
 	if r.Method != http.MethodPost {
 		httpError(w, http.StatusMethodNotAllowed, "METHOD", "POST")
 		return
 	}
 	var body struct {
-		Host string `json:"host"`
+		Host   string `json:"host"`
+		OsUser string `json:"os_user"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Host == "" {
 		httpError(w, http.StatusBadRequest, "BAD_REQUEST", "host обязателен")
 		return
 	}
-	if err := s.store.BindTokenHost(token, body.Host, s.clk.Now()); err != nil {
+	if err := s.store.BindTokenHost(token, body.Host, body.OsUser, s.clk.Now()); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			s.logAuthFail(r, http.StatusUnauthorized, "BAD_TOKEN", "enroll-токен недействителен", "enroll")
 			httpError(w, http.StatusUnauthorized, "BAD_TOKEN", "enroll-токен недействителен")
@@ -611,7 +620,7 @@ func sha256FileHex(path string) (string, error) {
 // handleDist — GET /api/v1/dist/<file>: только токен узла (CONTROL 4).
 func (s *Server) handleDist(w http.ResponseWriter, r *http.Request) {
 	tok := bearerToken(r)
-	if _, ok := s.store.VerifyNodeToken(tok); !ok {
+	if _, _, ok := s.store.VerifyNodeToken(tok); !ok {
 		s.logAuthFail(r, http.StatusUnauthorized, "UNAUTHORIZED", "нужен токен узла", "")
 		httpError(w, http.StatusUnauthorized, "UNAUTHORIZED", "нужен токен узла")
 		return
@@ -701,8 +710,8 @@ func (s *Server) handleNodeDelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.log.Info("api: node delete: uninstall", "host", host, "result", rep.Result)
-		// Токен узла per-host (не per-user): извлекаем host из nodeID.
-		_ = s.store.RevokeNodeToken(hostOf(nodeID), s.clk.Now())
+		// Токен узла per-node (host:os_user): извлекаем host и os_user из nodeID.
+		_ = s.store.RevokeNodeToken(hostOf(nodeID), osUserOf(nodeID), s.clk.Now())
 		s.hub.DetachHost(nodeID)
 		s.hub.Unregister(nodeID)
 		if s.sched != nil {
@@ -868,13 +877,22 @@ func (s *Server) handleNodeDirs(w http.ResponseWriter, r *http.Request) {
 }
 
 // hostOf — имя хоста из идентичности узла (host:os_user): часть до ':'.
-// Токены узла и часть операций per-host (не per-user), а hub/планировщик/
-// dispatch — per-nodeID. Пустой os_user (старые узлы) → nodeID == host.
+// Токены узла per-node (host:os_user), а hub/планировщик/dispatch — per-nodeID.
+// Пустой os_user (старые узлы) → nodeID == host.
 func hostOf(nodeID string) string {
 	if i := strings.Index(nodeID, ":"); i >= 0 {
 		return nodeID[:i]
 	}
 	return nodeID
+}
+
+// osUserOf — пользователь ОС из идентичности узла (host:os_user): часть после
+// первого ':'. Пустой os_user (старые узлы) → nodeID == host → "".
+func osUserOf(nodeID string) string {
+	if i := strings.Index(nodeID, ":"); i >= 0 {
+		return nodeID[i+1:]
+	}
+	return ""
 }
 
 // nodeIDForHost — nodeID (host:os_user) первого узла с данным host. Hub/

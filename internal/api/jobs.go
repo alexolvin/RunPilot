@@ -44,7 +44,7 @@ func (s *Server) jobsAuth(next http.Handler) http.Handler {
 			return
 		}
 		// Токен узла: верификация + host_ip = IP узла (раздел 15.3).
-		host, ok := s.store.VerifyNodeToken(tok)
+		host, _, ok := s.store.VerifyNodeToken(tok)
 		if !ok {
 			s.logAuthFail(r, http.StatusForbidden, "JOB_AUTH", "неверный или отозванный токен узла", "")
 			httpError(w, http.StatusForbidden, "JOB_AUTH", "неверный или отозванный токен узла")

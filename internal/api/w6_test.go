@@ -102,51 +102,51 @@ func TestNodeDeleteBothModesControl7(t *testing.T) {
 
 	// Режим now: узел отвечает на uninstall → токен отзывается сразу.
 	tok1 := mustEnroll(t, ts)
-	if err := st.BindTokenHost(tok1, "host-now", time.Now()); err != nil {
+	if err := st.BindTokenHost(tok1, "host-now", "", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	addFakeNode(t, hub, "host-now", proto.ResUninstalled, "")
 	if code, _ := doJSON(t, http.MethodDelete, ts.URL+"/api/v1/nodes/host-now?mode=now", nil); code != http.StatusOK {
 		t.Fatalf("delete now = %d, хочу 200", code)
 	}
-	if _, ok := st.VerifyNodeToken(tok1); ok {
+	if _, _, ok := st.VerifyNodeToken(tok1); ok {
 		t.Error("reжим now: токен должен быть отозван")
 	}
 
 	// Режим now + ошибка uninstall → отмена удаления (503), токен жив.
 	tokFail := mustEnroll(t, ts)
-	if err := st.BindTokenHost(tokFail, "host-fail", time.Now()); err != nil {
+	if err := st.BindTokenHost(tokFail, "host-fail", "", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	addFakeNode(t, hub, "host-fail", "uninstall_failed", "systemctl stop: permission denied")
 	if code, _ := doJSON(t, http.MethodDelete, ts.URL+"/api/v1/nodes/host-fail?mode=now", nil); code != http.StatusServiceUnavailable {
 		t.Fatalf("delete now (ошибка uninstall) = %d, хочу 503", code)
 	}
-	if _, ok := st.VerifyNodeToken(tokFail); !ok {
+	if _, _, ok := st.VerifyNodeToken(tokFail); !ok {
 		t.Error("режим now (ошибка): токен не должен быть отозван (отмена удаления)")
 	}
 
 	// Узел недоступен (нет соединения) → отмена удаления (503), токен жив.
 	tokOff := mustEnroll(t, ts)
-	if err := st.BindTokenHost(tokOff, "host-off", time.Now()); err != nil {
+	if err := st.BindTokenHost(tokOff, "host-off", "", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if code, _ := doJSON(t, http.MethodDelete, ts.URL+"/api/v1/nodes/host-off?mode=now", nil); code != http.StatusServiceUnavailable {
 		t.Fatalf("delete now (узел offline) = %d, хочу 503", code)
 	}
-	if _, ok := st.VerifyNodeToken(tokOff); !ok {
+	if _, _, ok := st.VerifyNodeToken(tokOff); !ok {
 		t.Error("режим now (offline): токен не должен быть отозван (отмена удаления)")
 	}
 
 	// Режим after_turns: токен жив, пометка на удаление.
 	tok2 := mustEnroll(t, ts)
-	if err := st.BindTokenHost(tok2, "host-after", time.Now()); err != nil {
+	if err := st.BindTokenHost(tok2, "host-after", "", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if code, _ := doJSON(t, http.MethodDelete, ts.URL+"/api/v1/nodes/host-after?mode=after_turns", nil); code != http.StatusAccepted {
 		t.Fatalf("delete after_turns = %d, хочу 202", code)
 	}
-	if _, ok := st.VerifyNodeToken(tok2); !ok {
+	if _, _, ok := st.VerifyNodeToken(tok2); !ok {
 		t.Error("reжим after_turns: токен пока должен быть активен")
 	}
 }
@@ -213,8 +213,8 @@ func TestEnrollFlow(t *testing.T) {
 	if resp2.StatusCode != http.StatusOK {
 		t.Fatalf("claim = %d, хочу 200", resp2.StatusCode)
 	}
-	if nt, err := st.GetNodeToken("node-01"); err != nil || nt.Token != tok {
-		t.Errorf("claim не привязал токен к host (err=%v)", err)
+	if nt, err := st.GetNodeToken("node-01", ""); err != nil || nt.Token != tok {
+		t.Errorf("claim не привязал токен к узлу (err=%v)", err)
 	}
 	// Чужой/отозванный токен → 401.
 	if code := httpCode(t, ts.URL+"/enroll/badtoken/install.sh"); code != http.StatusUnauthorized {
@@ -385,11 +385,11 @@ func TestEnrollReClaimSameHost(t *testing.T) {
 	if resp1.StatusCode != http.StatusOK {
 		t.Fatalf("первый claim = %d, хочу 200", resp1.StatusCode)
 	}
-	if nt, err := st.GetNodeToken(host); err != nil || nt.Token != tok1 {
+	if nt, err := st.GetNodeToken(host, ""); err != nil || nt.Token != tok1 {
 		t.Fatalf("claim1 не привязал: %v %v", nt, err)
 	}
 
-	// Re-enroll: новый токен на тот же host. ДО фикса — 500 + SAFE_MODE.
+	// Re-enroll: новый токен на тот же узел. ДО фикса — 500 + SAFE_MODE.
 	tok2 := mustEnroll(t, ts)
 	resp2, err := http.Post(ts.URL+"/enroll/"+tok2+"/claim", "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -400,11 +400,11 @@ func TestEnrollReClaimSameHost(t *testing.T) {
 	if resp2.StatusCode != http.StatusOK {
 		t.Fatalf("re-claim = %d (тело %s), хочу 200", resp2.StatusCode, raw2)
 	}
-	if nt, err := st.GetNodeToken(host); err != nil || nt.Token != tok2 {
+	if nt, err := st.GetNodeToken(host, ""); err != nil || nt.Token != tok2 {
 		t.Fatalf("re-claim не переключил токен: %v %v", nt, err)
 	}
 	// Старый токен отозван.
-	if _, ok := st.VerifyNodeToken(tok1); ok {
+	if _, _, ok := st.VerifyNodeToken(tok1); ok {
 		t.Error("старый токен должен быть отозван")
 	}
 }

@@ -211,8 +211,8 @@ func TestTE_N7(t *testing.T) {
 	// Существующий узел с именем h1 (реестр hub).
 	addFakeNode(t, hub, "h1", proto.ResSent, "")
 
-	// Чужой токен: привязан к host "th", а не к "h1".
-	foreign := store.NewNodeToken("th", time.Now())
+	// Чужой токен: привязан к узлу "th", а не к "h1".
+	foreign := store.NewNodeToken("th", "", time.Now())
 	if err := st.CreateNodeToken(foreign); err != nil {
 		t.Fatal(err)
 	}
