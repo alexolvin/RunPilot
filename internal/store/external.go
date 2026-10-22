@@ -86,11 +86,14 @@ func (s *Store) ExternalSetStatus(host string, pid int, startTime int64, status 
 	})
 }
 
-// ExternalMarkGone — для хоста: все ACTIVE-строки, отсутствующие в keep
-// (ключ "pid:start"), помечаются GONE (процесс завершился).
+// ExternalMarkGone — для хоста: все ACTIVE/IGNORED-строки, отсутствующие в
+// keep (ключ "pid:start"), помечаются GONE (процесс завершился). IGNORED
+// включён: «игнорированный» процесс тоже живёт, а после смерти (напр.
+// перезагрузка узла) строка не должна оставаться в live-списке.
 func (s *Store) ExternalMarkGone(host string, keep map[string]bool, at time.Time) error {
 	return s.DoWrite(func(tx *sql.Tx) error {
-		rows, err := tx.Query(`SELECT pid, start_time FROM external_process WHERE host=? AND status = ?`, host, model.ExtActive)
+		rows, err := tx.Query(`SELECT pid, start_time FROM external_process WHERE host=? AND status IN (?, ?)`,
+			host, model.ExtActive, model.ExtIgnored)
 		if err != nil {
 			return err
 		}

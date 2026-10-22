@@ -143,6 +143,7 @@ func (s *Server) handleExternalIgnore(w http.ResponseWriter, r *http.Request) {
 			httpError(w, http.StatusInternalServerError, "STORE", err.Error())
 			return
 		}
+		s.emitExternalsIfChanged(s.clk.Now())
 		writeJSON(w, map[string]any{"deleted": true})
 		return
 	}
@@ -180,11 +181,16 @@ func (s *Server) handleExternalKill(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, "BAD_REQUEST", "host и pid обязательны")
 		return
 	}
-	// Узел недоступен — понятная ошибка БЕЗ обращения к hub (нет соединения,
-	// TERM доставить некуда).
+	// Узел недоступен — TERM доставить некуда. По решению оператора строка
+	// удаляется (как при «Игнорировать» на недоступном узле): чего нет в
+	// реальности, не держим в базе.
 	if _, ok := s.hub.Registered(req.Host); !ok {
-		httpError(w, http.StatusBadGateway, "NODE_UNAVAILABLE",
-			"узел недоступен: "+req.Host)
+		if err := s.store.ExternalDeleteRow(req.Host, req.PID, req.StartTime); err != nil {
+			httpError(w, http.StatusInternalServerError, "STORE", err.Error())
+			return
+		}
+		s.emitExternalsIfChanged(s.clk.Now())
+		writeJSON(w, map[string]any{"result": "GONE"})
 		return
 	}
 	var uid int
@@ -208,11 +214,22 @@ func (s *Server) handleExternalKill(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadGateway, "NODE_UNAVAILABLE", err.Error())
 		return
 	}
+	now := s.clk.Now()
 	switch rep.Result {
 	case proto.ResKilled:
-		_ = s.store.ExternalSetStatus(req.Host, req.PID, req.StartTime, model.ExtKilled, s.clk.Now())
+		_ = s.store.ExternalSetStatus(req.Host, req.PID, req.StartTime, model.ExtKilled, now)
+		s.emitExternalsIfChanged(now)
 		writeJSON(w, map[string]any{"result": "KILLED"})
-	case proto.ResProcessGone, proto.ResProcessChanged:
+	case proto.ResProcessGone:
+		// Процесс уже мёртв — цель «Завершить» достигнута: строка GONE.
+		_ = s.store.ExternalSetStatus(req.Host, req.PID, req.StartTime, model.ExtGone, now)
+		s.emitExternalsIfChanged(now)
+		writeJSON(w, map[string]any{"result": "GONE"})
+	case proto.ResProcessChanged:
+		// PID переиспользован другим процессом: оригинал мёртв (строка GONE),
+		// аномалию показываем (409).
+		_ = s.store.ExternalSetStatus(req.Host, req.PID, req.StartTime, model.ExtGone, now)
+		s.emitExternalsIfChanged(now)
 		httpError(w, http.StatusConflict, rep.Result, rep.Detail)
 	default:
 		httpError(w, http.StatusInternalServerError, rep.Result, rep.Detail)
@@ -317,16 +334,26 @@ func (s *Server) applyExternals(host string, exts []proto.ExternalProc) {
 	// 8.2: live-множество изменилось → событие EXTERNALS (веб ре-берёт
 	// /externals, event-driven). applyExternals теперь каждый цикл (даже
 	// пустой) — шлём событие только при реальном изменении отпечатка.
-	if live, err := s.liveExternals(); err == nil {
-		fp := extFingerprint(live)
-		s.extMu.Lock()
-		changed := fp != s.extFingerprint
-		if changed {
-			s.extFingerprint = fp
-		}
-		s.extMu.Unlock()
-		if changed {
-			_ = s.store.EventRecord(model.Event{TS: now, Kind: model.KindExternals})
-		}
+	s.emitExternalsIfChanged(now)
+}
+
+// emitExternalsIfChanged — 8.2: live-множество изменилось → событие EXTERNALS
+// (веб ре-берёт /externals). Шлём только при реальном изменении отпечатка
+// (не спамим каждый цикл). Вызывается из applyExternals (каждый цикл узла) и
+// из kill/ignore-хендлеров (строка удалена/помечена без участия узла).
+func (s *Server) emitExternalsIfChanged(now time.Time) {
+	live, err := s.liveExternals()
+	if err != nil {
+		return
+	}
+	fp := extFingerprint(live)
+	s.extMu.Lock()
+	changed := fp != s.extFingerprint
+	if changed {
+		s.extFingerprint = fp
+	}
+	s.extMu.Unlock()
+	if changed {
+		_ = s.store.EventRecord(model.Event{TS: now, Kind: model.KindExternals})
 	}
 }

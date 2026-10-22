@@ -211,17 +211,28 @@ func TestExternalAPI(t *testing.T) {
 		t.Fatalf("правила не удалены: %d", len(rules))
 	}
 
-	// Kill: узел не подключён → 502 NODE_UNAVAILABLE.
+	// Kill: узел не подключён → строка удаляется (200 GONE), не 502: чего нет
+	// в реальности, не держим в базе.
+	var st800 int64
+	if list, _ := st.ExternalList(); list != nil {
+		for _, p := range list {
+			if p.PID == 800 {
+				st800 = p.StartTime
+			}
+		}
+	}
 	status, out = jobReq(t, ts, "", http.MethodPost, "/api/v1/externals/kill",
-		map[string]any{"host": "node-01", "pid": 800, "start_time": 0})
-	if status != http.StatusBadGateway || out["code"] != "NODE_UNAVAILABLE" {
-		t.Fatalf("kill без узла: %d %v, хочу 502 NODE_UNAVAILABLE", status, out)
+		map[string]any{"host": "node-01", "pid": 800, "start_time": st800})
+	if status != http.StatusOK || out["result"] != "GONE" {
+		t.Fatalf("kill без узла: %d %v, хочу 200 GONE", status, out)
+	}
+	if list, _ := st.ExternalList(); len(list) != 0 {
+		t.Fatalf("после kill без узла: %d строк, хочу 0 (строка удалена): %+v", len(list), list)
 	}
 }
 
 // TestExternalDeleteByNode — при потере/удалении узла его строки → GONE;
-// «Игнорировать» на недоступном узле удаляет строку; «Завершить» — понятная
-// ошибка без hub.
+// «Игнорировать» и «Завершить» на недоступном узле удаляют строку.
 func TestExternalDeleteByNode(t *testing.T) {
 	st, srv, clk := extTestServer(t)
 	ts := httptest.NewServer(srv.Handler())
@@ -269,11 +280,49 @@ func TestExternalDeleteByNode(t *testing.T) {
 	if list, _ := st.ExternalList(); len(list) != 1 {
 		t.Fatalf("после ignore-delete: %d строк, хочу 1 (801 удалена): %+v", len(list), list)
 	}
-	// «Завершить» на недоступном узле — 502 NODE_UNAVAILABLE (без hub).
+	// «Завершить» на недоступном узле — строка удаляется (200 GONE, без hub).
+	var st800 int64
+	if list, _ := st.ExternalList(); list != nil {
+		for _, p := range list {
+			if p.PID == 800 {
+				st800 = p.StartTime
+			}
+		}
+	}
 	status, out := jobReq(t, ts, "", http.MethodPost, "/api/v1/externals/kill",
-		map[string]any{"host": "node-01", "pid": 800, "start_time": 0})
-	if status != http.StatusBadGateway || out["code"] != "NODE_UNAVAILABLE" {
-		t.Fatalf("kill без узла: %d %v, хочу 502 NODE_UNAVAILABLE", status, out)
+		map[string]any{"host": "node-01", "pid": 800, "start_time": st800})
+	if status != http.StatusOK || out["result"] != "GONE" {
+		t.Fatalf("kill без узла: %d %v, хочу 200 GONE", status, out)
+	}
+	if list, _ := st.ExternalList(); len(list) != 0 {
+		t.Fatalf("после kill без узла: %d строк, хочу 0 (строка удалена): %+v", len(list), list)
+	}
+}
+
+// TestExternalIgnoredGone — IGNORED-процесс, исчезнувший из скана при онлайн-
+// узле, помечается GONE: рудимент не остаётся в live-списке (дефект 2026-10-22:
+// после перезагрузки узла IGNORED-строки жили вечно).
+func TestExternalIgnoredGone(t *testing.T) {
+	st, srv, clk := extTestServer(t)
+	// Правило игнора для qwen → кандидаты IGNORED.
+	if _, err := st.IgnoreAdd("node-01", "qwen", "", clk.Now()); err != nil {
+		t.Fatal(err)
+	}
+	clk.Advance(10 * time.Second)
+	srv.ApplyNodeMsg("node-01", extMsg(proto.ExternalProc{
+		PID: 910, UID: 1, StartSec: 10, Exe: "qwen", Source: "cron",
+		OpenAIBaseURL: "http://127.0.0.1:9000/v1",
+	}))
+	list, _ := st.ExternalList()
+	if len(list) != 1 || list[0].Status != model.ExtIgnored {
+		t.Fatalf("старт: %+v, хочу 1 IGNORED", list)
+	}
+	// Процесс исчез (пустой список) → IGNORED-строка GONE.
+	clk.Advance(time.Second)
+	srv.ApplyNodeMsg("node-01", extMsg())
+	list, _ = st.ExternalList()
+	if len(list) != 1 || list[0].Status != model.ExtGone {
+		t.Fatalf("после исчезновения: %+v, хочу GONE", list)
 	}
 }
 
