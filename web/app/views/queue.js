@@ -57,16 +57,22 @@ function clearQueue() {
 export function QueuePage() {
   const s = useStore();
   const [queueRows, setQueueRows] = useState([]);
+  // API-клиенты: разовый GET при входе на экран (список + учёт за сутки).
+  const [apiClients, setApiClients] = useState([]);
   // Раздел постановки в очереди: остановка (Esc) — сверка реальной остановки
   // по активности (состояние сессии), не по факту отправки. sid → 'stopping'|…
   const [stopping, setStopping] = useState({});
   const sessionsRef = useRef(s.sessions);
   const queueRowsRef = useRef(queueRows);
 
+  const reloadApiClients = () =>
+    get('/api/v1/api-clients').then((r) => { if (r.ok && r.data) setApiClients(r.data); });
+
   useEffect(() => {
     // Строки очереди — разовый GET (не live). Внешние кодеры —
     // из store (s.externals), обновляются по SSE EXTERNALS (live, без поллинга).
     get('/api/v1/queue').then((r) => { if (r.ok && r.data) setQueueRows(r.data); });
+    reloadApiClients();
   }, []);
   useEffect(() => { sessionsRef.current = s.sessions; }, [s.sessions]);
   useEffect(() => { queueRowsRef.current = queueRows; }, [queueRows]);
@@ -227,6 +233,8 @@ export function QueuePage() {
         </${Section}>`
       : null}
 
+    <${ApiClientsSection} clients=${apiClients} onChanged=${reloadApiClients} />
+
     ${s.externals.length
       ? html`<${Section} title=${T.externals.title} count=${s.externals.length}>
           <div class="srow-list">
@@ -235,6 +243,88 @@ export function QueuePage() {
           <p class="ext-hint">${T.externals.hint}</p>
         </${Section}>`
       : null}
+  </div>`;
+}
+
+// API-клиенты (безсессионные OpenAI-запросы в общую очередь): список + учёт
+// за сутки, создать/отключить/перевыпустить ключ. Ключ показывается один раз.
+function ApiClientsSection({ clients, onChanged }) {
+  const [showCreate, setShowCreate] = useState(false);
+  const [name, setName] = useState('');
+  const [newKey, setNewKey] = useState('');
+
+  function create() {
+    if (!name.trim()) return;
+    post('/api/v1/api-clients', { name: name.trim() }).then((r) => {
+      if (r.ok && r.data) {
+        setNewKey(r.data.key || '');
+        actions.addToast({ kind: 'success', text: T.queue.apiCreated });
+        setName('');
+        onChanged();
+      } else {
+        actions.addToast({ kind: 'error', text: (r.data && r.data.detail) || r.status });
+      }
+    }).catch(() => actions.addToast({ kind: 'error', text: 'network' }));
+  }
+  function setEnabled(c, on) {
+    post(`/api/v1/api-clients/${encodeURIComponent(c.name)}/${on ? 'enable' : 'disable'}`, {}).then((r) => {
+      if (r.ok) {
+        actions.addToast({ kind: 'info', text: on ? T.queue.apiEnabledDone : T.queue.apiDisabledDone });
+        onChanged();
+      } else {
+        actions.addToast({ kind: 'error', text: (r.data && r.data.detail) || r.status });
+      }
+    }).catch(() => actions.addToast({ kind: 'error', text: 'network' }));
+  }
+  function reissue(c) {
+    post(`/api/v1/api-clients/${encodeURIComponent(c.name)}/reissue`, {}).then((r) => {
+      if (r.ok && r.data) {
+        setNewKey(r.data.key || '');
+        actions.addToast({ kind: 'success', text: T.queue.apiReissued });
+      } else {
+        actions.addToast({ kind: 'error', text: (r.data && r.data.detail) || r.status });
+      }
+    }).catch(() => actions.addToast({ kind: 'error', text: 'network' }));
+  }
+
+  return html`<${Section} title=${T.queue.apiClients} count=${clients.length}
+    action=${html`<span class="section-action">
+      <${Button} variant="secondary" label=${showCreate ? T.queue.apiCancel : T.queue.apiCreate}
+        onClick=${() => setShowCreate((v) => !v)} />
+    </span>`}>
+    ${showCreate ? html`<div class="api-create">
+      <input class="field" type="text" placeholder=${T.queue.apiName}
+        value=${name} onInput=${(e) => setName(e.target.value)}
+        onKeyDown=${(e) => { if (e.key === 'Enter') create(); }} />
+      <${Button} variant="primary" label=${T.queue.apiCreate} onClick=${create} />
+    </div>` : null}
+    ${newKey ? html`<div class="api-key"><span>${T.queue.apiKey}</span>
+      <code class="mono">${newKey}</code></div>` : null}
+    ${clients.length
+      ? html`<div class="srow-list">
+          ${clients.map((c) => ApiClientRow({ c, onEnable: () => setEnabled(c, true),
+            onDisable: () => setEnabled(c, false), onReissue: () => reissue(c) }))}
+        </div>`
+      : html`<${SectionEmpty} text=${T.queue.apiEmpty} />`}
+  </${Section}>`;
+}
+
+function ApiClientRow({ c, onEnable, onDisable, onReissue }) {
+  const tokens = c.prompt_tokens_24h + c.completion_tokens_24h;
+  return html`<div class="srow">
+    <div class="srow-main">
+      <span class="srow-name mono">${c.name}</span>
+      <span class="srow-sub">class ${c.class} · ${c.enabled ? T.queue.apiEnabled : T.queue.apiDisabled}</span>
+      <span class="srow-why">${c.requests_24h} ${T.queue.apiRequests} · ${tokens} ${T.queue.apiTokens}</span>
+    </div>
+    <div class="srow-side">
+      <${Badge} tone=${c.enabled ? 'var(--color-success)' : 'var(--color-text-muted)'}
+        label=${c.enabled ? T.queue.apiEnabled : T.queue.apiDisabled} />
+      <${Button} variant="secondary" label=${T.queue.apiReissue} onClick=${onReissue} />
+      ${c.enabled
+        ? html`<${Button} variant="danger" label=${T.queue.apiDisable} onClick=${onDisable} />`
+        : html`<${Button} variant="secondary" label=${T.queue.apiEnable} onClick=${onEnable} />`}
+    </div>
   </div>`;
 }
 

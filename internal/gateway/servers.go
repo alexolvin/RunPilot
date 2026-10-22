@@ -223,7 +223,11 @@ func (s *Servers) StateOf(name string) model.ServerState {
 }
 
 // Accepts — сервер принимает ли класс очереди (servers[].accept).
+// BATCH (API-клиенты) принимается всеми серверами по умолчанию.
 func (s *Server) Accepts(c model.QueueClass) bool {
+	if c == model.ClassBatch {
+		return true
+	}
 	for _, name := range s.Cfg.Accept {
 		if cl, ok := model.QueueClassParse(name); ok && cl == c {
 			return true

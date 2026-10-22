@@ -639,6 +639,10 @@ func TestNoUsageNo529(t *testing.T) {
 			strings.HasSuffix(e.Name(), "_test.go") {
 			continue
 		}
+		// api.go — API-клиенты: учёт токенов из usage разрешён спекой §4.
+		if e.Name() == "api.go" {
+			continue
+		}
 		raw, err := os.ReadFile(e.Name())
 		if err != nil {
 			t.Fatal(err)

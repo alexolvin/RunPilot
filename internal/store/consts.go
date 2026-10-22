@@ -16,6 +16,10 @@ const (
 
 	// nodeTokenBytes — длина случайных байтов токена узла (16 → 32 hex-символа).
 	nodeTokenBytes = 16
+	// apiClientKeyBytes — длина ключа API-клиента в байтах (32 → 64 hex).
+	apiClientKeyBytes = 32
+	// hoursPerDay — часов в сутках (окно агрегации api_request).
+	hoursPerDay = 24
 	// bitsPerByte — битов на байт (фолбэк генерации токена).
 	bitsPerByte = 8
 	// decimalBase — десятичная система (strconv.FormatInt).

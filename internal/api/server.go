@@ -475,6 +475,15 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/nodes/{host}/update/{id}", s.handleNodeUpdateStatus)
 	mux.HandleFunc("GET /api/v1/nodes/{host}/dirs", s.handleNodeDirs)
 	mux.HandleFunc("GET /api/v1/queue", s.handleQueue)
+	mux.HandleFunc("GET /api/v1/api-clients", s.handleApiClients)
+	mux.HandleFunc("POST /api/v1/api-clients", s.handleApiClientCreate)
+	mux.HandleFunc("POST /api/v1/api-clients/{name}/enable", func(w http.ResponseWriter, r *http.Request) {
+		s.handleApiClientSetEnabled(w, r, true)
+	})
+	mux.HandleFunc("POST /api/v1/api-clients/{name}/disable", func(w http.ResponseWriter, r *http.Request) {
+		s.handleApiClientSetEnabled(w, r, false)
+	})
+	mux.HandleFunc("POST /api/v1/api-clients/{name}/reissue", s.handleApiClientReissue)
 	mux.HandleFunc("GET /api/v1/servers", s.handleServers)
 	mux.HandleFunc("GET /api/v1/stats", s.handleStats)
 	mux.HandleFunc("GET /api/v1/events", s.handleEvents)

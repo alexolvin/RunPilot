@@ -56,6 +56,22 @@ type Pane struct {
 	ReceivedAt string    `json:"ReceivedAt"`
 }
 
+// ApiClientRow — API-клиент шлюза + учёт за сутки (GET /api/v1/api-clients).
+type ApiClientRow struct {
+	Name             string   `json:"name"`
+	Class            string   `json:"class"`
+	Priority         int      `json:"priority"`
+	Enabled          bool     `json:"enabled"`
+	AllowedServers   []string `json:"allowed_servers,omitempty"`
+	MaxHoldSec       int      `json:"max_hold_sec"`
+	StickyIdleSec    int      `json:"sticky_idle_sec"`
+	AgingSec         int      `json:"aging_sec"`
+	CreatedAt        string   `json:"created_at"`
+	Requests24h      int      `json:"requests_24h"`
+	PromptTokens24h  int      `json:"prompt_tokens_24h"`
+	CompletionTokens24h int   `json:"completion_tokens_24h"`
+}
+
 // ProtoPane — proto.Pane (с json-тегами).
 type ProtoPane struct {
 	PaneID       string `json:"pane_id"`

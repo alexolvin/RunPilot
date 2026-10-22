@@ -39,6 +39,11 @@ const (
 	// kbInBytes — килобайт в байте (web.paste_max_kb → байты).
 	kbInBytes = 1024
 
+	// Дефолты API-клиентов (POST /api/v1/api-clients), сек.
+	apiClientDefaultMaxHoldSec   = 100
+	apiClientDefaultStickyIdleSec = 20
+	apiClientDefaultAgingSec     = 600
+
 	// idemCacheTTL — время жизни записи Idempotency-Key (O2): достаточно
 	// покрыть окно повторного нажатия / повторного запроса сетью (не порог ТЗ).
 	idemCacheTTL = 10 * time.Minute

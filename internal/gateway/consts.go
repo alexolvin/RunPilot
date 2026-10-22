@@ -3,6 +3,9 @@
 package gateway
 
 const (
+	// bearerPrefix — префикс заголовка Authorization API-клиента.
+	bearerPrefix = "bearer "
+
 	// faultBodyLimit — сколько байт тела ответа читается для классификации
 	// отказа (S4/S5/S6): шаблоны лежат в начале ошибки vLLM, весь стрим
 	// не буферизуется.

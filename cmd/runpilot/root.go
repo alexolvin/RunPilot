@@ -77,6 +77,7 @@ func newRoot(ver string) *cobra.Command {
 		newBrowserCmd(),
 		newOrchCmd(),
 		newNodeKeyCmd(),
+		newApiClientCmd(),
 	)
 	root.AddCommand(newQueueCmds()...)
 	return root

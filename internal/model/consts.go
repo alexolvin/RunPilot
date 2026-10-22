@@ -7,4 +7,6 @@ const (
 	ClassHigh   QueueClass = 1
 	ClassNormal QueueClass = 2
 	ClassLow    QueueClass = 3
+	// ClassBatch — безсессионные API-клиенты (ниже кодерных ходов).
+	ClassBatch QueueClass = 4
 )

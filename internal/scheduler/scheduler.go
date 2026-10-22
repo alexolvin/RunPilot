@@ -233,6 +233,9 @@ type Scheduler struct {
 	// Тесты: без async-горутины dispatch.
 	noAsyncDispatch bool
 
+	// apiAging — per-client aging_sec API-клиентов (name → aging_sec, кэш).
+	apiAging map[string]int
+
 	// Задержки диспетчеризации, мс (grant → SENT): приёмка p95.
 	latencies []int64
 
@@ -285,6 +288,7 @@ func New(o Options) *Scheduler {
 		autoSince:         map[string]time.Time{},
 		queueWaitNotified: map[string]time.Time{},
 		why:               map[string]*whyRec{},
+		apiAging:          map[string]int{},
 		noAsyncDispatch:   o.NoAsyncDispatch,
 	}
 }

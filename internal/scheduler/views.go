@@ -276,6 +276,9 @@ func (s *Scheduler) Cancel(target string) error {
 	if err != nil {
 		return err
 	}
+	if sess.Kind == model.KindAPI {
+		return fmt.Errorf("cancel: API-псевдосессия %s не закрывается", target)
+	}
 	pr := s.paneRec[sess.SID]
 	if pr == nil || pr.paneID == "" {
 		return fmt.Errorf("cancel: нет панели у %s", target)

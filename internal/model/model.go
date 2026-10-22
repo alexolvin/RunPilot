@@ -47,9 +47,11 @@ var AllRelayStates = []RelayState{
 
 // SessionKind — вид сессии (v2 разделы 2.4/2.5): PANE — кодер в tmux-панели
 // (проверки панели действуют), JOB — задание cron (runpilot exec, без панели).
+// API — псевдо-сессия безсессионного API-клиента (sid=api:<name>, без панели).
 const (
 	KindPane = "PANE"
 	KindJob  = "JOB"
+	KindAPI  = "API"
 )
 
 // ServerState — состояния сервера (раздел 4).
@@ -156,6 +158,8 @@ func (c QueueClass) String() string {
 		return "normal"
 	case ClassLow:
 		return "low"
+	case ClassBatch:
+		return "batch"
 	}
 	return "unknown"
 }
@@ -171,6 +175,8 @@ func QueueClassParse(s string) (QueueClass, bool) {
 		return ClassNormal, true
 	case "low":
 		return ClassLow, true
+	case "batch":
+		return ClassBatch, true
 	}
 	return 0, false
 }

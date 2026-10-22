@@ -11,10 +11,19 @@ import (
 
 // eff — эффективный класс записи (раздел 5 ТЗ):
 // eff = max(HIGH, class − floor(wait / aging_sec)); RESUME старением
-// не достигается (не участвует в старении).
+// не достигается (не участвует в старении). BATCH: после per-client aging_sec
+// — приоритет кодерного хода (HIGH) на один выпуск.
 func (s *Scheduler) eff(e model.QueueEntry, now time.Time) model.QueueClass {
 	if e.Class == model.ClassResume {
 		return model.ClassResume
+	}
+	if e.Class == model.ClassBatch {
+		wait := now.Sub(e.EnqueuedAt)
+		aging := s.apiAgingSec(e.SID)
+		if aging > 0 && wait >= time.Duration(aging)*time.Second {
+			return model.ClassHigh
+		}
+		return model.ClassBatch
 	}
 	wait := now.Sub(e.EnqueuedAt)
 	aging := time.Duration(s.cfg.Scheduler.AgingSec) * time.Second
@@ -30,6 +39,24 @@ func (s *Scheduler) eff(e model.QueueEntry, now time.Time) model.QueueClass {
 		eff = int(model.ClassLow)
 	}
 	return model.QueueClass(eff)
+}
+
+// apiAgingSec — per-client aging_sec API-клиента (sid=api:<name>); кэш в
+// памяти. Фолбэк — глобальный scheduler.aging_sec.
+func (s *Scheduler) apiAgingSec(sid string) int {
+	name := strings.TrimPrefix(sid, "api:")
+	if name == sid {
+		return s.cfg.Scheduler.AgingSec
+	}
+	if a, ok := s.apiAging[name]; ok {
+		return a
+	}
+	c, err := s.st.GetApiClient(name)
+	if err != nil {
+		return s.cfg.Scheduler.AgingSec
+	}
+	s.apiAging[name] = c.AgingSec
+	return c.AgingSec
 }
 
 // rankLess — ранг = (eff, enqueued_at); SID — детерминированный
@@ -56,7 +83,11 @@ func (s *Scheduler) viewOf(name string) (ServerView, bool) {
 }
 
 // accepts — сервер принимает ли эффективный класс (servers[].accept).
+// BATCH (API-клиенты) принимается всеми серверами по умолчанию.
 func accepts(v ServerView, c model.QueueClass) bool {
+	if c == model.ClassBatch {
+		return true
+	}
 	for _, name := range v.Accept {
 		if cl, ok := model.QueueClassParse(name); ok && cl == c {
 			return true

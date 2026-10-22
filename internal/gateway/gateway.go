@@ -106,6 +106,13 @@ type Gateway struct {
 	// Превышение gateway.max_buffered_mb → 503 runpilot_gateway_busy.
 	bufMu    sync.Mutex
 	buffered int64
+
+	// Липкие аренды API-клиентов (сервер удерживается за клиентом
+	// sticky_idle_sec; в памяти, не переживает рестарт). stickyTimers —
+	// таймер снятия аренды по истечении sticky_idle_sec (клиент в простое).
+	stickyMu     sync.Mutex
+	sticky       map[string]stickyLeaseRec
+	stickyTimers map[string]*time.Timer
 }
 
 // FaultReporter — приём отказа класса OOM/ENGINE_DEAD (раздел 7.1 С4/С5):
@@ -171,8 +178,10 @@ func NewGateway(cfg *config.Config, st *store.Store, clk clock.Clock, log *slog.
 		inflightCtx: map[int]context.CancelCauseFunc{},
 		inflightSID: map[int]string{},
 		lastEnd:     map[int64]time.Time{},
-		metrics:     NewMetrics(),
-		heldCount:   map[string]int{},
+		metrics:      NewMetrics(),
+		heldCount:    map[string]int{},
+		sticky:       map[string]stickyLeaseRec{},
+		stickyTimers: map[string]*time.Timer{},
 	}
 	return g, nil
 }
@@ -190,6 +199,12 @@ func (g *Gateway) Handler() http.Handler {
 
 // serveHTTP — разбор пути /s/<sid>/..., доступ, маршрутизация.
 func (g *Gateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	// API-клиенты (безсессионные OpenAI-запросы): POST /v1/chat/completions
+	// с Bearer-ключом (не /s/<sid>/).
+	if r.Method == http.MethodPost && r.URL.Path == "/v1/chat/completions" {
+		g.handleAPIRequest(w, r)
+		return
+	}
 	rest, sid := parseSPath(r.URL.Path)
 	if rest == "" || sid == "" {
 		http.Error(w, "not found", http.StatusNotFound)
