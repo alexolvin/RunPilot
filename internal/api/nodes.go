@@ -795,13 +795,21 @@ func (s *Server) runNodeUpdate(op *UpdateOp) {
 		s.updateOps[op.ID] = &opCopy
 		s.updateMu.Unlock()
 	}()
-	if err := s.triggerNodeUpdate(context.Background(), op.Host); err != nil {
+	reply, err := s.triggerNodeUpdate(context.Background(), op.Host)
+	if err != nil {
 		op.Stage = "failed"
 		op.Result = err.Error()
 		return
 	}
+	// Реальный результат узла (UPDATED/NOOP/REFUSED/FAILED) — не «ok» всегда:
+	// DispatchToNode возвращает ответ узла, а не факт доставки.
+	s.log.Info("api: node: self-update ответ узла", "node", op.Host,
+		"result", reply.Result, "detail", reply.Detail)
 	op.Stage = "done"
-	op.Result = "ok"
+	op.Result = string(reply.Result)
+	if reply.Detail != "" {
+		op.Result += " (" + reply.Detail + ")"
+	}
 	op.Version = s.version
 }
 
@@ -820,25 +828,24 @@ func (s *Server) handleNodeUpdateStatus(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(op)
 }
 
-// triggerNodeUpdate — отправить update-команду узлу (URL + sha256 + версия).
-func (s *Server) triggerNodeUpdate(ctx context.Context, host string) error {
+// triggerNodeUpdate — отправить update-команду узлу (URL + sha256 + версия)
+// и вернуть ответ узла (UPDATED/NOOP/REFUSED/FAILED) — для логирования и
+// статуса операции (раньше ответ выбрасывался, операция всегда «ok»).
+func (s *Server) triggerNodeUpdate(ctx context.Context, host string) (proto.Msg, error) {
 	p := s.distBinaryPath()
 	if p == "" {
-		return errors.New("бинарник недоступен")
+		return proto.Msg{}, errors.New("бинарник недоступен")
 	}
 	sha, err := sha256FileHex(p)
 	if err != nil {
-		return err
+		return proto.Msg{}, err
 	}
 	m := proto.New(proto.KindUpdate)
 	m.Version = s.version
 	m.BuildTime = s.buildTimeUnix // W12: детект отката узлом
 	m.URL = s.requestBaseNoPath() + "/api/v1/dist/runpilot"
 	m.SHA256 = sha
-	if _, err := s.hub.DispatchToNode(ctx, host, m); err != nil {
-		return err
-	}
-	return nil
+	return s.hub.DispatchToNode(ctx, host, m)
 }
 
 // requestBaseNoPath — http://host:port (без пути) API координатора для URL

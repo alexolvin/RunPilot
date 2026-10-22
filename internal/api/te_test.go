@@ -159,7 +159,7 @@ func TestTE_N4(t *testing.T) {
 	cap := addFakeNode(t, srv.hub, "n1", proto.ResSent, "")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := srv.triggerNodeUpdate(ctx, "n1"); err != nil {
+	if _, err := srv.triggerNodeUpdate(ctx, "n1"); err != nil {
 		t.Fatalf("triggerNodeUpdate: %v", err)
 	}
 	if cap.Type != proto.KindUpdate {
