@@ -612,6 +612,7 @@ func (n *Node) update(ctx context.Context, m proto.Msg) (*Reply, error) {
 
 // binVersion — <bin> version (вывод). Для защиты self-update (W12): сверка
 // версии скачанного бинарника с ожидаемой. Ошибка — "" (≠ m.Version → refused).
+// `version` выводит две строки (версия + коммит, git-сборка) — берём первую.
 func binVersion(ctx context.Context, bin string) string {
 	cctx, cancel := context.WithTimeout(ctx, binVersionTimeout)
 	defer cancel()
@@ -619,7 +620,11 @@ func binVersion(ctx context.Context, bin string) string {
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(string(out))
+	v := strings.TrimSpace(string(out))
+	if i := strings.IndexByte(v, '\n'); i >= 0 {
+		v = v[:i]
+	}
+	return v
 }
 
 func (n *Node) download(ctx context.Context, url, dest string) error {

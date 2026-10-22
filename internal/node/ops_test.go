@@ -467,6 +467,19 @@ func TestUpdateSuccess(t *testing.T) {
 	}
 }
 
+// TestBinVersionFirstLine — `version` выводит две строки (версия + коммит,
+// git-сборка); binVersion берёт первую (сверка self-update идёт по версии).
+// Без фикса binVersion возвращал «версия\nкоммит» → ≠ m.Version → REFUSED.
+func TestBinVersionFirstLine(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "runpilot")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho 1.2.3\necho abc1234\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := binVersion(context.Background(), bin); got != "1.2.3" {
+		t.Fatalf("binVersion = %q, хочу \"1.2.3\"", got)
+	}
+}
+
 // TestUpdateSameVersionNoop — W12 (ТЗ 14): целевая версия = текущей → NOOP,
 // бинарник не скачивается и не меняется, узел не рестартится.
 func TestUpdateSameVersionNoop(t *testing.T) {

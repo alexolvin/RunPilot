@@ -581,6 +581,7 @@ func fileExists(p string) bool {
 
 // distVersion — версия бинарника в dist_dir (`<dist> version`); для защиты от
 // stale dist (W12, ТЗ 14). Ошибка — бинарник недоступен/не runpilot.
+// `version` выводит две строки (версия + коммит, git-сборка) — берём первую.
 func (s *Server) distVersion() (string, error) {
 	p := s.distBinaryPath()
 	if p == "" {
@@ -592,7 +593,17 @@ func (s *Server) distVersion() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+	return firstLine(string(out)), nil
+}
+
+// firstLine — первая строка вывода (команда `version` отдаёт «версия\nкоммит»;
+// сверка идёт по версии, коммит игнорируем).
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	return s
 }
 
 // serveBinary — отдать бинарник с заголовком X-RUNPILOT-Sha256.

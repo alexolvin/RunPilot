@@ -186,9 +186,10 @@ func TestNodeUpdateDistOK(t *testing.T) {
 	if err := os.MkdirAll(distDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// dist-бинарник отчитывается версией координатора.
+	// dist-бинарник отчитывается версией координатора (две строки: версия +
+	// коммит, как git-сборка) — сверка идёт по первой строке.
 	okBin := filepath.Join(distDir, "runpilot")
-	if err := os.WriteFile(okBin, []byte("#!/bin/sh\necho 77e9550\n"), 0o755); err != nil {
+	if err := os.WriteFile(okBin, []byte("#!/bin/sh\necho 77e9550\necho abc1234\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
