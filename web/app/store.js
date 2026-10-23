@@ -324,10 +324,11 @@ export const actions = {
       return;
     }
     if ((ev.kind === 'SESSION_STATE' || ev.kind === 'HOLD') && ev.sid &&
-        !S.sessions.some((s) => s.sid === ev.sid) && !S.resyncing) {
+        !S.sessions.some((s) => s.sid === ev.sid)) {
       // Незнакомый sid: сессия создана, пока страница открыта (событие
       // создания несёт только состояние, без полей) — полный срез /state.
-      doResync();
+      if (S.resyncing) resyncPending = true;
+      else doResync();
       return;
     }
     if (ev.kind === 'SERVER_METRICS' && Array.isArray(pl)) {
@@ -340,7 +341,11 @@ export const actions = {
       // слоты серверов (slots_info в карточке). Обновляем ВСЁ из одного
       // свежего среза /state (одновременно), а не точечно: точечный патч
       // sessions уезжал от карточек на время ресинка → рассинхрон элементов.
-      if (!S.resyncing) doResync();
+      // Ресинк уже в полёте — не бросаем событие: повторим срез после него
+      // (иначе сессия застрянет в устаревшем состоянии, пока SERVER_METRICS
+      // держит карточки свежими).
+      if (S.resyncing) resyncPending = true;
+      else doResync();
     } else if (ev.kind === 'HOLD' && ev.sid && pl.reason) {
       patch.sessions = S.sessions.map((s) =>
         s.sid === ev.sid ? { ...s, hold_reason: pl.reason } : s);
@@ -371,12 +376,21 @@ export const actions = {
 // sseInstance — текущий EventSource (тестовый хук __runpilotSSE, CONTROL 2).
 let sseInstance = null;
 
+// resyncPending — SESSION_STATE пришло, пока ресинк уже в полёте: не бросаем
+// событие, а повторяем срез после текущего (иначе сессии устареют, пока
+// SERVER_METRICS держит карточки свежими → рассинхрон «В работе»/карточки).
+let resyncPending = false;
 // doResync — полный срез /state (при RESYNC от сервера и по хуку __runpilotResync).
 function doResync() {
   actions.setResyncing(true);
   actions.loadExternals(); // 8.2: live-список внешних кодеров тоже обновляем
   return get('/api/v1/state').then((r) => {
     if (r.ok && r.data) actions.setFull(r.data);
+    else actions.setResyncing(false);
+    if (resyncPending) {
+      resyncPending = false;
+      doResync();
+    }
   });
 }
 

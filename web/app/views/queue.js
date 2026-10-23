@@ -125,13 +125,12 @@ export function QueuePage() {
   // View-level: session state при PROMPT остаётся RUNNING (автомата не
   // трогаем), поэтому выносим такие сессии из «В работе» в «Требуют внимания».
   const isPrompt = (x) => { const p = s.panes[x.sid]; return !!p && p.state === 'PROMPT'; };
-  // «В работе» — RUNNING/DISPATCHING с действующей арендой (server). Все
-  // пути снятия аренды (turn-done, server down, node lost, pane gone) снимают
-  // аренду ДО смены state RUNNING→IDLE: в этом окне state ещё RUNNING, но
-  // аренды нет (handleState отдаёт сессию без server) — карточка сервера её
-  // не показывает, а фильтр по state показывал → «В работе» превышало
-  // ёмкость (3 при 2 слотах). Фильтр по server закрывает окно.
-  const running = s.sessions.filter((x) => (x.state === 'RUNNING' || x.state === 'DISPATCHING') && !isPrompt(x) && !!x.server);
+  // «В работе» — RUNNING/DISPATCHING. Согласованность с карточками серверов
+  // держит store: SESSION_STATE триггерит полный срез /state (сессии и
+  // карточки из одного снимка), и событие не теряется, если ресинк в полёте
+  // (resyncPending) — иначе сессия устаревала, пока SERVER_METRICS держал
+  // карточки свежими.
+  const running = s.sessions.filter((x) => (x.state === 'RUNNING' || x.state === 'DISPATCHING') && !isPrompt(x));
   const hold = s.sessions.filter((x) => x.state === 'HOLD' || isPrompt(x));
   // Свободные — IDLE без удержания: удерживающая (held) сессия уже в
   // «Очередь», дублировать её в «Свободных» нельзя (сессия в двух статусах).
