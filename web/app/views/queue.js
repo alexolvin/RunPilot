@@ -16,16 +16,6 @@ import { Badge } from '../components/badge.js';
 import { Button } from '../components/button.js';
 import { IconButton } from '../components/icon-button.js';
 
-// W13 этап 2: причины по серверам строки очереди → «3p14: внешняя нагрузка (1) · vzu5: занят PhoneBroker».
-function serverReasonsText(sr) {
-  if (!sr || !sr.length) return '';
-  return sr.map((x) => {
-    const label = T.queue.serverReasons[x.reason];
-    const txt = typeof label === 'function' ? label(x.detail || '') : (label || x.reason);
-    return x.server + ': ' + txt;
-  }).join(' · ');
-}
-
 // W7 (8.2, J9/J11): статусы внешних кодеров.
 const EXT_STATUS = { ACTIVE: 'stActive', KILLED: 'stKilled', GONE: 'stGone', IGNORED: 'stIgnored' };
 const EXT_TONE = { ACTIVE: 'var(--color-warning)', KILLED: 'var(--color-danger)', GONE: 'var(--color-text-muted)', IGNORED: 'var(--color-text-muted)' };
@@ -74,8 +64,8 @@ export function QueuePage() {
   }, []);
   // Строки очереди — live: пересъёмка /queue при каждом изменении среза
   // сессий (ресинк по SESSION_STATE), а не разовый снапшот. Без этого строка
-  // удерживающей сессии (held) и её server_reasons застревали в состоянии на
-  // момент входа на экран → сессия «висела» в «Очередь» и «Свободных» разом.
+  // удерживающей сессии (held) застревала в состоянии на момент входа на
+  // экран → сессия «висела» в «Очередь» и «Свободных» разом.
   // Внешние кодеры — из store (s.externals), обновляются по SSE EXTERNALS.
   useEffect(() => {
     get('/api/v1/queue').then((r) => { if (r.ok && r.data) setQueueRows(r.data); });
@@ -202,13 +192,11 @@ export function QueuePage() {
               const x = s.sessions.find((y) => y.sid === row.sid);
               const held = !!x && !!x.held_since;
               const why = whyText(s.meta, 'ineligible', row.why);
-              const srs = serverReasonsText(row.server_reasons);
               return html`<div class="srow qrow" onClick=${() => navigate('sessions', row.sid)}>
                 <div class="srow-main">
                   <span class="srow-name" title=${row.sid}>${row.session}</span>
                   ${row.node_id ? html`<span class="srow-sub">${row.node_id}</span>` : null}
                   ${why ? html`<span class="srow-why">${why}</span>` : null}
-                  ${srs ? html`<span class="srow-why srow-servers" title=${T.queue.serverReasonsTitle}>${srs}</span>` : null}
                 </div>
                 <div class="srow-side">
                   ${held ? html`<${Badge} tone="var(--color-warning)" label=${T.queue.held} />` : null}
