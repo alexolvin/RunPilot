@@ -160,7 +160,10 @@ export function QueuePage() {
   const queuedRows = queueRows.filter((row) => {
     const x = s.sessions.find((y) => y.sid === row.sid);
     if (!x) return false;
-    return x.state === 'QUEUED' || row.held;
+    // Held — это IDLE (ждёт слот). RUNNING/DISPATCHING — в «В работе», в
+    // «Очередь» не попадают, даже если в снапшоте ещё row.held (окно между
+    // выдачей неявной аренды и снятием held_request).
+    return x.state === 'QUEUED' || (x.state === 'IDLE' && !!x.held_since);
   });
 
   return html`<div class="page">

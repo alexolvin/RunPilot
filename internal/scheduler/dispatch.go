@@ -143,6 +143,11 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 			return
 		}
 		s.slotLeased(f.Name, f.Slot)
+		// Запись очереди: неявная аренда выдана — запрос больше не
+		// удерживается. Без этого RUNNING-сессия несла held_request и
+		// висела и в «В работе», и в «Очередь» в вебе (held_since из
+		// неснятой записи). Аналог JOB-ветки и confirmNowLocked.
+		_ = s.st.QueueDelete(sess.SID)
 		switch sess.State {
 		case model.SessionIdle:
 			s.sessionEvent(sess, model.EvEnterHasSlot, "")
