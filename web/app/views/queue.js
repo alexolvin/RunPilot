@@ -68,12 +68,18 @@ export function QueuePage() {
   const reloadApiClients = () =>
     get('/api/v1/api-clients').then((r) => { if (r.ok && r.data) setApiClients(r.data); });
 
+  // API-клиенты — разовый GET при входе на экран.
   useEffect(() => {
-    // Строки очереди — разовый GET (не live). Внешние кодеры —
-    // из store (s.externals), обновляются по SSE EXTERNALS (live, без поллинга).
-    get('/api/v1/queue').then((r) => { if (r.ok && r.data) setQueueRows(r.data); });
     reloadApiClients();
   }, []);
+  // Строки очереди — live: пересъёмка /queue при каждом изменении среза
+  // сессий (ресинк по SESSION_STATE), а не разовый снапшот. Без этого строка
+  // удерживающей сессии (held) и её server_reasons застревали в состоянии на
+  // момент входа на экран → сессия «висела» в «Очередь» и «Свободных» разом.
+  // Внешние кодеры — из store (s.externals), обновляются по SSE EXTERNALS.
+  useEffect(() => {
+    get('/api/v1/queue').then((r) => { if (r.ok && r.data) setQueueRows(r.data); });
+  }, [s.sessions]);
   useEffect(() => { sessionsRef.current = s.sessions; }, [s.sessions]);
   useEffect(() => { queueRowsRef.current = queueRows; }, [queueRows]);
 
@@ -131,7 +137,9 @@ export function QueuePage() {
   const isPrompt = (x) => { const p = s.panes[x.sid]; return !!p && p.state === 'PROMPT'; };
   const running = s.sessions.filter((x) => (x.state === 'RUNNING' || x.state === 'DISPATCHING') && !isPrompt(x));
   const hold = s.sessions.filter((x) => x.state === 'HOLD' || isPrompt(x));
-  const idleSessions = s.sessions.filter((x) => x.state === 'IDLE');
+  // Свободные — IDLE без удержания: удерживающая (held) сессия уже в
+  // «Очередь», дублировать её в «Свободных» нельзя (сессия в двух статусах).
+  const idleSessions = s.sessions.filter((x) => x.state === 'IDLE' && !x.held_since);
   const hasAny = s.servers.length > 0 || s.sessions.length > 0;
 
   if (!hasAny) {
@@ -188,6 +196,8 @@ export function QueuePage() {
       ${queuedRows.length
         ? html`<div class="srow-list">
             ${queuedRows.slice(0, UI.queueWorkMax).map((row) => {
+              const x = s.sessions.find((y) => y.sid === row.sid);
+              const held = !!x && !!x.held_since;
               const why = whyText(s.meta, 'ineligible', row.why);
               const srs = serverReasonsText(row.server_reasons);
               return html`<div class="srow qrow" onClick=${() => navigate('sessions', row.sid)}>
@@ -198,8 +208,8 @@ export function QueuePage() {
                   ${srs ? html`<span class="srow-why srow-servers" title=${T.queue.serverReasonsTitle}>${srs}</span>` : null}
                 </div>
                 <div class="srow-side">
-                  ${row.held ? html`<${Badge} tone="var(--color-warning)" label=${T.queue.held} />` : null}
-                  ${row.held && row.held_since ? html`<${HeldTimer} since=${row.held_since} />` : null}
+                  ${held ? html`<${Badge} tone="var(--color-warning)" label=${T.queue.held} />` : null}
+                  ${held && x.held_since ? html`<${HeldTimer} since=${x.held_since} />` : null}
                   <span class="qrow-wait">${row.wait_sec}${T.units.sec}</span>
                   <${IconButton} variant="secondary" icon="file-text" title=${T.session.editLaunch}
                     onClick=${(e) => { e.stopPropagation(); navigate('sessions', row.sid); }} />

@@ -83,6 +83,9 @@ function normSession(s) {
     node_id: s.OsUser ? s.Host + ':' + s.OsUser : s.Host,
     state: s.State,
     hold_reason: s.HoldReason || '', class: s.Class,
+    // п.6: время начала удержания (queue_entry.held_request=true); живое
+    // (из /state), а не из снапшота /queue — им ведём видимость «Очередь».
+    held_since: s.held_since || null,
     state_changed_at: s.StateChangedAt, last_server: s.LastServer || '',
     agent_version: s.AgentVersion || '', profile: s.Profile || '',
     constraint_kind: s.ConstraintKind || '', constraint_server: s.ConstraintServer || '',
