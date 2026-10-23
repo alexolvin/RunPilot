@@ -180,6 +180,62 @@ func (s *Store) SetApiClientEnabled(name string, enabled bool) error {
 	})
 }
 
+// SetApiClient — обновить настройки клиента (приоритет, класс, allowed_servers,
+// таймауты). Ключ и enabled не меняются (у них свои эндпоинты: reissue /
+// enable|disable). Возвращает обновлённого клиента.
+func (s *Store) SetApiClient(c ApiClient) (ApiClient, error) {
+	now := time.Now().UTC()
+	if err := s.DoWrite(func(tx *sql.Tx) error {
+		res, err := tx.Exec(`
+UPDATE api_client
+	SET class = ?, priority = ?, allowed_servers = ?,
+	    max_hold_sec = ?, sticky_idle_sec = ?, aging_sec = ?, updated_at = ?
+	WHERE name = ?`,
+			int(c.Class), c.Priority, strings.Join(c.AllowedServers, ","),
+			c.MaxHoldSec, c.StickyIdleSec, c.AgingSec, ts(now), c.Name)
+		if err != nil {
+			return err
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			return ErrNotFound
+		}
+		return nil
+	}); err != nil {
+		return ApiClient{}, err
+	}
+	return s.GetApiClient(c.Name)
+}
+
+// DeleteApiClient — удалить клиента и его псевдо-сессию (api:<name>).
+// Псевдо-сессию снимаем с очереди/аренды и ставим GONE, затем удаляем запись
+// сессии и клиента. Idempotent на клиенте: ErrNotFound, если клиента нет.
+func (s *Store) DeleteApiClient(name string) error {
+	sid := APISessionSID(name)
+	if err := s.DoWrite(func(tx *sql.Tx) error {
+		res, err := tx.Exec(`DELETE FROM api_client WHERE name = ?`, name)
+		if err != nil {
+			return err
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			return ErrNotFound
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	// Псевдо-сессия: снять с очереди и удалить запись (не GONE — ставим GONE).
+	if rec, err := s.GetSession(sid); err == nil {
+		now := time.Now().UTC()
+		_ = s.QueueDelete(sid)
+		_ = s.SetSessionState(sid, model.SessionGone, "", now)
+		_ = s.DeleteSession(sid)
+		_ = rec
+	}
+	return nil
+}
+
 // ReissueAPIKey — перевыпустить ключ (новый ключ показывается один раз).
 func (s *Store) ReissueAPIKey(name string) (string, error) {
 	key, err := NewAPIKey()

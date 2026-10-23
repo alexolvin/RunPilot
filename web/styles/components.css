@@ -412,6 +412,14 @@
 .api-create input{flex:1;min-width:0}
 .api-key{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--color-border);background:var(--color-surface-muted);font-size:var(--font-size-xs);color:var(--color-text-muted)}
 .api-key code{font-family:var(--font-mono);color:var(--color-accent);word-break:break-all}
+.api-key-hint{flex:1;min-width:0}
+/* Страница API-сессии: одна колонка (sc-col), заметка, форма, пример. */
+.sc-col{display:flex;flex-direction:column;gap:var(--space-3);min-width:0}
+.sc-note{margin:0 0 var(--space-2);font-size:var(--font-size-sm);color:var(--color-text-muted)}
+.api-form{display:flex;flex-direction:column;gap:var(--space-3)}
+.api-form-row{display:flex;gap:var(--space-3)}
+.api-form-row .field{flex:1;min-width:0}
+.api-ex{margin:0 0 var(--space-2);padding:var(--space-3);background:var(--color-screen-bg);color:var(--color-screen-text);border:1px solid var(--color-border);border-radius:var(--radius-control);font-size:var(--font-size-xs);white-space:pre-wrap;word-break:break-all}
 /* Пиктограмма состояния (замена текстового бейджа). */
 .state-icon{display:inline-flex;align-items:center;justify-content:center;flex:none}
 /* Кнопка-иконка (замена текстовой кнопки в строках списков). */

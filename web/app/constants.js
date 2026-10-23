@@ -55,6 +55,9 @@ export const BP = {
 // Минимальный размер интерактивного элемента на телефоне (19.3.6: 44×44 px).
 export const TOUCH_MIN_PX = 44;
 
+// API-сессия: префикс sid псевдо-сессии API-клиента (api:<name>).
+export const API_PREFIX = 'api:';
+
 // HTTP-коды (W1/W6): неверный токен, лимит попыток, «принято» (удаляется).
 export const HTTP = {
   unauthorized: 401,

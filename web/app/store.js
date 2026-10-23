@@ -9,7 +9,7 @@ import { UI } from './constants.js';
 
 // Экраны (навигация).
 export const PAGES = [
-  'queue', 'sessions', 'servers', 'nodes',
+  'queue', 'sessions', 'api-session', 'servers', 'nodes',
   'journal', 'monitoring', 'notifications', 'settings',
 ];
 const THEME_KEY = 'runpilot.theme';
@@ -82,6 +82,9 @@ function normSession(s) {
     // пользователя»); пустой os_user (старые записи) → host.
     node_id: s.OsUser ? s.Host + ':' + s.OsUser : s.Host,
     state: s.State,
+    // Kind: PANE (дефолт) | JOB | API. API-сессия (api:<name>) → отдельная
+    // страница (эндпоинт + настройки клиента), не tmux-карточка.
+    kind: s.Kind || '',
     hold_reason: s.HoldReason || '', class: s.Class,
     // п.6: время начала удержания (queue_entry.held_request=true); живое
     // (из /state), а не из снапшота /queue — им ведём видимость «Очередь».

@@ -29,7 +29,9 @@ export function SessionRow(props) {
   };
 
   const hasConstraint = s.constraint_kind && s.constraint_kind !== 'none';
-  return html`<div class="srow srow--link" onClick=${() => navigate('sessions', s.sid)}>
+  // API-сессия (kind=API, api:<name>) → отдельная страница (эндпоинт + настройки).
+  const page = s.kind === 'API' ? 'api-session' : 'sessions';
+  return html`<div class="srow srow--link" onClick=${() => navigate(page, s.sid)}>
     <div class="srow-main">
       <span class="srow-name" title=${s.sid}>${s.name || s.sid}</span>
       ${s.node_id ? html`<span class="srow-sub">${s.node_id}</span>` : null}

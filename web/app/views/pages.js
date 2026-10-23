@@ -5,6 +5,7 @@ import { useStore } from '../store.js';
 import { QueuePage } from './queue.js';
 import { SessionsPage } from './sessions.js';
 import { SessionPage } from './session.js';
+import { ApiSessionPage } from './api-session.js';
 import { ServersPage } from './servers.js';
 import { NodesPage } from './nodes.js';
 import { JournalPage } from './journal.js';
@@ -27,6 +28,7 @@ export function PageView() {
   // их при ре-рендере (useState вернёт чужое значение — баг W4).
   switch (s.page) {
     case 'sessions': return html`<${SessionsRoute} />`;
+    case 'api-session': return html`<${ApiSessionPage} />`;
     case 'servers': return html`<${ServersPage} />`;
     case 'nodes': return html`<${NodesPage} />`;
     case 'journal': return html`<${JournalPage} />`;
