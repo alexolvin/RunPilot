@@ -216,6 +216,7 @@ type Turn struct {
 	ApprovalHoldMaxSec   int `yaml:"approval_hold_max_sec"`
 	UnknownMaxSec        int `yaml:"unknown_max_sec"`
 	NodeLostReleaseSec   int `yaml:"node_lost_release_sec"`
+	NodeLostGoneSec      int `yaml:"node_lost_gone_sec"`
 	AutoEnqueueStableSec int `yaml:"auto_enqueue_stable_sec"`
 	// v2 (раздел 4.2): период грации принудительного завершения кодера.
 	KillGraceSec int `yaml:"kill_grace_sec"`
@@ -513,6 +514,7 @@ func (c *Config) Validate() error {
 		"turn.approval_hold_max_sec":      c.Turn.ApprovalHoldMaxSec,
 		"turn.unknown_max_sec":            c.Turn.UnknownMaxSec,
 		"turn.node_lost_release_sec":      c.Turn.NodeLostReleaseSec,
+		"turn.node_lost_gone_sec":         c.Turn.NodeLostGoneSec,
 		"turn.auto_enqueue_stable_sec":    c.Turn.AutoEnqueueStableSec,
 		"gateway.hold_max_sec":            c.Gateway.HoldMaxSec,
 		"gateway.max_body_mb":             c.Gateway.MaxBodyMB,

@@ -40,6 +40,11 @@ const (
 	EvDependencyFailed SessionEvent = "dependency_failed"
 	EvNodeDrain        SessionEvent = "node_drain"
 
+	// Узел потерял связь (нет трафика ≥ node_lost_release_sec): все сессии
+	// узла → HOLD(NODE_LOST). Отличается от EvErrorFatal (только RUNNING/
+	// DETACHED) тем, что ведёт в HOLD и IDLE/QUEUED/DETACHED.
+	EvNodeLost SessionEvent = "node_lost"
+
 	// Панель исчезла.
 	EvPaneGone SessionEvent = "pane_gone"
 
@@ -60,7 +65,7 @@ var AllSessionEvents = []SessionEvent{
 	EvTurnDone, EvLeaseRevoked, EvResumeRequest, EvIdleNoError,
 	EvErrorRetryable, EvErrorFatal,
 	EvRequeue, EvUnhold, EvHold, EvPinUnavailable, EvDependencyFailed, EvNodeDrain,
-	EvPaneGone, EvEmergency, EvAgentExit,
+	EvNodeLost, EvPaneGone, EvEmergency, EvAgentExit,
 }
 
 // Transition — одна строка таблицы автомата.
@@ -103,6 +108,14 @@ var sessionTransitions = []Transition{
 	{SessionQueued, EvDependencyFailed, SessionHold},       // DEPENDENCY_FAILED
 	{SessionIdle, EvNodeDrain, SessionHold},                // NODE_DRAIN
 	{SessionQueued, EvNodeDrain, SessionHold},              // NODE_DRAIN
+	// Узел потерял связь (нет трафика ≥ node_lost_release_sec): все сессии
+	// узла → HOLD(NODE_LOST). В отличие от EvErrorFatal покрывает IDLE/
+	// QUEUED/DETACHED (RUNNING/DETACHED ранее велись EvErrorFatal).
+	{SessionIdle, EvNodeLost, SessionHold},                 // NODE_LOST
+	{SessionQueued, EvNodeLost, SessionHold},               // NODE_LOST
+	{SessionDispatching, EvNodeLost, SessionHold},          // NODE_LOST
+	{SessionRunning, EvNodeLost, SessionHold},              // NODE_LOST
+	{SessionDetached, EvNodeLost, SessionHold},             // NODE_LOST
 	// Из любого состояния — GONE.
 	{SessionIdle, EvPaneGone, SessionGone},
 	{SessionQueued, EvPaneGone, SessionGone},
@@ -176,6 +189,8 @@ func HoldReasonFor(ev SessionEvent) (HoldReason, bool) {
 		return HoldDependencyFailed, true
 	case EvNodeDrain:
 		return HoldNodeDrain, true
+	case EvNodeLost:
+		return HoldNodeLost, true
 	case EvHold:
 		return HoldOperator, true
 	}

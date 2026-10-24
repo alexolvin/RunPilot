@@ -185,3 +185,46 @@ func TestNodeLost(t *testing.T) {
 		t.Fatalf("NODE_LOST: аренда не снята")
 	}
 }
+
+// NODE_LOST: IDLE-сессия (не только RUNNING) → HOLD(NODE_LOST) при потере узла.
+func TestNodeLostIdleSession(t *testing.T) {
+	h := newHarn(t, []ServerView{srv("s", 10, 1)})
+	h.addSession("s1", "s1", "node1", model.SessionIdle, model.ClassNormal, model.NoConstraint)
+	h.idlePane("s1", "node1")
+	h.sch.NodeLost("node1")
+	// До node_lost_release: всё ещё IDLE.
+	h.advance(60 * time.Second)
+	h.tick()
+	if st := h.sessionState("s1"); st != model.SessionIdle {
+		t.Fatalf("до node_lost_release: state=%s, хочу IDLE", st)
+	}
+	// После node_lost_release: HOLD(NODE_LOST).
+	h.advance(60 * time.Second)
+	h.tick()
+	if st := h.sessionState("s1"); st != model.SessionHold {
+		t.Fatalf("после node_lost_release: state=%s, хочу HOLD", st)
+	}
+	if hr := h.session("s1").HoldReason; hr != model.HoldNodeLost {
+		t.Fatalf("hold_reason=%s, хочу NODE_LOST", hr)
+	}
+}
+
+// NODE_GONE: узел отсутствует > node_lost_gone_sec → сессия GONE.
+func TestNodeLostGone(t *testing.T) {
+	h := newHarn(t, []ServerView{srv("s", 10, 1)})
+	h.addSession("s1", "s1", "node1", model.SessionIdle, model.ClassNormal, model.NoConstraint)
+	h.idlePane("s1", "node1")
+	h.sch.NodeLost("node1")
+	// На node_lost_release: HOLD(NODE_LOST).
+	h.advance(120 * time.Second)
+	h.tick()
+	if st := h.sessionState("s1"); st != model.SessionHold {
+		t.Fatalf("на node_lost_release: state=%s, хочу HOLD", st)
+	}
+	// На node_lost_gone: GONE.
+	h.advance(480 * time.Second)
+	h.tick()
+	if st := h.sessionState("s1"); st != model.SessionGone {
+		t.Fatalf("на node_lost_gone: state=%s, хочу GONE", st)
+	}
+}

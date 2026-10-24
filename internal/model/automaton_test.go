@@ -35,11 +35,12 @@ func TestSessionTransitionsComplete(t *testing.T) {
 // 2 ручной hold (OPERATOR из таблицы hold_reason) +
 // 3 аварийная остановка (v2 6.2: DISPATCHING/RUNNING/DETACHED → HOLD) +
 // 4 кодер завершился (v2 7.3 C1: DISPATCHING/RUNNING/DETACHED/IDLE → HOLD) +
-// 1 активность на шлюзе (HOLD → RUNNING) = 39,
-// плюс начальный ∅ → IDLE (runpilot run) = 40 переходов всего.
+// 5 узел потерял связь (NODE_LOST: IDLE/QUEUED/DISPATCHING/RUNNING/DETACHED → HOLD) +
+// 1 активность на шлюзе (HOLD → RUNNING) = 44,
+// плюс начальный ∅ → IDLE (runpilot run) = 45 переходов всего.
 func TestTransitionCount(t *testing.T) {
-	const wantTable = 39
-	const wantTotal = 40 // таблица + начальный переход
+	const wantTable = 44
+	const wantTotal = 45 // таблица + начальный переход
 	if got := len(SessionTransitions()); got != wantTable {
 		t.Fatalf("строк в таблице автомата = %d, ждём %d (см. отчёт о маппинге)", got, wantTable)
 	}
@@ -100,6 +101,7 @@ func TestHoldReasonFor(t *testing.T) {
 		EvPinUnavailable:    HoldPinUnavailable,
 		EvDependencyFailed:  HoldDependencyFailed,
 		EvNodeDrain:         HoldNodeDrain,
+		EvNodeLost:          HoldNodeLost,
 		EvHold:              HoldOperator,
 	}
 	for ev, code := range want {

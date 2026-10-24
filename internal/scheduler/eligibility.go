@@ -560,6 +560,10 @@ func (s *Scheduler) nodeLostRelease() time.Duration {
 	return time.Duration(s.cfg.Turn.NodeLostReleaseSec) * time.Second
 }
 
+func (s *Scheduler) nodeLostGone() time.Duration {
+	return time.Duration(s.cfg.Turn.NodeLostGoneSec) * time.Second
+}
+
 func (s *Scheduler) autoEnqueueStable() time.Duration {
 	return time.Duration(s.cfg.Turn.AutoEnqueueStableSec) * time.Second
 }

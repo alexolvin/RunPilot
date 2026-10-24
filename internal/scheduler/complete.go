@@ -315,34 +315,45 @@ func (s *Scheduler) serverDownLocked(server string, now time.Time) {
 	}
 }
 
-// tickNodeLost — узел отключился без трафика turn.node_lost_release_sec:
-// аренды его RUNNING-сессий снимаются (NODE_LOST), сессии → HOLD (раздел 8 ТЗ).
+// tickNodeLost — узел отключился без трафика:
+//   - ≥ node_lost_release_sec: все его сессии (IDLE/QUEUED/DISPATCHING/
+//     RUNNING/DETACHED) → HOLD(NODE_LOST), аренды RUNNING снимаются;
+//   - ≥ node_lost_gone_sec: сессии → GONE (узел, evidently, перезагружен —
+//     панели мертвы; NodeSeen сбрасывает таймер).
+//
 // NodeSeen сбрасывает таймер (узел снова отвечает) — см. NodeLost/NodeSeen.
 func (s *Scheduler) tickNodeLost(now time.Time) {
-	var lost []string
-	for host, down := range s.nodeDown {
-		if now.Sub(down) >= s.nodeLostRelease() {
-			lost = append(lost, host)
-		}
-	}
-	if len(lost) == 0 {
-		return
-	}
-	lostSet := make(map[string]bool, len(lost))
-	for _, host := range lost {
-		lostSet[host] = true
-	}
 	sessions := s.sessionsMap()
-	for _, sess := range sessions {
-		if sess.State != model.SessionRunning || !lostSet[sess.NodeID()] {
+	for host, down := range s.nodeDown {
+		absent := now.Sub(down)
+		if absent < s.nodeLostRelease() {
 			continue
 		}
-		if s.inflight[sess.SID] != 0 {
-			continue // запросы в полёте: узел ещё отвечает
+		gone := s.nodeLostGone() > 0 && absent >= s.nodeLostGone()
+		for _, sess := range sessions {
+			if sess.NodeID() != host || sess.State == model.SessionGone {
+				continue
+			}
+			if s.inflight[sess.SID] != 0 {
+				continue // запросы в полёте: узел ещё отвечает
+			}
+			if gone {
+				s.releaseLeaseLocked(sess.SID, model.ReleaseNodeLost, now)
+				_ = s.st.QueueDelete(sess.SID)
+				s.goneLocked(sess, now)
+				s.notifyf("runpilot: %s: узел %s отсутствует >%d мин → сессия завершена (NODE_GONE)",
+					sess.Name, host, int(s.nodeLostGone().Minutes()))
+				continue
+			}
+			if sess.State == model.SessionHold {
+				continue // уже в HOLD (от предыдущего тика) — не дублируем
+			}
+			if sess.State == model.SessionRunning {
+				s.releaseLeaseLocked(sess.SID, model.ReleaseNodeLost, now)
+			}
+			s.sessionEvent(sess, model.EvNodeLost, model.HoldNodeLost)
+			s.notifyf("runpilot: %s: узел %s не отвечает (NODE_LOST)", sess.Name, host)
 		}
-		s.releaseLeaseLocked(sess.SID, model.ReleaseNodeLost, now)
-		s.sessionEvent(sess, model.EvErrorFatal, model.HoldNodeLost)
-		s.notifyf("runpilot: %s: узел %s не отвечает (NODE_LOST)", sess.Name, sess.NodeID())
 	}
 }
 

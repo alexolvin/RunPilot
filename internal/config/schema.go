@@ -124,6 +124,8 @@ func Schema() []SettingField {
 			"Максимальное время состояния UNKNOWN.", ApplyNewDispatch),
 		intField("turn.node_lost_release_sec", "s", "Ходы", "Снятие аренды",
 			"Снятие аренды RUNNING-сессий при потере узла.", ApplyNewDispatch),
+		intField("turn.node_lost_gone_sec", "s", "Ходы", "ГONE по потере узла",
+			"Сессии потерявшего узла → GONE, если узел отсутствует дольше этого.", ApplyNewDispatch),
 		intField("turn.auto_enqueue_stable_sec", "s", "Ходы", "Автопостановка",
 			"Стабильность IDLE перед автопостановкой.", ApplyNewDispatch),
 		intField("turn.kill_grace_sec", "s", "Ходы", "Грация завершения",

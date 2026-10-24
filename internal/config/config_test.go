@@ -86,7 +86,7 @@ var configKeys = []string{
 	"dispatch.resume_key_delay_ms", "dispatch.budget_p95_ms",
 	"turn", "turn.done_quiet_sec", "turn.done_stable_sec", "turn.tool_hold_max_sec",
 	"turn.approval_hold_max_sec", "turn.unknown_max_sec", "turn.node_lost_release_sec",
-	"turn.auto_enqueue_stable_sec", "turn.kill_grace_sec",
+	"turn.node_lost_gone_sec", "turn.auto_enqueue_stable_sec", "turn.kill_grace_sec",
 	"gateway", "gateway.hold_max_sec", "gateway.max_body_mb", "gateway.max_buffered_mb",
 	"gateway.retry_after_sec", "gateway.max_inflight", "gateway.read_header_timeout_sec",
 	"monitor", "monitor.health_interval_sec", "monitor.health_timeout_sec",

@@ -59,6 +59,7 @@ func Defaults() *Config {
 			ApprovalHoldMaxSec:   600,
 			UnknownMaxSec:        60,
 			NodeLostReleaseSec:   120,
+			NodeLostGoneSec:      600,
 			AutoEnqueueStableSec: 20,
 			KillGraceSec:         10,
 		},
