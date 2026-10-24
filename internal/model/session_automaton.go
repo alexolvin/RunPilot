@@ -28,6 +28,10 @@ const (
 	EvTurnDone       SessionEvent = "turn_done"
 	EvLeaseRevoked   SessionEvent = "lease_revoked"
 	EvResumeRequest  SessionEvent = "resume_request"
+	// APPROVAL_TIMEOUT: панель PROMPT ≥ approval_hold_max_sec. В отличие от
+	// EvLeaseRevoked (→ DETACHED, «выполняется без слота») ведёт в HOLD —
+	// сессия ждёт разрешения оператора, а не слота.
+	EvApprovalTimeout SessionEvent = "approval_timeout"
 	EvIdleNoError    SessionEvent = "idle_no_error"
 	EvErrorRetryable SessionEvent = "error_retryable"
 	EvErrorFatal     SessionEvent = "error_fatal"
@@ -62,7 +66,7 @@ var AllSessionEvents = []SessionEvent{
 	EvEnqueue, EvDequeue, EvLeaseGranted,
 	EvStartConfirmed, EvPaneChanged, EvEmptyInput, EvStartNotConfirmed,
 	EvEnterHasSlot, EvEnterNoSlot,
-	EvTurnDone, EvLeaseRevoked, EvResumeRequest, EvIdleNoError,
+	EvTurnDone, EvLeaseRevoked, EvResumeRequest, EvApprovalTimeout, EvIdleNoError,
 	EvErrorRetryable, EvErrorFatal,
 	EvRequeue, EvUnhold, EvHold, EvPinUnavailable, EvDependencyFailed, EvNodeDrain,
 	EvNodeLost, EvPaneGone, EvEmergency, EvAgentExit,
@@ -97,6 +101,7 @@ var sessionTransitions = []Transition{
 	{SessionIdle, EvEnterNoSlot, SessionQueued},            // ручной Enter, слота нет
 	{SessionRunning, EvTurnDone, SessionIdle},              // ход завершён OK
 	{SessionRunning, EvLeaseRevoked, SessionDetached},      // аренда снята в ходе
+	{SessionRunning, EvApprovalTimeout, SessionHold},       // PROMPT ≥ approval_hold_max_sec
 	{SessionDetached, EvResumeRequest, SessionRunning},     // новый запрос хода
 	{SessionHold, EvResumeRequest, SessionRunning},         // активность на шлюзе: вывод из HOLD
 	{SessionDetached, EvIdleNoError, SessionIdle},          // панель IDLE без ошибки
@@ -193,6 +198,8 @@ func HoldReasonFor(ev SessionEvent) (HoldReason, bool) {
 		return HoldNodeLost, true
 	case EvHold:
 		return HoldOperator, true
+	case EvApprovalTimeout:
+		return HoldApprovalTimeout, true
 	}
 	return "", false
 }

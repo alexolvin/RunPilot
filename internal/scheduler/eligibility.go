@@ -142,11 +142,20 @@ func (s *Scheduler) eligible(e model.QueueEntry, sess store.SessionRecord,
 		if pr.state == model.PaneWaitUI {
 			return false
 		}
-		if pr.state != model.PaneIdle {
-			return false
-		}
-		if pr.paneID == "" || now.Sub(pr.hashSince) < s.dispatchStable() {
-			return false
+		if sess.State == model.SessionHold && sess.HoldReason == model.HoldApprovalTimeout {
+			// HOLD(APPROVAL_TIMEOUT): выдача, когда панель ушла из PROMPT
+			// (кодер работает — BUSY, или завершил — IDLE). Без проверки
+			// стабильности: кодер генерирует (хеш меняется).
+			if pr.state == model.PanePrompt {
+				return false
+			}
+		} else {
+			if pr.state != model.PaneIdle {
+				return false
+			}
+			if pr.paneID == "" || now.Sub(pr.hashSince) < s.dispatchStable() {
+				return false
+			}
 		}
 	}
 

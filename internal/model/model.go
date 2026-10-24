@@ -196,8 +196,9 @@ const (
 	HoldDependencyFailed  HoldReason = "DEPENDENCY_FAILED"
 	HoldPinUnavailable    HoldReason = "PIN_UNAVAILABLE"
 	// v2 (раздел 3.3): новые коды hold_reason.
-	HoldAgentExited HoldReason = "AGENT_EXITED" // кодер в панели завершился
-	HoldEmergency   HoldReason = "EMERGENCY"    // ход прерван аварийной остановкой
+	HoldAgentExited     HoldReason = "AGENT_EXITED"  // кодер в панели завершился
+	HoldEmergency       HoldReason = "EMERGENCY"     // ход прерван аварийной остановкой
+	HoldApprovalTimeout HoldReason = "APPROVAL_TIMEOUT" // кодер ждёт разрешения дольше approval_hold_max_sec
 )
 
 // ConstraintKind — вид ограничения записи (раздел 4).

@@ -126,6 +126,7 @@ func holdReasonText() map[string]string {
 		"PIN_UNAVAILABLE":     "Закреплённый сервер недоступен",
 		"AGENT_EXITED":        "Кодер завершился",
 		"EMERGENCY":           "Аварийная остановка",
+		"APPROVAL_TIMEOUT":    "Ждёт разрешения (таймаут)",
 	}
 }
 

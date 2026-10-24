@@ -68,10 +68,13 @@ func (s *Scheduler) checkTurn(sess store.SessionRecord, now time.Time) {
 
 		// Панель PROMPT approval_hold_max_sec → APPROVAL_TIMEOUT
 		// (уведомление — сразу при входе в PROMPT, в PaneUpdate).
+		// Сессия → HOLD(APPROVAL_TIMEOUT), а не DETACHED: она ждёт
+		// разрешения оператора, а не слота. Ре-выдача — когда панель
+		// уйдёт из PROMPT (см. grantable/eligible).
 		if pr != nil && pr.state == model.PanePrompt {
 			if now.Sub(pr.stateSince) >= s.approvalHoldMax() {
 				s.releaseLeaseLocked(sess.SID, model.ReleaseApprovalTimeout, now)
-				s.sessionEvent(sess, model.EvLeaseRevoked, "")
+				s.sessionEvent(sess, model.EvApprovalTimeout, model.HoldApprovalTimeout)
 				return
 			}
 		}

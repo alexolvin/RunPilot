@@ -33,7 +33,10 @@ func grantable(e model.QueueEntry, sess store.SessionRecord) bool {
 	}
 	// DETACHED: аренда снята в ходе — при свободном слоте ре-выдаём
 	// (иначе сессия стаит в «Выполняется без слота» до нового запроса).
-	return sess.State == model.SessionQueued || sess.State == model.SessionDetached
+	// HOLD(APPROVAL_TIMEOUT): ре-выдача, когда панель уйдёт из PROMPT
+	// (проверка в eligible).
+	return sess.State == model.SessionQueued || sess.State == model.SessionDetached ||
+		(sess.State == model.SessionHold && sess.HoldReason == model.HoldApprovalTimeout)
 }
 
 func (s *Scheduler) tickGrant(now time.Time) {
@@ -125,9 +128,12 @@ func candNames(cand []slotRec) []string {
 // события, dispatch узлу (раздел 8 ТЗ). rule — правило выбора
 // (pin|prefer|warm_cache|priority|lru), candidates — кандидаты (W13 этап 2).
 func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRec, now time.Time, rule string, candidates []string) {
-	if e.HeldRequest {
+	if e.HeldRequest ||
+		(sess.State == model.SessionHold && sess.HoldReason == model.HoldApprovalTimeout) {
 		// Удержанный запрос: неявная аренда, без dispatch (Enter уже
 		// нажат оператором / ход продолжен).
+		// HOLD(APPROVAL_TIMEOUT): кодер уже разрешил и работает (панель
+		// BUSY) — неявная аренда, без dispatch (не слать resume_text).
 		l, err := s.st.LeaseCreateIfAbsent(model.Lease{
 			SID: sess.SID, Server: f.Name, Slot: f.Slot,
 			State: model.LeaseActive, Origin: model.LeaseOriginImplicit,
@@ -151,7 +157,7 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 		switch sess.State {
 		case model.SessionIdle:
 			s.sessionEvent(sess, model.EvEnterHasSlot, "")
-		case model.SessionDetached:
+		case model.SessionDetached, model.SessionHold:
 			s.sessionEvent(sess, model.EvResumeRequest, "")
 		}
 		// Неявная аренда: ход создан атомарно с выдачей (идемпотентно).

@@ -140,7 +140,7 @@ func TestTE_C2(t *testing.T) {
 }
 
 // TestTE_C3 — запрос разрешения: панель PROMPT approval_hold_max_sec →
-// DETACHED (аренда снята APPROVAL_TIMEOUT).
+// HOLD(APPROVAL_TIMEOUT) (аренда снята APPROVAL_TIMEOUT).
 func TestTE_C3(t *testing.T) {
 	h := newHarn(t, []ServerView{srv("s", 10, 1)})
 	runningWithLease(t, h, "s1", "host", "s")
@@ -148,8 +148,11 @@ func TestTE_C3(t *testing.T) {
 	approval := time.Duration(h.cfg.Turn.ApprovalHoldMaxSec) * time.Second
 	h.advance(approval + time.Second)
 	h.tick()
-	if st := h.sessionState("s1"); st != model.SessionDetached {
-		t.Fatalf("state=%s, хочу DETACHED (PROMPT approval_hold_max_sec)", st)
+	if st := h.sessionState("s1"); st != model.SessionHold {
+		t.Fatalf("state=%s, хочу HOLD (PROMPT approval_hold_max_sec)", st)
+	}
+	if hr := h.session("s1").HoldReason; hr != model.HoldApprovalTimeout {
+		t.Fatalf("hold_reason=%s, хочу APPROVAL_TIMEOUT", hr)
 	}
 	if _, ok := h.leaseOf("s1"); ok {
 		t.Fatal("аренда не снята (APPROVAL_TIMEOUT)")

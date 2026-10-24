@@ -712,7 +712,9 @@ func (s *Scheduler) sessionEvent(sess store.SessionRecord, ev model.SessionEvent
 	}
 	// DETACHED: аренда снята в ходе — ставим в очередь (RESUME), чтобы при
 	// свободном слоте планировщик ре-выдал (иначе стаит в «без слота»).
-	if to == model.SessionDetached {
+	// HOLD(APPROVAL_TIMEOUT): то же — ре-выдача, когда панель уйдёт из PROMPT.
+	if to == model.SessionDetached ||
+		(to == model.SessionHold && hold == model.HoldApprovalTimeout) {
 		if _, err := s.st.QueueGet(sess.SID); err != nil {
 			_ = s.st.QueueUpsert(model.QueueEntry{
 				SID:        sess.SID,
