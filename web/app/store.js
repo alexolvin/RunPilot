@@ -387,8 +387,14 @@ let resyncPending = false;
 function doResync() {
   actions.setResyncing(true);
   actions.loadExternals(); // 8.2: live-список внешних кодеров тоже обновляем
-  return get('/api/v1/state').then((r) => {
-    if (r.ok && r.data) actions.setFull(r.data);
+  // Таймаут: если fetch /state завис (сервер не отвечает), resyncing не
+  // останется true навсегда — иначе каждое последующее SESSION_STATE лишь
+  // выставит resyncPending, и s.sessions застрянет на старом снимке
+  // («В работе»/карточки разъедутся: карточки живые через SERVER_METRICS).
+  const timeout = new Promise((resolve) =>
+    setTimeout(() => resolve({ ok: false, data: null }), UI.resyncTimeoutMs));
+  return Promise.race([get('/api/v1/state'), timeout]).then((r) => {
+    if (r && r.ok && r.data) actions.setFull(r.data);
     else actions.setResyncing(false);
     if (resyncPending) {
       resyncPending = false;

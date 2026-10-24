@@ -345,4 +345,10 @@ func (g *Gateway) applySessionEvent(sess store.SessionRecord, ev model.SessionEv
 		return
 	}
 	_ = g.st.SetSessionState(sess.SID, to, "", g.clk.Now())
+	// SESSION_STATE для веба: без события клиент не ресинчится (scheduler
+	// sessionEvent его пишет), и после выдачи аренды шлюзом (IDLE/DETACHED→
+	// RUNNING) «В работе» отваливается от карточек серверов (те живые через
+	// SERVER_METRICS) — инцидент 2026-10-24 (runpilot4.png).
+	payload, _ := json.Marshal(map[string]any{"from": string(sess.State), "to": string(to)})
+	_ = g.st.EventRecord(model.Event{TS: g.clk.Now(), Kind: model.KindSessionState, SID: sess.SID, Payload: payload})
 }
