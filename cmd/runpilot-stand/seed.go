@@ -62,7 +62,7 @@ type noopPanes struct{}
 
 func (noopPanes) PaneBySID(string) (scheduler.PaneSnap, bool) { return scheduler.PaneSnap{}, false }
 
-func (noopPanes) PaneByPaneID(string) (scheduler.PaneSnap, bool) { return scheduler.PaneSnap{}, false }
+func (noopPanes) PaneByPaneID(model.PaneKey) (scheduler.PaneSnap, bool) { return scheduler.PaneSnap{}, false }
 
 func pInt(v int) *int           { return &v }
 func pFloat(v float64) *float64 { return &v }

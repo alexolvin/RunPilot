@@ -332,14 +332,22 @@ func (n *Node) respawn(ctx context.Context, socket string, m proto.Msg) (*Reply,
 }
 
 func (n *Node) killSession(ctx context.Context, socket string, m proto.Msg) (*Reply, error) {
-	session := sessionOfPane(ctx, n.ex, socket, m.PaneID)
-	if session == "" {
+	info, err := n.cmd.paneInfo(ctx, socket, m.PaneID)
+	if err != nil {
 		return &Reply{CmdID: m.CmdID, Result: ResPaneGone}, nil
 	}
-	if _, err := n.ex.Output(ctx, "tmux", tmuxArgs(socket, "kill-session", "-t", "="+session)...); err != nil {
+	// Сверка принадлежности: панель должна принадлежать ожидаемой сессии
+	// (SID + имя tmux-сессии), иначе kill убил бы чужую сессию.
+	if bad := verifyPane(info, m); bad != "" {
+		n.log.Warn("node: kill_session: панель не принадлежит сессии",
+			"pane", m.PaneID, "sid", m.SID, "got_sid", info.SID,
+			"session", info.Session, "want_session", m.TmuxSession)
+		return &Reply{CmdID: m.CmdID, Result: bad, Detail: "pane/sid mismatch"}, nil
+	}
+	if _, err := n.ex.Output(ctx, "tmux", tmuxArgs(socket, "kill-session", "-t", "="+info.Session)...); err != nil {
 		return &Reply{CmdID: m.CmdID, Result: ResPaneGone}, nil
 	}
-	return &Reply{CmdID: m.CmdID, Result: proto.ResKilled, Detail: session}, nil
+	return &Reply{CmdID: m.CmdID, Result: proto.ResKilled, Detail: info.Session}, nil
 }
 
 // releasePane — снять @runpilot_sid: панель остаётся живой как UNMANAGED (5.4).

@@ -258,7 +258,7 @@ func (s *Scheduler) Peek(target string, n int) (string, error) {
 	defer cancel()
 	m := proto.New(proto.KindCapture)
 	m.SID, m.PaneID, m.Lines = sess.SID, pr.paneID, n
-	reply, err := s.dispatch(ctx, pr.paneID, m)
+	reply, err := s.dispatch(ctx, pr.paneKey, m)
 	if err != nil {
 		return "", fmt.Errorf("peek: %w", err)
 	}
@@ -290,7 +290,7 @@ func (s *Scheduler) Cancel(target string) error {
 	defer cancel()
 	m := proto.New(proto.KindSendKeys)
 	m.SID, m.PaneID, m.Keys = sess.SID, pr.paneID, s.cancelKeys
-	reply, err := s.dispatch(ctx, pr.paneID, m)
+	reply, err := s.dispatch(ctx, pr.paneKey, m)
 	if err != nil {
 		return fmt.Errorf("cancel: %w", err)
 	}

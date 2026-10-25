@@ -333,3 +333,19 @@ func (c *CommandRunner) paneInfo(ctx context.Context, socket, paneID string) (Pa
 	}
 	return panes[0], nil
 }
+
+// verifyPane — сверка принадлежности панели ожидаемой сессии: @runpilot_sid
+// и имя tmux-сессии. Защита разрушающих команд (KillSession/Paste/Approve/
+// Compress): координатор несёт ожидаемый SID + имя tmux-сессии, узел проверяет,
+// что панель %N сейчас принадлежит именно этой сессии. При несовпадении
+// возвращает ResPaneChanged (команда не выполняется). Пустое поле — без сверки
+// (совместимость со старыми координаторами).
+func verifyPane(info PaneInfo, m proto.Msg) string {
+	if m.SID != "" && info.SID != m.SID {
+		return ResPaneChanged
+	}
+	if m.TmuxSession != "" && info.Session != m.TmuxSession {
+		return ResPaneChanged
+	}
+	return ""
+}

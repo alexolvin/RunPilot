@@ -872,7 +872,6 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDispatch(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		SID        string `json:"sid"`
-		PaneID     string `json:"pane_id"`
 		Mode       string `json:"mode"`
 		ExpectHash uint64 `json:"expect_hash"`
 	}
@@ -880,23 +879,24 @@ func (s *Server) handleDispatch(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
 		return
 	}
-	paneID := body.PaneID
-	if paneID == "" {
-		info, ok := s.hub.PaneBySID(body.SID)
-		if !ok {
-			httpError(w, http.StatusNotFound, "PANE_NOT_FOUND", "нет снимка панели сессии")
-			return
-		}
-		paneID = info.Pane.PaneID
+	if body.SID == "" {
+		httpError(w, http.StatusBadRequest, "BAD_REQUEST", "нужен sid")
+		return
 	}
+	info, ok := s.hub.PaneBySID(body.SID)
+	if !ok {
+		httpError(w, http.StatusNotFound, "PANE_NOT_FOUND", "нет снимка панели сессии")
+		return
+	}
+	key := model.PaneKeyOf(info.Host, info.Pane.PaneID)
 	m := proto.New(proto.KindDispatch)
-	m.SID, m.PaneID, m.Mode, m.ExpectHash = body.SID, paneID, body.Mode, body.ExpectHash
+	m.SID, m.PaneID, m.Mode, m.ExpectHash = body.SID, info.Pane.PaneID, body.Mode, body.ExpectHash
 
 	ctx, cancel := context.WithTimeout(r.Context(),
 		time.Duration(s.cfg.Dispatch.NodeReplyTimeoutSec)*time.Second)
 	defer cancel()
 	t0 := s.clk.Now()
-	reply, err := s.hub.Dispatch(ctx, paneID, m)
+	reply, err := s.hub.Dispatch(ctx, key, m)
 	if err != nil {
 		httpError(w, http.StatusBadGateway, "DISPATCH", err.Error())
 		return
@@ -1031,6 +1031,11 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() {
 		s.hub.Unregister(nodeID)
+		// Узел отключился — снять все его снимки панелей: старая привязка
+		// SID→PaneKey не должна пережить отключение (рестарт tmux повторно
+		// выдаст %0, и чужая новая сессия могла привязаться к старой панели).
+		// Состояние сессий обрабатывает NodeLost (HOLD(NODE_LOST) → GONE).
+		s.hub.DropPanesOfHost(nodeID, map[string]bool{})
 		if s.sched != nil {
 			s.sched.NodeLost(nodeID)
 		}
@@ -1104,12 +1109,12 @@ func (s *Server) handleNodeWS(w http.ResponseWriter, r *http.Request) {
 			if m.Pane != nil {
 				s.hub.SetPane(nodeID, *m.Pane)
 				if s.sched != nil {
-					s.sched.PaneUpdate(m.Pane.PaneID, m.Pane.SID,
+					s.sched.PaneUpdate(model.PaneKeyOf(nodeID, m.Pane.PaneID), m.Pane.SID,
 						model.PaneState(m.Pane.State), m.Pane.Hash, s.clk.Now())
 				}
 			}
 		case proto.KindPaneGone:
-			s.onPaneGone(m.PaneID, m.SID)
+			s.onPaneGone(nodeID, m.PaneID, m.SID)
 		case proto.KindUnmanaged:
 			s.hub.SetUnmanaged(nodeID, m.Unmanaged)
 		case proto.KindReply:
@@ -1228,10 +1233,10 @@ func (s *Server) applyPanes(nodeID string, panes []proto.Pane) {
 	}
 	if s.sched != nil {
 		for _, sid := range goneSIDs {
-			s.sched.PaneGone("", sid)
+			s.sched.PaneGone(model.PaneKey{}, sid)
 		}
 		for _, p := range panes {
-			s.sched.PaneUpdate(p.PaneID, p.SID,
+			s.sched.PaneUpdate(model.PaneKeyOf(nodeID, p.PaneID), p.SID,
 				model.PaneState(p.State), p.Hash, s.clk.Now())
 		}
 	}
@@ -1262,7 +1267,7 @@ func (s *Server) reconcilePanesWithStore(nodeID string, panes []proto.Pane) {
 			continue
 		}
 		if s.sched != nil {
-			s.sched.PaneGone("", r.SID)
+			s.sched.PaneGone(model.PaneKey{}, r.SID)
 		}
 		gone++
 	}
@@ -1283,12 +1288,12 @@ func (s *Server) ApplyNodeMsg(nodeID string, m proto.Msg) {
 		if m.Pane != nil {
 			s.hub.SetPane(nodeID, *m.Pane)
 			if s.sched != nil {
-				s.sched.PaneUpdate(m.Pane.PaneID, m.Pane.SID,
+				s.sched.PaneUpdate(model.PaneKeyOf(nodeID, m.Pane.PaneID), m.Pane.SID,
 					model.PaneState(m.Pane.State), m.Pane.Hash, s.clk.Now())
 			}
 		}
 	case proto.KindPaneGone:
-		s.onPaneGone(m.PaneID, m.SID)
+		s.onPaneGone(nodeID, m.PaneID, m.SID)
 	case proto.KindUnmanaged:
 		s.hub.SetUnmanaged(nodeID, m.Unmanaged)
 	case proto.KindReply:
@@ -1309,12 +1314,14 @@ func (s *Server) ApplyNodeMsg(nodeID string, m proto.Msg) {
 }
 
 // onPaneGone — панель исчезла (delta узла): снять снимок, сессию — в GONE.
-func (s *Server) onPaneGone(paneID, sid string) {
-	if id := s.hub.DropPane(paneID); id != "" {
+// nodeID — идентичность узла (из аутентифицированного соединения).
+func (s *Server) onPaneGone(nodeID, paneID, sid string) {
+	key := model.PaneKeyOf(nodeID, paneID)
+	if id := s.hub.DropPane(key); id != "" {
 		sid = id
 	}
 	if s.sched != nil && sid != "" {
-		s.sched.PaneGone(paneID, sid)
+		s.sched.PaneGone(key, sid)
 	}
 }
 

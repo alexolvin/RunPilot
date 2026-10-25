@@ -70,7 +70,7 @@ type panesSrc struct {
 }
 
 func (p *panesSrc) PaneBySID(sid string) (scheduler.PaneSnap, bool)   { s, ok := p.bySID[sid]; return s, ok }
-func (p *panesSrc) PaneByPaneID(id string) (scheduler.PaneSnap, bool) { s, ok := p.byPane[id]; return s, ok }
+func (p *panesSrc) PaneByPaneID(key model.PaneKey) (scheduler.PaneSnap, bool) { s, ok := p.byPane[key.Pane]; return s, ok }
 
 // mHarn — стенд: планировщик + монитор на виртуальных часах.
 type mHarn struct {
@@ -130,7 +130,7 @@ func newMHarn(t *testing.T, slots int) *mHarn {
 			State:  model.ServerUp,
 		}}},
 		Panes: panes,
-		Dispatch: func(ctx context.Context, paneID string, m proto.Msg) (proto.Msg, error) {
+		Dispatch: func(ctx context.Context, key model.PaneKey, m proto.Msg) (proto.Msg, error) {
 			return proto.Msg{}, errors.New("dispatch отключён в тесте")
 		},
 		ResumeText:      "continue",
@@ -164,7 +164,7 @@ func (h *mHarn) addSession(sid string) {
 // idlePane — панель через публичный хук планировщика (как узел).
 func (h *mHarn) idlePane(sid string) {
 	h.t.Helper()
-	h.sch.PaneUpdate("p-"+sid, sid, model.PaneIdle, 1, h.clk.Now())
+	h.sch.PaneUpdate(model.PaneKeyOf("host", "p-"+sid), sid, model.PaneIdle, 1, h.clk.Now())
 }
 
 func (h *mHarn) enqueue(sid string) {

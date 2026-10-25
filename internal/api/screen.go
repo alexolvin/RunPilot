@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"runpilot/internal/model"
 	"runpilot/internal/proto"
 )
 
@@ -42,11 +43,12 @@ func (s *Server) captureScreen(ctx context.Context, sid string) (screenFrame, bo
 	if !ok {
 		return screenFrame{}, false
 	}
+	key := model.PaneKeyOf(info.Host, info.Pane.PaneID)
 	m := proto.New(proto.KindScreen)
 	m.PaneID, m.SID = info.Pane.PaneID, sid
 	cctx, cancel := context.WithTimeout(ctx, time.Duration(s.cfg.Web.PasteVerifySec)*time.Second)
 	defer cancel()
-	reply, err := s.hub.Dispatch(cctx, m.PaneID, m)
+	reply, err := s.hub.Dispatch(cctx, key, m)
 	if err != nil || reply.Result != proto.ResSent {
 		return screenFrame{}, false
 	}

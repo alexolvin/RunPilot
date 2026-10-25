@@ -149,7 +149,7 @@ func (s *Server) handleSpawn(w http.ResponseWriter, r *http.Request) {
 	pane := proto.Pane{PaneID: rep.Detail, SID: newSID, State: "IDLE"}
 	s.hub.SetPane(nodeID, pane)
 	if s.sched != nil {
-		s.sched.PaneUpdate(rep.Detail, newSID, model.PaneIdle, 0, now)
+		s.sched.PaneUpdate(model.PaneKeyOf(nodeID, rep.Detail), newSID, model.PaneIdle, 0, now)
 	}
 	// Событие создания (SSE): открытое вебо узнаёт о сессии без перезагрузки
 	// (до этого список обновлялся только при RESYNC/релоаде).

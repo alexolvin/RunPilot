@@ -28,7 +28,7 @@ func TestTickBoundaryReleaseToGrant(t *testing.T) {
 	occupy(t, st, clk, holder, "s", 1)
 	st.TurnStart(holder, clk.Now())
 	st.SetSessionState(holder, model.SessionRunning, "", clk.Now())
-	sch.PaneUpdate("%1", holder, model.PaneIdle, 1, clk.Now())
+	sch.PaneUpdate(model.PaneKeyOf("vc", "%1"), holder, model.PaneIdle, 1, clk.Now())
 	clk.Advance(time.Duration(cfgDoneStableSec)*time.Second + time.Second)
 	sch.Tick() // tick T: tickComplete → closeTurn(holder): release(released_at=T) + setCooldown(until=T+cooldown)
 	assertHeld(t, st, waiter, "before-cooldown")

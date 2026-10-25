@@ -265,6 +265,22 @@ const (
 // Состояние отображения, не входит в автомат сессии.
 const PaneUnmanaged PaneState = "UNMANAGED"
 
+// PaneKey — глобально-уникальный идентификатор панели координатора:
+// Node — идентичность узла (NodeInfo.ID() = host:os_user), Pane — tmux
+// pane_id (локален для tmux-сервера узла; %N уникален только в пределах
+// сервера, поэтому голый pane_id не может быть глобальным ключом — два узла
+// с собственными tmux-серверами могут иметь панели с одинаковым %N).
+// Все реестры координатора (hub.panes/bySID/unmanaged, scheduler.paneRec,
+// status_push.lastStatus) ключуются PaneKey. Голый pane_id живёт только в
+// proto.* (провод) и в коде узла.
+type PaneKey struct {
+	Node string
+	Pane string
+}
+
+// PaneKeyOf — ключ панели из идентичности узла и tmux pane_id.
+func PaneKeyOf(node, paneID string) PaneKey { return PaneKey{Node: node, Pane: paneID} }
+
 // Session — сущность session (раздел 4).
 type Session struct {
 	SID              string

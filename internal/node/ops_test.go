@@ -293,6 +293,9 @@ func TestReplyMsgCarriesRoots(t *testing.T) {
 func TestKillSession(t *testing.T) {
 	ex := &fakeExec{}
 	ex.respond = func(name string, args ...string) (string, error) {
+		if strings.Contains(strings.Join(args, " "), "list-panes") {
+			return "sessname\t0\t0\t%7\t1234\tbash\t0\t\t\t/dir\n", nil
+		}
 		if strings.Contains(strings.Join(args, " "), "display-message") {
 			return "sessname\n", nil
 		}
@@ -309,6 +312,49 @@ func TestKillSession(t *testing.T) {
 	}
 	if !ex.callContains("kill-session", "sessname") {
 		t.Error("kill-session не вызван с именем сессии")
+	}
+}
+
+// TestKillSessionSIDMismatch — координатор несёт SID, а панель принадлежит
+// другой сессии (tmux-рестарт, %0 повторно выдана): узел отказывается убивать.
+func TestKillSessionSIDMismatch(t *testing.T) {
+	ex := &fakeExec{}
+	ex.respond = func(name string, args ...string) (string, error) {
+		if strings.Contains(strings.Join(args, " "), "list-panes") {
+			// Панель %7 сейчас принадлежит сессии OTHER (sid S-other).
+			return "sessname\t0\t0\t%7\t1234\tbash\t0\tS-other\t\t/dir\n", nil
+		}
+		return "", nil
+	}
+	n := newTestNode(t, ex)
+	seedPane(t, n, "%7", "default")
+	m := proto.New(proto.KindKillSession)
+	m.CmdID, m.PaneID, m.SID = "c1", "%7", "S-want"
+	rep, _ := n.Handle(context.Background(), m)
+	if rep.Result != proto.ResPaneChanged {
+		t.Fatalf("Result=%q, хочу PANE_CHANGED (SID-несовпадение)", rep.Result)
+	}
+	if ex.callContains("kill-session", "sessname") {
+		t.Error("kill-session вызван при SID-несовпадении")
+	}
+}
+
+// TestKillSessionTmuxSessionMismatch — имя tmux-сессии не совпадает: отказ.
+func TestKillSessionTmuxSessionMismatch(t *testing.T) {
+	ex := &fakeExec{}
+	ex.respond = func(name string, args ...string) (string, error) {
+		if strings.Contains(strings.Join(args, " "), "list-panes") {
+			return "realname\t0\t0\t%7\t1234\tbash\t0\t\t\t/dir\n", nil
+		}
+		return "", nil
+	}
+	n := newTestNode(t, ex)
+	seedPane(t, n, "%7", "default")
+	m := proto.New(proto.KindKillSession)
+	m.CmdID, m.PaneID, m.TmuxSession = "c1", "%7", "wantname"
+	rep, _ := n.Handle(context.Background(), m)
+	if rep.Result != proto.ResPaneChanged {
+		t.Fatalf("Result=%q, хочу PANE_CHANGED (tmux-имя не совпадает)", rep.Result)
 	}
 }
 

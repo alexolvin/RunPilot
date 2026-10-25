@@ -124,7 +124,7 @@ func (a apiE2EGwViews) List() []scheduler.ServerView {
 type apiE2ENoopPanes struct{}
 
 func (apiE2ENoopPanes) PaneBySID(string) (scheduler.PaneSnap, bool)   { return scheduler.PaneSnap{}, false }
-func (apiE2ENoopPanes) PaneByPaneID(string) (scheduler.PaneSnap, bool) { return scheduler.PaneSnap{}, false }
+func (apiE2ENoopPanes) PaneByPaneID(model.PaneKey) (scheduler.PaneSnap, bool) { return scheduler.PaneSnap{}, false }
 
 // --- запрос к шлюзу ---
 
@@ -248,7 +248,7 @@ func TestAPIE2E(t *testing.T) {
 		Cfg: cfg, Store: st, Clk: clk,
 		Servers: apiE2EGwViews{gw: gw.Servers()},
 		Panes:   apiE2ENoopPanes{},
-		Dispatch: func(context.Context, string, proto.Msg) (proto.Msg, error) {
+		Dispatch: func(context.Context, model.PaneKey, proto.Msg) (proto.Msg, error) {
 			return proto.Msg{}, nil
 		},
 		Wake: gw.Wake, Log: log,

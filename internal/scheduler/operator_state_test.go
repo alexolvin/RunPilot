@@ -57,7 +57,7 @@ func TestOperatorStatesPersistAndRestore(t *testing.T) {
 	applied := map[string]model.ServerState{}
 	sch2 := New(Options{
 		Cfg: h.cfg, Store: h.st, Clk: h.clk, Servers: h.srv, Panes: h.panes,
-		Dispatch: func(ctx context.Context, paneID string, m proto.Msg) (proto.Msg, error) {
+		Dispatch: func(ctx context.Context, key model.PaneKey, m proto.Msg) (proto.Msg, error) {
 			return proto.Msg{}, errors.New("dispatch отключён")
 		},
 		ResumeText: "continue", NoAsyncDispatch: true,

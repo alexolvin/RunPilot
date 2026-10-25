@@ -57,11 +57,12 @@ func (s *Server) CmdPaste(ctx context.Context, sid, text string, enqueue bool) (
 	if !p.InputEmpty {
 		return command.Outcome{Code: "INPUT_NOT_EMPTY", Text: "ввод кодера не пуст"}, nil
 	}
+	key := model.PaneKeyOf(info.Host, p.PaneID)
 	m := proto.New(proto.KindPaste)
-	m.PaneID, m.Text = p.PaneID, text
+	m.PaneID, m.SID, m.TmuxSession, m.Text = p.PaneID, sid, p.Session, text
 	cctx, cancel := context.WithTimeout(ctx, time.Duration(s.cfg.Web.PasteVerifySec)*time.Second)
 	defer cancel()
-	reply, err := s.hub.Dispatch(cctx, p.PaneID, m)
+	reply, err := s.hub.Dispatch(cctx, key, m)
 	if err != nil {
 		return command.Outcome{Code: "DISPATCH", Text: err.Error()}, nil
 	}
@@ -142,11 +143,12 @@ func (s *Server) CmdApprove(ctx context.Context, sid, option string) (command.Ou
 	if !ok {
 		return command.Outcome{Code: "PANE_NOT_FOUND", Text: "нет панели сессии"}, nil
 	}
+	key := model.PaneKeyOf(info.Host, info.Pane.PaneID)
 	m := proto.New(proto.KindApprove)
-	m.PaneID, m.Text = info.Pane.PaneID, option
+	m.PaneID, m.SID, m.TmuxSession, m.Text = info.Pane.PaneID, sid, info.Pane.Session, option
 	cctx, cancel := context.WithTimeout(ctx, time.Duration(s.cfg.Web.PasteVerifySec)*time.Second)
 	defer cancel()
-	reply, err := s.hub.Dispatch(cctx, info.Pane.PaneID, m)
+	reply, err := s.hub.Dispatch(cctx, key, m)
 	if err != nil {
 		return command.Outcome{Code: "DISPATCH", Text: err.Error()}, nil
 	}
@@ -169,11 +171,12 @@ func (s *Server) CmdCompress(ctx context.Context, sid string) (command.Outcome, 
 	if !ok {
 		return command.Outcome{Code: "PANE_NOT_FOUND", Text: "нет панели сессии"}, nil
 	}
+	key := model.PaneKeyOf(info.Host, info.Pane.PaneID)
 	m := proto.New(proto.KindCompress)
-	m.PaneID = info.Pane.PaneID
+	m.PaneID, m.SID, m.TmuxSession = info.Pane.PaneID, sid, info.Pane.Session
 	cctx, cancel := context.WithTimeout(ctx, time.Duration(s.cfg.Web.PasteVerifySec)*time.Second)
 	defer cancel()
-	reply, err := s.hub.Dispatch(cctx, info.Pane.PaneID, m)
+	reply, err := s.hub.Dispatch(cctx, key, m)
 	if err != nil {
 		return command.Outcome{Code: "DISPATCH", Text: err.Error()}, nil
 	}
@@ -198,24 +201,25 @@ func (s *Server) CmdClose(ctx context.Context, sid string) (command.Outcome, err
 		return command.Outcome{Code: "OK", Text: "сессия уже закрыта"}, nil
 	}
 	if p, ok := s.hub.PaneBySID(sid); ok {
+		key := model.PaneKeyOf(p.Host, p.Pane.PaneID)
 		m := proto.New(proto.KindKillSession)
-		m.PaneID = p.Pane.PaneID
+		m.PaneID, m.SID, m.TmuxSession = p.Pane.PaneID, sid, p.Pane.Session
 		cctx, cancel := context.WithTimeout(ctx, nodeCmdTimeout)
 		defer cancel()
-		reply, err := s.hub.Dispatch(cctx, p.Pane.PaneID, m)
+		reply, err := s.hub.Dispatch(cctx, key, m)
 		if err != nil {
 			return command.Outcome{Code: "DISPATCH", Text: err.Error()}, nil
 		}
 		switch reply.Result {
 		case proto.ResKilled, proto.ResPaneGone:
-			s.hub.DropPane(p.Pane.PaneID)
-			s.sched.PaneGone(p.Pane.PaneID, sid)
+			s.hub.DropPane(key)
+			s.sched.PaneGone(key, sid)
 			return command.Outcome{Code: "OK", Text: "закрыта: " + reply.Detail}, nil
 		default:
 			return command.Outcome{Code: reply.Result, Text: "не удалось закрыть: " + reply.Detail}, nil
 		}
 	}
-	s.sched.PaneGone("", sid)
+	s.sched.PaneGone(model.PaneKey{}, sid)
 	return command.Outcome{Code: "OK", Text: "закрыта (панель отсутствовала)"}, nil
 }
 

@@ -125,7 +125,7 @@ func main() {
 		Clk:     clk,
 		Servers: servers,
 		Panes:   noopPanes{},
-		Dispatch: func(context.Context, string, proto.Msg) (proto.Msg, error) {
+		Dispatch: func(context.Context, model.PaneKey, proto.Msg) (proto.Msg, error) {
 			return proto.Msg{}, nil
 		},
 		Log: log,

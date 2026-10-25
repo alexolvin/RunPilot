@@ -38,7 +38,7 @@ type fakePanes struct {
 }
 
 func (f *fakePanes) PaneBySID(sid string) (PaneSnap, bool)      { p, ok := f.bySID[sid]; return p, ok }
-func (f *fakePanes) PaneByPaneID(id string) (PaneSnap, bool)    { p, ok := f.byPane[id]; return p, ok }
+func (f *fakePanes) PaneByPaneID(key model.PaneKey) (PaneSnap, bool) { p, ok := f.byPane[key.Pane]; return p, ok }
 
 // harn — испытательный стенд планировщика.
 type harn struct {
@@ -100,7 +100,7 @@ func newHarn(t *testing.T, servers []ServerView) *harn {
 	panes := &fakePanes{bySID: map[string]PaneSnap{}, byPane: map[string]PaneSnap{}}
 	sch := New(Options{
 		Cfg: cfg, Store: st, Clk: clk, Servers: fs, Panes: panes,
-		Dispatch: func(ctx context.Context, paneID string, m proto.Msg) (proto.Msg, error) {
+		Dispatch: func(ctx context.Context, key model.PaneKey, m proto.Msg) (proto.Msg, error) {
 			return proto.Msg{}, errors.New("dispatch отключён в тесте")
 		},
 		ResumeText:      "continue",
@@ -142,7 +142,7 @@ func (h *harn) setPane(sid, host string, st model.PaneState, hash uint64, inputE
 		InputEmpty: inputEmpty, ReceivedAt: h.clk.Now(), Host: host}
 	h.panes.bySID[sid] = snap
 	h.panes.byPane[paneID] = snap
-	h.sch.PaneUpdate(paneID, sid, st, hash, h.clk.Now())
+	h.sch.PaneUpdate(model.PaneKeyOf(host, paneID), sid, st, hash, h.clk.Now())
 }
 
 // idlePane — панель готова к диспетчеризации: IDLE, ввод непуст.
@@ -796,7 +796,7 @@ func TestS14Snapshot(t *testing.T) {
 		InputEmpty: false, ReceivedAt: stale, Host: "host"}
 	h.panes.bySID["B"] = snap
 	h.panes.byPane["p-B"] = snap
-	h.sch.PaneUpdate("p-B", "B", model.PaneIdle, 1, stale)
+	h.sch.PaneUpdate(model.PaneKeyOf("host", "p-B"), "B", model.PaneIdle, 1, stale)
 	h.enqueue("B", model.ClassNormal, model.NoConstraint, model.QueueModeSubmit)
 	h.advance(3 * time.Second)
 	// B становится стабильной по хешу, но received_at давний.

@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"runpilot/internal/model"
 	"runpilot/internal/proto"
 )
 
@@ -41,8 +42,8 @@ type StatusPusher struct {
 	log *slog.Logger
 
 	mu          sync.Mutex
-	lastStatus  map[string]string // pane_id → последний отправленный статус
-	lastSummary map[string]string // host → последняя отправленная сводка
+	lastStatus  map[model.PaneKey]string // ключ панели → последний отправленный статус
+	lastSummary map[string]string        // host → последняя отправленная сводка
 }
 
 // NewStatusPusher создаёт пушер. log nil → slog.Default().
@@ -54,15 +55,16 @@ func NewStatusPusher(hub *Hub, src StatusSource, log *slog.Logger) *StatusPusher
 		hub:         hub,
 		src:         src,
 		log:         log,
-		lastStatus:  map[string]string{},
+		lastStatus:  map[model.PaneKey]string{},
 		lastSummary: map[string]string{},
 	}
 }
 
 type statusSend struct {
-	paneID string
-	kind   proto.Kind
-	text   string
+	paneKey model.PaneKey // ключ панели (роутинг PushPane)
+	paneID  string        // голый tmux pane_id (m.PaneID для узла)
+	kind    proto.Kind
+	text    string
 }
 
 // PushAll — пересчитать оба текста и отправить только изменившиеся. Вызывается
@@ -79,9 +81,10 @@ func (p *StatusPusher) PushAll() {
 	var sends []statusSend
 	// set_status: per pane — текст изменился для панели → отправить.
 	for _, pn := range panes {
-		if p.lastStatus[pn.Pane.PaneID] != statusText {
-			sends = append(sends, statusSend{pn.Pane.PaneID, proto.KindSetStatus, statusText})
-			p.lastStatus[pn.Pane.PaneID] = statusText
+		k := model.PaneKeyOf(pn.Host, pn.Pane.PaneID)
+		if p.lastStatus[k] != statusText {
+			sends = append(sends, statusSend{k, pn.Pane.PaneID, proto.KindSetStatus, statusText})
+			p.lastStatus[k] = statusText
 		}
 	}
 	// set_summary: per host — сводка изменилась для хоста → всем его панелям.
@@ -97,13 +100,13 @@ func (p *StatusPusher) PushAll() {
 	}
 	for _, pn := range panes {
 		if summaryChanged[pn.Host] {
-			sends = append(sends, statusSend{pn.Pane.PaneID, proto.KindSetSummary, summaryText})
+			sends = append(sends, statusSend{model.PaneKeyOf(pn.Host, pn.Pane.PaneID), pn.Pane.PaneID, proto.KindSetSummary, summaryText})
 		}
 	}
 	p.mu.Unlock()
 
 	for _, s := range sends {
-		if err := p.hub.PushPane(s.paneID, p.msg(s.kind, s.paneID, s.text)); err != nil {
+		if err := p.hub.PushPane(s.paneKey, p.msg(s.kind, s.paneID, s.text)); err != nil {
 			p.log.Warn("api: status: push: " + err.Error(), "pane", s.paneID)
 		}
 	}
@@ -122,16 +125,17 @@ func (p *StatusPusher) ResendHost(host string) {
 	p.mu.Lock()
 	var sends []statusSend
 	for _, pn := range panes {
+		k := model.PaneKeyOf(pn.Host, pn.Pane.PaneID)
 		sends = append(sends,
-			statusSend{pn.Pane.PaneID, proto.KindSetStatus, statusText},
-			statusSend{pn.Pane.PaneID, proto.KindSetSummary, summaryText})
-		p.lastStatus[pn.Pane.PaneID] = statusText
+			statusSend{k, pn.Pane.PaneID, proto.KindSetStatus, statusText},
+			statusSend{k, pn.Pane.PaneID, proto.KindSetSummary, summaryText})
+		p.lastStatus[k] = statusText
 	}
 	p.lastSummary[host] = summaryText
 	p.mu.Unlock()
 
 	for _, s := range sends {
-		if err := p.hub.PushPane(s.paneID, p.msg(s.kind, s.paneID, s.text)); err != nil {
+		if err := p.hub.PushPane(s.paneKey, p.msg(s.kind, s.paneID, s.text)); err != nil {
 			p.log.Warn("api: status: resend: " + err.Error(), "pane", s.paneID)
 		}
 	}

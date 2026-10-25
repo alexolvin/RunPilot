@@ -32,7 +32,7 @@ func (f *apiFakeServers) List() []scheduler.ServerView { return f.list }
 type apiFakePanes struct{}
 
 func (f *apiFakePanes) PaneBySID(string) (scheduler.PaneSnap, bool)      { return scheduler.PaneSnap{}, false }
-func (f *apiFakePanes) PaneByPaneID(string) (scheduler.PaneSnap, bool)   { return scheduler.PaneSnap{}, false }
+func (f *apiFakePanes) PaneByPaneID(model.PaneKey) (scheduler.PaneSnap, bool)   { return scheduler.PaneSnap{}, false }
 
 // jobTestServer — координатор с планировщиком (для /jobs). token — пустой
 // (локальный режим) или операторский токен (через RUNPILOT_TOKEN).
@@ -54,7 +54,7 @@ func jobTestServer(t *testing.T, token string) (*httptest.Server, *store.Store, 
 	sch := scheduler.New(scheduler.Options{
 		Cfg: cfg, Store: st, Clk: clk,
 		Servers: &apiFakeServers{}, Panes: &apiFakePanes{},
-		Dispatch: func(context.Context, string, proto.Msg) (proto.Msg, error) {
+		Dispatch: func(context.Context, model.PaneKey, proto.Msg) (proto.Msg, error) {
 			return proto.Msg{}, errors.New("off")
 		},
 		ResumeText: "continue", NoAsyncDispatch: true,

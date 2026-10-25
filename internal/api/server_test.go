@@ -364,7 +364,7 @@ func TestNodePaneFlow(t *testing.T) {
 	ok := false
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if info, ok = hub.Pane("%42"); ok {
+		if info, ok = hub.Pane(model.PaneKeyOf("h1", "%42")); ok {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)

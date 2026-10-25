@@ -225,15 +225,17 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 	})
 
 	// Dispatch узлу: снимок панели → expect_hash; resume → resume_text.
+	var paneKey model.PaneKey
 	paneID := ""
 	expectHash := uint64(0)
 	if pr := s.paneRec[sess.SID]; pr != nil {
+		paneKey = pr.paneKey
 		paneID = pr.paneID
 		expectHash = pr.hash
 	}
 	mode := string(e.Mode)
 	rec := &dispatchRec{
-		paneID: paneID, mode: mode, expectHash: expectHash,
+		paneKey: paneKey, paneID: paneID, mode: mode, expectHash: expectHash,
 		entry: e, grantedAt: now, leaseServer: f.Name,
 	}
 	s.dispatched[sess.SID] = rec
@@ -256,7 +258,7 @@ func (s *Scheduler) grant(e model.QueueEntry, sess store.SessionRecord, f slotRe
 	if s.noAsyncDispatch {
 		return // тест: reply инжектится через InjectReply
 	}
-	go s.runDispatch(sess.SID, paneID, msg, now)
+	go s.runDispatch(sess.SID, paneKey, msg, now)
 }
 
 // grantErr — ошибка выдачи аренды: ErrSlotFull — обычная гонка (слот между
@@ -274,14 +276,14 @@ func (s *Scheduler) grantErr(sid string, f slotRec, what string, err error) {
 
 // runDispatch — команда узлу + ожидание reply (таймаут держим сами:
 // dispatch.node_reply_timeout_sec).
-func (s *Scheduler) runDispatch(sid, paneID string, msg proto.Msg, grantedAt time.Time) {
+func (s *Scheduler) runDispatch(sid string, paneKey model.PaneKey, msg proto.Msg, grantedAt time.Time) {
 	ctx, cancel := context.WithDeadline(context.Background(),
 		s.clk.Now().Add(s.nodeReplyTimeout()))
 	defer cancel()
 	var reply proto.Msg
 	var err error
-	if paneID != "" && s.dispatch != nil {
-		reply, err = s.dispatch(ctx, paneID, msg)
+	if paneKey.Pane != "" && s.dispatch != nil {
+		reply, err = s.dispatch(ctx, paneKey, msg)
 	} else {
 		err = errNoPane
 	}

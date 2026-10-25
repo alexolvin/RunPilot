@@ -461,8 +461,8 @@ func (a *hubPanes) PaneBySID(sid string) (scheduler.PaneSnap, bool) {
 	return toSnap(p), true
 }
 
-func (a *hubPanes) PaneByPaneID(paneID string) (scheduler.PaneSnap, bool) {
-	p, ok := a.h.Pane(paneID)
+func (a *hubPanes) PaneByPaneID(key model.PaneKey) (scheduler.PaneSnap, bool) {
+	p, ok := a.h.Pane(key)
 	if !ok {
 		return scheduler.PaneSnap{}, false
 	}

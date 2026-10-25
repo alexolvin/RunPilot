@@ -102,7 +102,7 @@ func (s *Server) handleAdopt(w http.ResponseWriter, r *http.Request) {
 	// (узел пришлёт актуальный в следующем цикле).
 	s.hub.SetPane(host, proto.Pane{PaneID: paneID, SID: newSID, State: "IDLE"})
 	if s.sched != nil {
-		s.sched.PaneUpdate(paneID, newSID, model.PaneIdle, 0, now)
+		s.sched.PaneUpdate(model.PaneKeyOf(host, paneID), newSID, model.PaneIdle, 0, now)
 	}
 	s.recordSessionCreated(newSID, now)
 	s.log.Info("api: adopt: сессия создана", "sid", newSID, "name", name,

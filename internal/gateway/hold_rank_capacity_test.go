@@ -29,7 +29,7 @@ func TestHoldRankResumeBeatsHeld(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	sch.PaneUpdate("%2", x, model.PaneIdle, 1, clk.Now())
+	sch.PaneUpdate(model.PaneKeyOf("vc", "%2"), x, model.PaneIdle, 1, clk.Now())
 	// B: удерживаемый запрос (HIGH) — запись held_request=1 (как создаёт holdPass).
 	b := vcHeld(t, st, clk)
 
@@ -44,13 +44,13 @@ func TestHoldRankResumeBeatsHeld(t *testing.T) {
 
 	// Освобождение слота: holder завершает ход (closeTurn) → слот COOLDOWN,
 	// таймер COOLDOWN на +cooldown_sec (граница тика).
-	sch.PaneUpdate("%1", holder, model.PaneIdle, 1, clk.Now())
+	sch.PaneUpdate(model.PaneKeyOf("vc", "%1"), holder, model.PaneIdle, 1, clk.Now())
 	clk.Advance(time.Duration(cfgDoneStableSec) * time.Second + time.Second)
 	sch.Tick() // closeTurn(holder) → слот COOLDOWN (таймер на +cooldown)
 
 	// Снимок X — свежий ДО конца COOLDOWN: выдача теперь в at+cooldown (таймер),
 	// а не на следующем тике; если бы X устарел на границе, выдан был held-B.
-	sch.PaneUpdate("%2", x, model.PaneIdle, 1, clk.Now())
+	sch.PaneUpdate(model.PaneKeyOf("vc", "%2"), x, model.PaneIdle, 1, clk.Now())
 	clk.Advance(time.Duration(cfgCooldownSec)*time.Second + 100*time.Millisecond)
 	// таймер COOLDOWN срабатывает в at+cooldown → tickGrant: X (RESUME) > B (HIGH).
 	lx, errX := st.LeaseGet(x)
@@ -109,7 +109,7 @@ func TestHoldCapacityOneSlotTenFrees(t *testing.T) {
 		occupy(t, st, clk, holder, "a", 1)
 		st.TurnStart(holder, clk.Now())
 		st.SetSessionState(holder, model.SessionRunning, "", clk.Now())
-		sch.PaneUpdate("%1", holder, model.PaneIdle, 1, clk.Now())
+		sch.PaneUpdate(model.PaneKeyOf("vc", "%1"), holder, model.PaneIdle, 1, clk.Now())
 		clk.Advance(time.Duration(cfgDoneStableSec)*time.Second + time.Second)
 		sch.Tick() // closeTurn → слот COOLDOWN
 		clk.Advance(time.Duration(cfgCooldownSec)*time.Second + 100*time.Millisecond)

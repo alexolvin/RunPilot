@@ -43,7 +43,7 @@ func unmanagedTestServer(t *testing.T) (*httptest.Server, *store.Store, *Server,
 	sch := scheduler.New(scheduler.Options{
 		Cfg: cfg, Store: st, Clk: clk,
 		Servers: &apiFakeServers{}, Panes: &apiFakePanes{},
-		Dispatch: func(context.Context, string, proto.Msg) (proto.Msg, error) {
+		Dispatch: func(context.Context, model.PaneKey, proto.Msg) (proto.Msg, error) {
 			return proto.Msg{}, errors.New("off")
 		},
 		ResumeText: "continue", NoAsyncDispatch: true,
@@ -87,8 +87,8 @@ func TestOnPaneGone(t *testing.T) {
 	_, st, srv, hub := unmanagedTestServer(t)
 	seedSession(t, st, "SG1", "gone1", "h1", model.SessionIdle)
 	hub.SetPane("h1", proto.Pane{PaneID: "%42", SID: "SG1", State: "IDLE"})
-	srv.onPaneGone("%42", "")
-	if _, ok := hub.Pane("%42"); ok {
+	srv.onPaneGone("h1", "%42", "")
+	if _, ok := hub.Pane(model.PaneKeyOf("h1", "%42")); ok {
 		t.Fatal("снимок панели остался после pane_gone")
 	}
 	waitForState(t, st, "SG1", model.SessionGone)

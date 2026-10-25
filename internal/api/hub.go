@@ -110,16 +110,18 @@ type NodeHealthView struct {
 }
 
 // Hub — реестр узлов, снимков панелей, GPU-телеметрии и ожидателей reply.
+// Панели ключуются model.PaneKey (узел + tmux pane_id): голый pane_id
+// уникален только в пределах tmux-сервера, а у каждого узла свой сервер.
 type Hub struct {
 	clk clock.Clock
 
 	mu        sync.Mutex
-	nodes     map[string]*NodeInfo       // host → узел
-	panes     map[string]*PaneInfo       // pane_id → снимок
-	bySID     map[string]string          // sid → pane_id
-	replies   map[string]chan proto.Msg  // cmd_id → канал ответа
-	gpus      map[string]*GPUInfo        // server → последняя телеметрия
-	unmanaged map[string]*PaneInfo       // pane_id → отцепленная панель (узел удалён, J7)
+	nodes     map[string]*NodeInfo             // host:os_user → узел
+	panes     map[model.PaneKey]*PaneInfo      // ключ панели → снимок
+	bySID     map[string]model.PaneKey         // sid → ключ панели
+	replies   map[string]chan proto.Msg        // cmd_id → канал ответа
+	gpus      map[string]*GPUInfo              // server → последняя телеметрия
+	unmanaged map[model.PaneKey]*PaneInfo      // ключ панели → отцепленная панель (узел удалён, J7)
 	// unmanagedLive — живые UNMANAGED-панели по узлам (8.3 X1): полный
 	// список каждого цикла узла; в отличие от unmanaged (J7) узлы онлайн.
 	unmanagedLive map[string][]proto.UnmanagedPane
@@ -132,11 +134,11 @@ func NewHub(clk clock.Clock) *Hub {
 	return &Hub{
 		clk:             clk,
 		nodes:           map[string]*NodeInfo{},
-		panes:           map[string]*PaneInfo{},
-		bySID:           map[string]string{},
+		panes:           map[model.PaneKey]*PaneInfo{},
+		bySID:           map[string]model.PaneKey{},
 		replies:         map[string]chan proto.Msg{},
 		gpus:            map[string]*GPUInfo{},
-		unmanaged:       map[string]*PaneInfo{},
+		unmanaged:       map[model.PaneKey]*PaneInfo{},
 		unmanagedLive:   map[string][]proto.UnmanagedPane{},
 		healths:         map[string]*NodeHealthView{},
 	}
@@ -251,8 +253,8 @@ func (h *Hub) DetachHost(nodeID string) {
 		up.Pane.State = string(model.PaneUnmanaged)
 		h.unmanaged[id] = &up
 		delete(h.panes, id)
-		for s, pid := range h.bySID {
-			if pid == id {
+		for s, k := range h.bySID {
+			if k == id {
 				delete(h.bySID, s)
 			}
 		}
@@ -287,7 +289,7 @@ func (h *Hub) UnmanagedOfHost(nodeID string) []PaneInfo {
 }
 
 // SetPanes — полный список панелей узла (сообщение panes). nodeID —
-// идентичность узла (host:os_user).
+// идентичность узла (host:os_user), берётся из аутентифицированного соединения.
 func (h *Hub) SetPanes(nodeID string, list []proto.Pane) {
 	now := h.clk.Now()
 	h.mu.Lock()
@@ -296,8 +298,9 @@ func (h *Hub) SetPanes(nodeID string, list []proto.Pane) {
 		if p.SID == "" {
 			continue
 		}
-		h.panes[p.PaneID] = &PaneInfo{Pane: p, Host: nodeID, ReceivedAt: now}
-		h.bySID[p.SID] = p.PaneID
+		k := model.PaneKeyOf(nodeID, p.PaneID)
+		h.panes[k] = &PaneInfo{Pane: p, Host: nodeID, ReceivedAt: now}
+		h.bySID[p.SID] = k
 	}
 }
 
@@ -309,15 +312,16 @@ func (h *Hub) SetPane(nodeID string, p proto.Pane) {
 	now := h.clk.Now()
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.panes[p.PaneID] = &PaneInfo{Pane: p, Host: nodeID, ReceivedAt: now}
-	h.bySID[p.SID] = p.PaneID
+	k := model.PaneKeyOf(nodeID, p.PaneID)
+	h.panes[k] = &PaneInfo{Pane: p, Host: nodeID, ReceivedAt: now}
+	h.bySID[p.SID] = k
 }
 
-// Pane — снимок панели.
-func (h *Hub) Pane(paneID string) (*PaneInfo, bool) {
+// Pane — снимок панели по ключу.
+func (h *Hub) Pane(key model.PaneKey) (*PaneInfo, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	p, ok := h.panes[paneID]
+	p, ok := h.panes[key]
 	return p, ok
 }
 
@@ -336,21 +340,22 @@ func (h *Hub) PanesOfHost(nodeID string) []PaneInfo {
 }
 
 // DropPanesOfHost — панели узла, исчезнувшие из полного нового списка:
-// убрать их снимки, вернуть их sids (PaneGone, Э4).
+// убрать их снимки, вернуть их sids (PaneGone, Э4). newIDs — голые pane_id
+// из полного скана узла.
 func (h *Hub) DropPanesOfHost(nodeID string, newIDs map[string]bool) []string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	var sids []string
-	for id, p := range h.panes {
-		if p.Host != nodeID || newIDs[id] {
+	for k, p := range h.panes {
+		if p.Host != nodeID || newIDs[p.Pane.PaneID] {
 			continue
 		}
 		if p.Pane.SID != "" {
 			sids = append(sids, p.Pane.SID)
 		}
-		delete(h.panes, id)
-		for s, pid := range h.bySID {
-			if pid == id {
+		delete(h.panes, k)
+		for s, pk := range h.bySID {
+			if pk == k {
 				delete(h.bySID, s)
 			}
 		}
@@ -371,14 +376,14 @@ func (h *Hub) MarkUnmanaged(nodeID string, list []proto.Pane) []string {
 		}
 	}
 	var sids []string
-	for id, p := range h.panes {
-		if p.Host != nodeID || !unmanagedNow[id] || p.Pane.SID == "" {
+	for k, p := range h.panes {
+		if p.Host != nodeID || !unmanagedNow[p.Pane.PaneID] || p.Pane.SID == "" {
 			continue
 		}
 		sids = append(sids, p.Pane.SID)
-		delete(h.panes, id)
-		for s, pid := range h.bySID {
-			if pid == id {
+		delete(h.panes, k)
+		for s, pk := range h.bySID {
+			if pk == k {
 				delete(h.bySID, s)
 			}
 		}
@@ -388,16 +393,16 @@ func (h *Hub) MarkUnmanaged(nodeID string, list []proto.Pane) []string {
 
 // DropPane — снять снимок панели (pane_gone / удаление узла): вернуть SID,
 // если панель была управляемой.
-func (h *Hub) DropPane(paneID string) string {
+func (h *Hub) DropPane(key model.PaneKey) string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	var sid string
-	if p, ok := h.panes[paneID]; ok {
+	if p, ok := h.panes[key]; ok {
 		sid = p.Pane.SID
-		delete(h.panes, paneID)
+		delete(h.panes, key)
 	}
-	for s, pid := range h.bySID {
-		if pid == paneID {
+	for s, k := range h.bySID {
+		if k == key {
 			delete(h.bySID, s)
 		}
 	}
@@ -447,9 +452,9 @@ func (h *Hub) AllPanes() []PaneInfo {
 // PushPane — fire-and-forget команда панели (через её узел) БЕЗ ожидания
 // reply (set_status/set_summary, п.6c: ответ не нужен). Ошибка — узел/панель
 // недоступны (вызывающий логгирует; узел переподключится и попросит заново).
-func (h *Hub) PushPane(paneID string, m proto.Msg) error {
+func (h *Hub) PushPane(key model.PaneKey, m proto.Msg) error {
 	h.mu.Lock()
-	info, ok := h.panes[paneID]
+	info, ok := h.panes[key]
 	host := ""
 	if ok {
 		host = info.Host
@@ -457,7 +462,7 @@ func (h *Hub) PushPane(paneID string, m proto.Msg) error {
 	node, okNode := h.nodes[host]
 	h.mu.Unlock()
 	if !ok || !okNode || node.Conn == nil {
-		return fmt.Errorf("hub: панель %s или узел недоступны", paneID)
+		return fmt.Errorf("hub: панель %s/%s или узел недоступны", key.Node, key.Pane)
 	}
 	return node.Conn.WriteJSON(m)
 }
@@ -542,10 +547,11 @@ func (h *Hub) DeliverReply(m proto.Msg) {
 }
 
 // Dispatch — отправить команду dispatch узлу и дождаться reply
-// (таймаут dispatch.node_reply_timeout_sec держит вызывающий).
-func (h *Hub) Dispatch(ctx context.Context, paneID string, m proto.Msg) (proto.Msg, error) {
+// (таймаут dispatch.node_reply_timeout_sec держит вызывающий). key — ключ
+// панели (узел + tmux pane_id); m.PaneID — голый tmux pane_id для узла.
+func (h *Hub) Dispatch(ctx context.Context, key model.PaneKey, m proto.Msg) (proto.Msg, error) {
 	h.mu.Lock()
-	info, ok := h.panes[paneID]
+	info, ok := h.panes[key]
 	host := ""
 	if ok {
 		host = info.Host
@@ -553,7 +559,7 @@ func (h *Hub) Dispatch(ctx context.Context, paneID string, m proto.Msg) (proto.M
 	node, okNode := h.nodes[host]
 	h.mu.Unlock()
 	if !ok || !okNode || node.Conn == nil {
-		return proto.Msg{}, fmt.Errorf("hub: панель %s или узел недоступны", paneID)
+		return proto.Msg{}, fmt.Errorf("hub: панель %s/%s или узел недоступны", key.Node, key.Pane)
 	}
 	m.CmdID = h.NewCmdID()
 	wait := h.WaitReply(m.CmdID)
@@ -636,13 +642,14 @@ func (h *Hub) unmanagedAll() []UnmanagedView {
 	return out
 }
 
-// PaneStates — состояния панелей (для статусных строк, Э4/Э5).
+// PaneStates — состояния панелей (для статусных строк, Э4/Э5). Ключ —
+// «узел/pane_id».
 func (h *Hub) PaneStates() map[string]model.PaneState {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	out := map[string]model.PaneState{}
-	for id, p := range h.panes {
-		out[id] = model.PaneState(p.Pane.State)
+	for k, p := range h.panes {
+		out[k.Node+"/"+k.Pane] = model.PaneState(p.Pane.State)
 	}
 	return out
 }

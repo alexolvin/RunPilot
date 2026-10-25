@@ -39,8 +39,8 @@ func (a hubPaneSource) PaneBySID(sid string) (scheduler.PaneSnap, bool) {
 	return snapOf(p), true
 }
 
-func (a hubPaneSource) PaneByPaneID(paneID string) (scheduler.PaneSnap, bool) {
-	p, ok := a.h.Pane(paneID)
+func (a hubPaneSource) PaneByPaneID(key model.PaneKey) (scheduler.PaneSnap, bool) {
+	p, ok := a.h.Pane(key)
 	if !ok {
 		return scheduler.PaneSnap{}, false
 	}
@@ -64,7 +64,7 @@ func TestPasteEnqueueStaleInput(t *testing.T) {
 	sch := scheduler.New(scheduler.Options{
 		Cfg: cfg, Store: st, Clk: clk,
 		Servers: &apiFakeServers{}, Panes: hubPaneSource{h: hub},
-		Dispatch: func(context.Context, string, proto.Msg) (proto.Msg, error) {
+		Dispatch: func(context.Context, model.PaneKey, proto.Msg) (proto.Msg, error) {
 			return proto.Msg{}, errors.New("off")
 		},
 		ResumeText: "continue", NoAsyncDispatch: true,
@@ -85,7 +85,7 @@ func TestPasteEnqueueStaleInput(t *testing.T) {
 	hub.Register(&NodeInfo{Host: host, HostIP: "127.0.0.1", RUNPILOTVersion: "v", Conn: &r5Conn{hub: hub}})
 	hub.SetPane(host, proto.Pane{PaneID: "%77", SID: sid, State: "IDLE", InputEmpty: true, Hash: 1})
 	// Планировщик знает панель как IDLE (как после цикла KindPanes).
-	sch.PaneUpdate("%77", sid, model.PaneIdle, 1, clk.Now())
+	sch.PaneUpdate(model.PaneKeyOf(host, "%77"), sid, model.PaneIdle, 1, clk.Now())
 
 	// enqueue=true: вставка → Enqueue. Без фикса — «ввод пуст».
 	out, err := srv.CmdPaste(context.Background(), sid, "задача", true)

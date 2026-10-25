@@ -76,12 +76,14 @@ type PaneSnap struct {
 // PaneSource — снимки панелей (продакшн: адаптер api.Hub).
 type PaneSource interface {
 	PaneBySID(sid string) (PaneSnap, bool)
-	PaneByPaneID(paneID string) (PaneSnap, bool)
+	// PaneByPaneID — по ключу панели (узел + tmux pane_id).
+	PaneByPaneID(key model.PaneKey) (PaneSnap, bool)
 }
 
 // DispatchFunc — команда dispatch узлу с ожиданием reply
-// (продакшн: Hub.Dispatch; таймаут держит вызывающий).
-type DispatchFunc func(ctx context.Context, paneID string, m proto.Msg) (proto.Msg, error)
+// (продакшн: Hub.Dispatch; таймаут держит вызывающий). key — ключ панели
+// (узел + tmux pane_id) для маршрутизации; m.PaneID — голый tmux pane_id.
+type DispatchFunc func(ctx context.Context, key model.PaneKey, m proto.Msg) (proto.Msg, error)
 
 // Options — зависимости планировщика.
 type Options struct {
@@ -113,7 +115,8 @@ type Options struct {
 }
 
 type dispatchRec struct {
-	paneID      string
+	paneKey     model.PaneKey // роутинг dispatch
+	paneID      string        // голый tmux pane_id (провод/события)
 	mode        string
 	expectHash  uint64
 	entry       model.QueueEntry
@@ -128,6 +131,9 @@ type confirmRec struct {
 }
 
 type paneRec struct {
+	// paneKey — ключ панели (узел + tmux pane_id): роутинг dispatch.
+	paneKey model.PaneKey
+	// paneID — голый tmux pane_id: провод (m.PaneID).
 	paneID     string
 	host       string
 	state      model.PaneState
@@ -370,21 +376,22 @@ func (s *Scheduler) RequestTick(sid string, started bool) {
 	}
 }
 
-// PaneUpdate — новый снимок панели (узел). paneID или sid — один из
-// них обязателен; gone — панель исчезла.
-func (s *Scheduler) PaneUpdate(paneID, sid string, st model.PaneState, hash uint64, receivedAt time.Time) {
+// PaneUpdate — новый снимок панели (узел). key (узел + tmux pane_id) или
+// sid — один из них обязателен.
+func (s *Scheduler) PaneUpdate(key model.PaneKey, sid string, st model.PaneState, hash uint64, receivedAt time.Time) {
 	s.mu.Lock()
 	now := s.clk.Now()
 	pr := s.paneRec[sid]
 	if pr == nil {
 		pr = &paneRec{}
-		if snap, ok := s.panes.PaneByPaneID(paneID); ok && snap.SID != "" {
+		if snap, ok := s.panes.PaneByPaneID(key); ok && snap.SID != "" {
 			sid = snap.SID
 		}
 		s.paneRec[sid] = pr
 		pr = s.paneRec[sid]
 	}
-	pr.paneID = paneID
+	pr.paneKey = key
+	pr.paneID = key.Pane
 	if st != pr.state {
 		pr.state = st
 		pr.stateSince = now
@@ -402,18 +409,18 @@ func (s *Scheduler) PaneUpdate(paneID, sid string, st model.PaneState, hash uint
 		delete(s.autoSince, sid)
 	}
 	pr.receivedAt = receivedAt
-	if host, ok := s.panes.PaneByPaneID(paneID); ok && host.Host != "" {
+	if host, ok := s.panes.PaneByPaneID(key); ok && host.Host != "" {
 		pr.host = host.Host
 	}
 	s.mu.Unlock()
 }
 
 // PaneGone — панель исчезла: аренда, очередь, сессия → GONE.
-func (s *Scheduler) PaneGone(paneID, sid string) {
+func (s *Scheduler) PaneGone(key model.PaneKey, sid string) {
 	s.mu.Lock()
 	now := s.clk.Now()
-	if sid == "" {
-		if snap, ok := s.panes.PaneByPaneID(paneID); ok {
+	if sid == "" && key.Pane != "" {
+		if snap, ok := s.panes.PaneByPaneID(key); ok {
 			sid = snap.SID
 		}
 	}

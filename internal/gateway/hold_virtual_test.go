@@ -47,7 +47,7 @@ func (a *vclockServers) List() []scheduler.ServerView {
 type vclockPanes struct{}
 
 func (p *vclockPanes) PaneBySID(string) (scheduler.PaneSnap, bool)     { return scheduler.PaneSnap{}, false }
-func (p *vclockPanes) PaneByPaneID(string) (scheduler.PaneSnap, bool)  { return scheduler.PaneSnap{}, false }
+func (p *vclockPanes) PaneByPaneID(model.PaneKey) (scheduler.PaneSnap, bool)  { return scheduler.PaneSnap{}, false }
 
 // vclockEnv — окружение: gateway + scheduler на виртуальных часах (прод-вайринг
 // из serve.go: Wake=gw.Wake, Servers().OnChange→sch.ServerState).
@@ -82,7 +82,7 @@ func vclockEnv(t *testing.T, servers []config.Server) (
 		Clk:    clk,
 		Servers: &vclockServers{gw: gw.Servers()},
 		Panes:   &vclockPanes{},
-		Dispatch: func(ctx context.Context, paneID string, m proto.Msg) (proto.Msg, error) {
+		Dispatch: func(ctx context.Context, key model.PaneKey, m proto.Msg) (proto.Msg, error) {
 			return proto.Msg{}, errors.New("dispatch отключён в тесте")
 		},
 		ResumeText:      "continue",
@@ -249,7 +249,7 @@ func TestP10CooldownFree(t *testing.T) {
 	st.TurnStart(holder, clk.Now())
 	st.SetSessionState(holder, model.SessionRunning, "", clk.Now())
 	// Панель holder'а IDLE (условие closeTurn: пр IDLE + hashSince стабильно).
-	sch.PaneUpdate("%1", holder, model.PaneIdle, 1, clk.Now())
+	sch.PaneUpdate(model.PaneKeyOf("vc", "%1"), holder, model.PaneIdle, 1, clk.Now())
 	clk.Advance(time.Duration(cfgDoneStableSec) * time.Second + time.Second)
 	sch.Tick() // closeTurn → releaseLease(TURN_DONE) + setCooldown
 	if l, _ := st.LeaseGet(holder); l != nil && l.State == model.LeaseActive {

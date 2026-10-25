@@ -183,7 +183,7 @@ func TestTE_C5(t *testing.T) {
 func TestTE_C9(t *testing.T) {
 	h := newHarn(t, []ServerView{srv("s", 10, 1)})
 	runningWithLease(t, h, "s1", "host", "s")
-	h.sch.PaneGone("p-s1", "s1")
+	h.sch.PaneGone(model.PaneKey{}, "s1")
 	if st := h.sessionState("s1"); st != model.SessionGone {
 		t.Fatalf("state=%s, хочу GONE (панель закрыта вне runpilot)", st)
 	}
@@ -272,8 +272,8 @@ func TestTE_N3(t *testing.T) {
 		runningWithLease(t, h, sid, "node1", "s")
 	}
 	// Все панели узла исчезли разом.
-	h.sch.PaneGone("p-a", "a")
-	h.sch.PaneGone("p-b", "b")
+	h.sch.PaneGone(model.PaneKey{}, "a")
+	h.sch.PaneGone(model.PaneKey{}, "b")
 	for _, sid := range []string{"a", "b"} {
 		if st := h.sessionState(sid); st != model.SessionGone {
 			t.Fatalf("%s: state=%s, хочу GONE (tmux перезапущен)", sid, st)

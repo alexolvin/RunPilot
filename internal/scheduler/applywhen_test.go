@@ -139,7 +139,7 @@ func newHarnDB(t *testing.T, servers []config.Server) *harn {
 	panes := &fakePanes{bySID: map[string]PaneSnap{}, byPane: map[string]PaneSnap{}}
 	sch := New(Options{
 		Cfg: cfg, Store: st, Clk: clk, Servers: &dbServers{st: st}, Panes: panes,
-		Dispatch: func(ctx context.Context, paneID string, m proto.Msg) (proto.Msg, error) {
+		Dispatch: func(ctx context.Context, key model.PaneKey, m proto.Msg) (proto.Msg, error) {
 			return proto.Msg{}, errors.New("dispatch отключён в тесте")
 		},
 		ResumeText:      "continue",

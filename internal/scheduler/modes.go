@@ -26,7 +26,7 @@ func (s *Scheduler) SetEmergency() error {
 	if err := s.st.SetMode(string(model.ModeEmergency)); err != nil {
 		return err
 	}
-	var cancelPanes []string
+	var cancelPanes []model.PaneKey
 	s.mu.Lock()
 	first := s.mode != string(model.ModeEmergency)
 	if first {
@@ -114,18 +114,18 @@ func (s *Scheduler) agentExitLocked(sid string, code int) {
 
 // emergencyStopLocked — снять идущие ходы при аварийной остановке (вызывать
 // с mu): аренда EMERGENCY, ход CANCELLED, сессия → HOLD(EMERGENCY).
-func (s *Scheduler) emergencyStopLocked(now time.Time, cancelPanes *[]string) {
+func (s *Scheduler) emergencyStopLocked(now time.Time, cancelPanes *[]model.PaneKey) {
 	for _, sess := range s.sessionsMap() {
 		switch sess.State {
 		case model.SessionDispatching, model.SessionRunning:
 			s.emergencyReleaseTurn(sess, now)
 			if pr := s.paneRec[sess.SID]; pr != nil && pr.paneID != "" {
-				*cancelPanes = append(*cancelPanes, pr.paneID)
+				*cancelPanes = append(*cancelPanes, pr.paneKey)
 			}
 			s.sessionEvent(sess, model.EvEmergency, model.HoldEmergency)
 		case model.SessionDetached:
 			if pr := s.paneRec[sess.SID]; pr != nil && pr.paneID != "" {
-				*cancelPanes = append(*cancelPanes, pr.paneID)
+				*cancelPanes = append(*cancelPanes, pr.paneKey)
 			}
 			s.sessionEvent(sess, model.EvEmergency, model.HoldEmergency)
 		}
@@ -148,15 +148,15 @@ func (s *Scheduler) emergencyReleaseTurn(sess store.SessionRecord, now time.Time
 
 // cancelKeysPanes — отправить cancel-клавиши панелям (6.2 шаг 4: кодеры
 // перестают генерировать). Ошибки не фатальны — ходы уже сняты.
-func (s *Scheduler) cancelKeysPanes(panes []string) {
+func (s *Scheduler) cancelKeysPanes(panes []model.PaneKey) {
 	if len(s.cancelKeys) == 0 {
 		return
 	}
-	for _, paneID := range panes {
+	for _, key := range panes {
 		ctx, cancel := context.WithTimeout(context.Background(), s.nodeReplyTimeout())
 		m := proto.New(proto.KindSendKeys)
-		m.PaneID, m.Keys = paneID, s.cancelKeys
-		_, _ = s.dispatch(ctx, paneID, m)
+		m.PaneID, m.Keys = key.Pane, s.cancelKeys
+		_, _ = s.dispatch(ctx, key, m)
 		cancel()
 	}
 }

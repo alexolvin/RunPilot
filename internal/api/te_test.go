@@ -748,7 +748,7 @@ func o5TestServer(t *testing.T) (*store.Store, *Server, *clock.Virtual) {
 	sch := scheduler.New(scheduler.Options{
 		Cfg: cfg, Store: st, Clk: clk,
 		Servers: &apiFakeServers{}, Panes: &apiFakePanes{},
-		Dispatch: func(context.Context, string, proto.Msg) (proto.Msg, error) {
+		Dispatch: func(context.Context, model.PaneKey, proto.Msg) (proto.Msg, error) {
 			return proto.Msg{}, errors.New("off")
 		},
 		ResumeText: "continue", NoAsyncDispatch: true,

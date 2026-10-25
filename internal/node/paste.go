@@ -24,6 +24,9 @@ func (c *CommandRunner) paste(ctx context.Context, socket string, m proto.Msg) (
 	if err != nil {
 		return gone()
 	}
+	if bad := verifyPane(info, m); bad != "" {
+		return &Reply{CmdID: m.CmdID, Result: bad, Detail: "pane/sid mismatch"}, nil
+	}
 	buf := "runpilot-" + m.CmdID
 	if _, err := c.ex.OutputInput(ctx, "tmux", m.Text, tmuxArgs(socket, "load-buffer", "-b", buf, "-")...); err != nil {
 		return nil, err
@@ -117,6 +120,9 @@ func (c *CommandRunner) approve(ctx context.Context, socket string, m proto.Msg)
 	if err != nil {
 		return gone()
 	}
+	if bad := verifyPane(info, m); bad != "" {
+		return &Reply{CmdID: m.CmdID, Result: bad, Detail: "pane/sid mismatch"}, nil
+	}
 	st, _, _, err := capturePane(ctx, c.ex, c.re, info)
 	if err != nil {
 		return gone()
@@ -164,6 +170,9 @@ func (c *CommandRunner) compress(ctx context.Context, socket string, m proto.Msg
 	info, err := c.paneInfo(ctx, socket, m.PaneID)
 	if err != nil {
 		return gone()
+	}
+	if bad := verifyPane(info, m); bad != "" {
+		return &Reply{CmdID: m.CmdID, Result: bad, Detail: "pane/sid mismatch"}, nil
 	}
 	st, _, input, err := capturePane(ctx, c.ex, c.re, info)
 	if err != nil {
