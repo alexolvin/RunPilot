@@ -93,9 +93,12 @@ func (g *Gateway) handleAPIRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// stream:true → 400 (API-клиенты без стриминга).
-	if isStreamBody(raw) {
-		g.writeAPIError(w, http.StatusBadRequest, "streaming is not supported for api clients", "stream_not_supported")
+	// stream:true — только для клиентов с allow_stream (учёт токенов — из
+	// usage-чанка, см. streamingWriter; usage-чанк с пустым choices клиенту
+	// не передаётся).
+	stream := isStreamBody(raw)
+	if stream && !client.AllowStream {
+		g.writeAPIError(w, http.StatusBadRequest, "streaming is not enabled for this api client", "stream_not_enabled")
 		_ = g.st.ApiRequestRecord(store.ApiRequest{TS: now, Client: client.Name, Result: "400"})
 		return
 	}
@@ -142,7 +145,7 @@ func (g *Gateway) handleAPIRequest(w http.ResponseWriter, r *http.Request) {
 	defer g.unBumpBuffered(int64(len(raw)))
 
 	g.log.Debug("gateway: api: параметры запроса", "client", client.Name,
-		"stream", false, "bytes", len(raw))
+		"stream", stream, "bytes", len(raw))
 
 	// Разрешение аренды (BATCH, allowed_servers, max_hold_sec).
 	decision, err := g.resolveAPIPass(ctx, sess, client)
@@ -322,35 +325,51 @@ func (g *Gateway) holdAPIPass(ctx context.Context, sess store.SessionRecord, cli
 }
 
 // serveAPIAttempt — проксирование API-запроса (+ учёт api_request, липкая аренда).
+// stream:true (allow_stream) — SSE-поток насквозь, учёт токенов из usage-чанка.
 func (g *Gateway) serveAPIAttempt(w http.ResponseWriter, r *http.Request, ctx context.Context,
 	sess store.SessionRecord, client store.ApiClient, rest string, raw []byte, decision *leaseDecision, t0 time.Time) {
-	body, err := transformBody(raw,
-		decision.server.Cfg.Upstreams.OpenAI.Model,
-		decision.server.Cfg.MaxOutputTokens)
+	stream := isStreamBody(raw)
+	wantsUsage := hasIncludeUsage(raw)
+	var body []byte
+	var err error
+	if stream {
+		body, err = transformAPIStreamBody(raw,
+			decision.server.Cfg.Upstreams.OpenAI.Model,
+			decision.server.Cfg.MaxOutputTokens, wantsUsage)
+	} else {
+		body, err = transformBody(raw,
+			decision.server.Cfg.Upstreams.OpenAI.Model,
+			decision.server.Cfg.MaxOutputTokens)
+	}
 	if err != nil {
 		g.writeAPIError(w, http.StatusBadRequest, "bad request", "bad_request")
 		_ = g.st.ApiRequestRecord(store.ApiRequest{TS: t0, Client: client.Name, Result: "400"})
 		return
 	}
-	prefail, st, respBody := g.doAPIAttempt(w, r, ctx, rest, body, decision, sess.SID)
-	if prefail {
-		// Отказ до первого байта: 502 + Retry-After, аренда снимается.
-		g.resetClientHeaders(w)
-		if decision.lease != nil {
-			_ = g.st.LeaseRelease(sess.SID, releaseReasonServerDown, g.clk.Now())
-			g.wake()
+	var (
+		st *attemptState
+		u  *apiUsage
+	)
+	if stream {
+		var prefail bool
+		prefail, st, u = g.doAPIStreamAttempt(w, r, ctx, rest, body, decision, sess.SID, !wantsUsage)
+		if prefail {
+			g.apiPrefail(w, sess.SID, client, decision, t0)
+			return
 		}
-		g.apiSessionIdle(sess.SID)
-		g.writeAPI502WithRetry(w, "runpilot_server_down")
-		_ = g.st.ApiRequestRecord(store.ApiRequest{
-			TS: t0, Client: client.Name, Server: decision.server.Cfg.Name,
-			LatencyMS: g.clk.Now().Sub(t0).Milliseconds(), Result: "502",
-		})
-		return
+	} else {
+		var prefail bool
+		var respBody []byte
+		prefail, st, respBody = g.doAPIAttempt(w, r, ctx, rest, body, decision, sess.SID)
+		if prefail {
+			g.apiPrefail(w, sess.SID, client, decision, t0)
+			return
+		}
+		u = usageFromBody(respBody)
 	}
 	g.finishAttempt(w, st)
-	// Учёт: токены из usage ответа, model.
-	g.recordAPIRequest(client, decision, st, t0, respBody)
+	// Учёт: токены из usage (non-streaming — из тела, streaming — из usage-чанка).
+	g.recordAPIRequest(client, decision, st, t0, u)
 	g.apiSessionIdle(sess.SID)
 	// Липкая аренда: сервер удерживается за клиентом sticky_idle_sec
 	// (аренда живёт, повторные запросы не идут в очередь). Если в очереди
@@ -454,8 +473,235 @@ func (g *Gateway) doAPIAttempt(w http.ResponseWriter, r *http.Request, ctx conte
 	if preFirstByteFail(st, ctx) {
 		return true, st, nil
 	}
+	// Тело для учёта — до flushToClient: WriteTo расходует буфер
+	// (сдвигает read-offset), и Bytes() после него пуст.
+	respBody := bw.buf.Bytes()
 	bw.flushToClient()
-	return false, st, bw.buf.Bytes()
+	return false, st, respBody
+}
+
+// doAPIStreamAttempt — стриминговое проксирование API-запроса: SSE-поток
+// насквозь к клиенту, usage извлекается (учёт токенов). Отказ до первого
+// байта — как в doAPIAttempt (prefail). hideUsageChunk — usage-чанк с
+// пустым choices не передавать клиенту (клиент не просил include_usage).
+func (g *Gateway) doAPIStreamAttempt(w http.ResponseWriter, r *http.Request, ctx context.Context,
+	rest string, body []byte, decision *leaseDecision, sid string, hideUsageChunk bool) (bool, *attemptState, *apiUsage) {
+	st := newAttemptState()
+	req := withState(r, st)
+	req = withSID(req, sid)
+	req.URL.Path = rest
+	req.Body = io.NopCloser(bytes.NewReader(body))
+	req.ContentLength = int64(len(body))
+	sw := &streamingWriter{ResponseWriter: w, st: st, clk: g.clk, hideUsageChunk: hideUsageChunk}
+	g.proxyFor(decision.server).ServeHTTP(sw, req)
+	if preFirstByteFail(st, ctx) {
+		return true, st, nil
+	}
+	return false, st, sw.usage()
+}
+
+// transformAPIStreamBody — тело стримингового API-запроса: как transformBody
+// + stream_options.include_usage=true (учёт токенов из usage-чанка). Если
+// клиент сам задал stream_options — merge (остальные поля сохраняются).
+// clientWantsUsage=true — клиент сам запросил include_usage: не трогаем
+// (usage-чанк пройдёт к клиенту, см. streamingWriter).
+func transformAPIStreamBody(raw []byte, model string, maxOutput int, clientWantsUsage bool) ([]byte, error) {
+	doc, err := transformBodyDoc(raw, model, maxOutput)
+	if err != nil {
+		return nil, err
+	}
+	if !clientWantsUsage {
+		var so map[string]json.RawMessage
+		if v, ok := doc["stream_options"]; ok {
+			_ = json.Unmarshal(v, &so)
+		}
+		if so == nil {
+			so = map[string]json.RawMessage{}
+		}
+		so["include_usage"] = json.RawMessage("true")
+		b, err := json.Marshal(so)
+		if err != nil {
+			return nil, fmt.Errorf("gateway: stream_options: %w", err)
+		}
+		doc["stream_options"] = b
+	}
+	out, err := json.Marshal(doc)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: сборка тела: %w", err)
+	}
+	return out, nil
+}
+
+// hasIncludeUsage — клиент сам запросил stream_options.include_usage.
+func hasIncludeUsage(raw []byte) bool {
+	var req struct {
+		StreamOptions struct {
+			IncludeUsage bool `json:"include_usage"`
+		} `json:"stream_options"`
+	}
+	if err := json.Unmarshal(raw, &req); err != nil {
+		return false
+	}
+	return req.StreamOptions.IncludeUsage
+}
+
+// streamingWriter — ResponseWriter стримингового API-запроса: SSE-поток
+// передаётся клиенту побайто, usage/model извлекаются (учёт токенов).
+// Usage-чанк (choices: [] + usage) клиенту, не запросившему include_usage,
+// НЕ передаётся (клиент читает choices[0]).
+type streamingWriter struct {
+	http.ResponseWriter
+	st  *attemptState
+	clk clock.Clock
+
+	// hideUsageChunk — не передавать usage-чанк клиенту.
+	hideUsageChunk bool
+
+	headerSent bool
+	pending    []byte
+
+	model      string
+	prompt     int
+	completion int
+	haveUsage  bool
+}
+
+func (s *streamingWriter) WriteHeader(code int) {
+	s.st.setStatus(code)
+	if !s.headerSent {
+		s.headerSent = true
+		if !s.st.migrating() {
+			s.ResponseWriter.WriteHeader(code)
+		}
+	}
+}
+
+func (s *streamingWriter) Write(data []byte) (int, error) {
+	if s.st.migrating() {
+		return 0, errMigrate
+	}
+	if !s.headerSent {
+		s.WriteHeader(http.StatusOK)
+	}
+	s.st.setFirstByte(s.clk.Now())
+	s.pending = append(s.pending, data...)
+	// Полный SSE-событие = блок до "\n\n"; некомплектное — в pending.
+	for {
+		idx := bytes.Index(s.pending, []byte(sseEventSep))
+		if idx < 0 {
+			break
+		}
+		event := s.pending[:idx]
+		s.pending = s.pending[idx+len(sseEventSep):]
+		if s.forwardEvent(event) {
+			s.Flush()
+		}
+	}
+	s.st.noteWrite(len(data))
+	return len(data), nil
+}
+
+// Flush — прокинуть клиенту (ReverseProxy с FlushInterval: -1 вызывает
+// после каждого write апстрима).
+func (s *streamingWriter) Flush() {
+	if !s.headerSent || s.st.migrating() {
+		return
+	}
+	if f, ok := s.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// forwardEvent — одно SSE-событие (строка "data: …" без завершающего \n\n).
+// true — событие передано клиенту.
+func (s *streamingWriter) forwardEvent(raw []byte) bool {
+	payload := raw
+	if i := bytes.IndexByte(raw, ':'); i >= 0 {
+		payload = bytes.TrimSpace(raw[i+1:])
+	}
+	if bytes.Equal(payload, []byte("[DONE]")) {
+		return s.writeEvent(raw)
+	}
+	// Извлечь usage/model для учёта; событие не пересобирается.
+	var probe struct {
+		Model   string              `json:"model"`
+		Choices []json.RawMessage   `json:"choices"`
+		Usage   *struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(payload, &probe); err != nil {
+		return s.writeEvent(raw)
+	}
+	if probe.Model != "" && s.model == "" {
+		s.model = probe.Model
+	}
+	if probe.Usage != nil {
+		s.prompt = probe.Usage.PromptTokens
+		s.completion = probe.Usage.CompletionTokens
+		s.haveUsage = true
+		// Usage-чанк с пустым choices — клиенту, не запросившему
+		// include_usage, не посылать (клиент читает choices[0]).
+		if s.hideUsageChunk && len(probe.Choices) == 0 {
+			return false
+		}
+	}
+	return s.writeEvent(raw)
+}
+
+// writeEvent — событие + завершающий \n\n.
+func (s *streamingWriter) writeEvent(raw []byte) bool {
+	buf := append(append([]byte{}, raw...), []byte(sseEventSep)...)
+	_, err := s.ResponseWriter.Write(buf)
+	return err == nil
+}
+
+// usage — извлечённый usage (учёт токенов); nil, если usage-чанка не было.
+func (s *streamingWriter) usage() *apiUsage {
+	if s.model == "" && !s.haveUsage {
+		return nil
+	}
+	return &apiUsage{model: s.model, prompt: s.prompt, completion: s.completion}
+}
+
+// apiUsage — учёт токенов API-запроса (non-streaming — из тела ответа,
+// streaming — из usage-чанка).
+type apiUsage struct {
+	model      string
+	prompt     int
+	completion int
+}
+
+// usageFromBody — usage из non-streaming ответа.
+func usageFromBody(respBody []byte) *apiUsage {
+	var resp struct {
+		Model string `json:"model"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return nil
+	}
+	return &apiUsage{model: resp.Model, prompt: resp.Usage.PromptTokens, completion: resp.Usage.CompletionTokens}
+}
+
+// apiPrefail — отказ до первого байта (502/503/504, ошибка соединения):
+// 502 + Retry-After, аренда снимается.
+func (g *Gateway) apiPrefail(w http.ResponseWriter, sid string, client store.ApiClient, decision *leaseDecision, t0 time.Time) {
+	g.resetClientHeaders(w)
+	if decision.lease != nil {
+		_ = g.st.LeaseRelease(sid, releaseReasonServerDown, g.clk.Now())
+		g.wake()
+	}
+	g.apiSessionIdle(sid)
+	g.writeAPI502WithRetry(w, "runpilot_server_down")
+	_ = g.st.ApiRequestRecord(store.ApiRequest{
+		TS: t0, Client: client.Name, Server: decision.server.Cfg.Name,
+		LatencyMS: g.clk.Now().Sub(t0).Milliseconds(), Result: "502",
+	})
 }
 
 // writeAPI502WithRetry — 502 + Retry-After (сервер упал в запросе).
@@ -466,28 +712,28 @@ func (g *Gateway) writeAPI502WithRetry(w http.ResponseWriter, code string) {
 	fmt.Fprintf(w, `{"error":{"message":"runpilot: %s","type":"server_error","code":"%s"}}`, code, code)
 }
 
-// recordAPIRequest — строка api_request (токены из usage ответа).
-func (g *Gateway) recordAPIRequest(client store.ApiClient, decision *leaseDecision, st *attemptState, t0 time.Time, respBody []byte) {
+// recordAPIRequest — строка api_request (токены из usage: non-streaming —
+// из тела ответа, streaming — из usage-чанка).
+func (g *Gateway) recordAPIRequest(client store.ApiClient, decision *leaseDecision, st *attemptState, t0 time.Time, u *apiUsage) {
 	tEnd := g.clk.Now()
 	result := "OK"
 	if st.copyError() != nil {
 		result = "502"
 	}
-	var resp struct {
-		Model string `json:"model"`
-		Usage struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
-		} `json:"usage"`
+	var modelName string
+	var prompt, completion int
+	if u != nil {
+		modelName = u.model
+		prompt = u.prompt
+		completion = u.completion
 	}
-	_ = json.Unmarshal(respBody, &resp)
 	_ = g.st.ApiRequestRecord(store.ApiRequest{
 		TS:               t0,
 		Client:           client.Name,
 		Server:           decision.server.Cfg.Name,
-		Model:            resp.Model,
-		PromptTokens:     resp.Usage.PromptTokens,
-		CompletionTokens: resp.Usage.CompletionTokens,
+		Model:            modelName,
+		PromptTokens:     prompt,
+		CompletionTokens: completion,
 		WaitMS:           decision.heldMS,
 		LatencyMS:        tEnd.Sub(t0).Milliseconds(),
 		Result:           result,

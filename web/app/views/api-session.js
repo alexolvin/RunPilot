@@ -53,6 +53,7 @@ export function ApiSessionPage() {
             max_hold_sec: r.data.max_hold_sec || 0,
             sticky_idle_sec: r.data.sticky_idle_sec || 0,
             aging_sec: r.data.aging_sec || 0,
+            allow_stream: !!r.data.allow_stream,
           });
         } else {
           setLoadErr((r.data && r.data.detail) || ('HTTP ' + r.status));
@@ -95,6 +96,7 @@ export function ApiSessionPage() {
       max_hold_sec: Number(form.max_hold_sec) || 0,
       sticky_idle_sec: Number(form.sticky_idle_sec) || 0,
       aging_sec: Number(form.aging_sec) || 0,
+      allow_stream: !!form.allow_stream,
     }).then((r) => {
       if (r.ok && r.data) {
         setClient(r.data);
@@ -257,6 +259,12 @@ export function ApiSessionPage() {
               <input class="input" type="number" value=${form.aging_sec}
                 onInput=${(e) => setForm({ ...form, aging_sec: e.target.value })} />
             </label>
+            <label class="field api-check">
+              <input type="checkbox" checked=${!!form.allow_stream}
+                onChange=${(e) => setForm({ ...form, allow_stream: e.target.checked })} />
+              <span class="field-label">${T.apiSession.allowStream}</span>
+            </label>
+            <p class="sc-note">${T.apiSession.allowStreamNote}</p>
             <${Button} variant="primary" label=${T.apiSession.save} loading=${saving}
               onClick=${saveSettings} />
           </div>

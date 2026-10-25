@@ -11,6 +11,10 @@ const (
 	// не буферизуется.
 	faultBodyLimit = 4096
 
+	// sseEventSep — разделитель событий SSE ("\n\n"): полный блок
+	// "data: …\n\n". Используется стриминговым writer'ом API-клиентов.
+	sseEventSep = "\n\n"
+
 	// metricLabelParts — частей в ключе метрики "server|code".
 	metricLabelParts = 2
 	// msToSec — мс → с.

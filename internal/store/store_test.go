@@ -37,9 +37,10 @@ func TestMigrateAndSchemaVersion(t *testing.T) {
 	// 014_operator_state, 015_external_process_cwd, 016_session_exec_pid,
 	// 017_session_exec_starttime, 018_session_exec_pgid, 019_lease_rule,
 	// 020_request_body_bytes, 021_session_qwen_session_id, 022_relay,
-	// 023_session_os_user, 024_node_token_os_user, 025_api_client.
-	if v != 25 {
-		t.Fatalf("schema_version = %d, ждём 25", v)
+	// 023_session_os_user, 024_node_token_os_user, 025_api_client,
+	// 026_api_client_allow_stream.
+	if v != 26 {
+		t.Fatalf("schema_version = %d, ждём 26", v)
 	}
 	// Повторное открытие — идемпотентно.
 	if err := s.Close(); err != nil {
@@ -85,8 +86,8 @@ func TestOpenIdempotent(t *testing.T) {
 		t.Fatalf("повторное Open: %v", err)
 	}
 	defer func() { _ = s2.Close() }()
-	if v, _ := s2.SchemaVersion(); v != 25 {
-		t.Fatalf("schema_version после повторного Open = %d (хотим 25)", v)
+	if v, _ := s2.SchemaVersion(); v != 26 {
+		t.Fatalf("schema_version после повторного Open = %d (хотим 26)", v)
 	}
 }
 

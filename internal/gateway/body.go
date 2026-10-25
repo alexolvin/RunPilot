@@ -5,13 +5,13 @@ import (
 	"fmt"
 )
 
-// transformBody — обработка тела генерирующего запроса (раздел 6 ТЗ):
+// transformBodyDoc — разбор тела генерирующего запроса (раздел 6 ТЗ):
 // подмена model, ограничение max_tokens/max_completion_tokens сверху
 // server.max_output_tokens. Декодирование только в map[string]json.RawMessage:
 // всё остальное (массивы content, image_url, video_url, неизвестные поля)
 // проходит побайто без изменений. Типизированные структуры сообщений
 // в шлюзе запрещены.
-func transformBody(raw []byte, model string, maxOutput int) ([]byte, error) {
+func transformBodyDoc(raw []byte, model string, maxOutput int) (map[string]json.RawMessage, error) {
 	var doc map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("gateway: тело запроса: %w", err)
@@ -46,6 +46,15 @@ func transformBody(raw []byte, model string, maxOutput int) ([]byte, error) {
 			}
 			doc[key] = b
 		}
+	}
+	return doc, nil
+}
+
+// transformBody — обработка тела генерирующего запроса (раздел 6 ТЗ).
+func transformBody(raw []byte, model string, maxOutput int) ([]byte, error) {
+	doc, err := transformBodyDoc(raw, model, maxOutput)
+	if err != nil {
+		return nil, err
 	}
 	out, err := json.Marshal(doc)
 	if err != nil {

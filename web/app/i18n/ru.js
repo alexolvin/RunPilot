@@ -263,6 +263,8 @@ export const T = {
     maxHoldSec: 'Макс. удержание, сек',
     stickyIdleSec: 'Липкий idle, сек',
     agingSec: 'Aging, сек',
+    allowStream: 'Стриминг (stream: true)',
+    allowStreamNote: 'Без стриминга запросы с stream:true отклоняются (400). Токены учитываются из usage-чанка; usage-чанк клиенту не передаётся.',
     save: 'Сохранить',
     saved: 'Настройки сохранены',
     saveErr: 'Не удалось сохранить',

@@ -22,7 +22,9 @@ type ApiClientView struct {
 	MaxHoldSec     int    `json:"max_hold_sec"`
 	StickyIdleSec  int    `json:"sticky_idle_sec"`
 	AgingSec       int    `json:"aging_sec"`
-	CreatedAt      string `json:"created_at"`
+	// AllowStream — stream:true для клиента (учёт токенов из usage-чанка).
+	AllowStream bool   `json:"allow_stream"`
+	CreatedAt   string `json:"created_at"`
 	// Учёт за последние сутки.
 	Requests         int `json:"requests_24h"`
 	PromptTokens     int `json:"prompt_tokens_24h"`
@@ -39,17 +41,7 @@ func (s *Server) handleApiClients(w http.ResponseWriter, r *http.Request) {
 	daily, _ := s.store.ApiRequestsDaily(s.clk.Now())
 	out := make([]ApiClientView, 0, len(clients))
 	for _, c := range clients {
-		v := ApiClientView{
-			Name:           c.Name,
-			Class:          c.Class.String(),
-			Priority:       c.Priority,
-			Enabled:        c.Enabled,
-			AllowedServers: c.AllowedServers,
-			MaxHoldSec:     c.MaxHoldSec,
-			StickyIdleSec:  c.StickyIdleSec,
-			AgingSec:       c.AgingSec,
-			CreatedAt:      c.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
-		}
+		v := apiClientView(c, daily)
 		if d, ok := daily[c.Name]; ok {
 			v.Requests = d.Requests
 			v.PromptTokens = d.PromptTokens
@@ -69,6 +61,7 @@ func (s *Server) handleApiClientCreate(w http.ResponseWriter, r *http.Request) {
 		MaxHoldSec     int      `json:"max_hold_sec"`
 		StickyIdleSec  int      `json:"sticky_idle_sec"`
 		AgingSec       int      `json:"aging_sec"`
+		AllowStream    bool     `json:"allow_stream"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
 		httpError(w, http.StatusBadRequest, "BAD_REQUEST", "name обязателен")
@@ -82,6 +75,7 @@ func (s *Server) handleApiClientCreate(w http.ResponseWriter, r *http.Request) {
 		MaxHoldSec:     body.MaxHoldSec,
 		StickyIdleSec:  body.StickyIdleSec,
 		AgingSec:       body.AgingSec,
+		AllowStream:    body.AllowStream,
 	}
 	if c.MaxHoldSec == 0 {
 		c.MaxHoldSec = apiClientDefaultMaxHoldSec
@@ -132,6 +126,7 @@ func apiClientView(c store.ApiClient, daily map[string]store.ApiRequestDaily) Ap
 		MaxHoldSec:     c.MaxHoldSec,
 		StickyIdleSec:  c.StickyIdleSec,
 		AgingSec:       c.AgingSec,
+		AllowStream:    c.AllowStream,
 		CreatedAt:      c.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 	}
 	if d, ok := daily[c.Name]; ok {
@@ -165,6 +160,7 @@ func (s *Server) handleApiClientUpdate(w http.ResponseWriter, r *http.Request) {
 		MaxHoldSec     int      `json:"max_hold_sec"`
 		StickyIdleSec  int      `json:"sticky_idle_sec"`
 		AgingSec       int      `json:"aging_sec"`
+		AllowStream    bool     `json:"allow_stream"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		httpError(w, http.StatusBadRequest, "BAD_REQUEST", err.Error())
@@ -188,6 +184,7 @@ func (s *Server) handleApiClientUpdate(w http.ResponseWriter, r *http.Request) {
 	c.MaxHoldSec = body.MaxHoldSec
 	c.StickyIdleSec = body.StickyIdleSec
 	c.AgingSec = body.AgingSec
+	c.AllowStream = body.AllowStream
 	updated, err := s.store.SetApiClient(c)
 	if err != nil {
 		httpError(w, http.StatusInternalServerError, "STORE", err.Error())
