@@ -434,9 +434,12 @@ func (s *Scheduler) NodeSeen(host string) {
 	defer s.mu.Unlock()
 	now := s.clk.Now()
 	_, wasDown := s.nodeDown[host]
+	_, wasSeen := s.nodeSeen[host]
 	s.nodeSeen[host] = now
 	delete(s.nodeDown, host)
-	if wasDown {
+	// UP — и для нового узла (первое подключение), и после DOWN (реконнект).
+	// Веб резинсит /state по NODE_STATE, чтобы список узлов обновился.
+	if wasDown || !wasSeen {
 		s.event(model.KindNodeState, "", host, map[string]any{"host": host, "state": "UP"})
 	}
 }

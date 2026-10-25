@@ -138,6 +138,12 @@ export function NodeEnroll({ onClose }) {
     if (isNew) setReady(true);
   }, [s.nodes]);
 
+  // Узел подключился (появился в s.nodes) → закрыть диалог: узел виден в списке
+  // (ресинк по NODE_STATE), оператору не нужно вручную жать «Закрыть».
+  useEffect(() => {
+    if (ready) onClose();
+  }, [ready]);
+
   // «Добавить» — автоустановка: координатор сам выполняет ssh, результат
   // приходит по SSE (NODE_ENROLL).
   const add = () => {

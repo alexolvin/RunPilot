@@ -326,6 +326,13 @@ export const actions = {
       } });
       return;
     }
+    if (ev.kind === 'NODE_STATE' && ev.server) {
+      // Узел подключился/отключился → полный срез /state (обновить s.nodes):
+      // список «Узлы» и диалог enroll (ready) видят новый узел без F5.
+      if (S.resyncing) resyncPending = true;
+      else doResync();
+      return;
+    }
     if ((ev.kind === 'SESSION_STATE' || ev.kind === 'HOLD') && ev.sid &&
         !S.sessions.some((s) => s.sid === ev.sid)) {
       // Незнакомый sid: сессия создана, пока страница открыта (событие
