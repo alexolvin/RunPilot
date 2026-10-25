@@ -394,11 +394,21 @@ function doResync() {
   const timeout = new Promise((resolve) =>
     setTimeout(() => resolve({ ok: false, data: null }), UI.resyncTimeoutMs));
   return Promise.race([get('/api/v1/state'), timeout]).then((r) => {
-    if (r && r.ok && r.data) actions.setFull(r.data);
-    else actions.setResyncing(false);
-    if (resyncPending) {
-      resyncPending = false;
-      doResync();
+    try {
+      if (r && r.ok && r.data) actions.setFull(r.data);
+      else actions.setResyncing(false);
+    } finally {
+      // Страховка: если setFull упал до set() — resyncing не сбросился, и
+      // повтор по resyncPending был бы потерян. Тогда resyncing застрял бы
+      // true: каждое SESSION_STATE лишь выставляло resyncPending, и
+      // s.sessions замёрз на старом снимке, пока SERVER_METRICS держит
+      // карточки свежими (рассинхрон «В работе»/карточки). Сбрасываем
+      // resyncing и повторяем срез.
+      if (S.resyncing) actions.setResyncing(false);
+      if (resyncPending) {
+        resyncPending = false;
+        doResync();
+      }
     }
   });
 }
